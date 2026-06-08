@@ -908,6 +908,7 @@ if st.session_state.page == "Upload & Inspect":
                     return ["background-color:#f0fdf4; color:#16a34a"]*len(row)
 
                 val_df = pd.DataFrame(val_results)
+                val_df["Value"] = val_df["Value"].astype(str)
                 try:
                     styled = val_df.style.apply(_row_style, axis=1)
                     st.dataframe(styled, use_container_width=True, hide_index=True)
