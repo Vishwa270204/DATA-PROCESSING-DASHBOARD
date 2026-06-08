@@ -24,19 +24,19 @@ from plotly.subplots import make_subplots
 
 warnings.filterwarnings("ignore")
 
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 # PAGE CONFIG
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 st.set_page_config(
     page_title="DataPrep Pro",
-    page_icon="??",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 # DATABASE
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 DB_NAME = "dashboard.db"
 
 def init_database():
@@ -71,9 +71,9 @@ def get_processing_history(file_name=None):
         conn.close(); return df
     except: return pd.DataFrame()
 
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 # BACKEND LOGIC
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 def load_file(buf, name):
     n = name.lower()
     if n.endswith(".csv"):    return pd.read_csv(buf, low_memory=False)
@@ -256,7 +256,7 @@ def detect_future_dates(df):
             except: pass
     return r
 
-# --- CONTENT-BASED similar column detection ---
+# ─── CONTENT-BASED similar column detection ───
 def detect_duplicate_information_columns(df):
     """Detect similar columns based on DATA CONTENT, not column names."""
     suggestions = []
@@ -305,7 +305,7 @@ def detect_duplicate_information_columns(df):
                     score = 85 + overlap_ratio * 10
                     suggestions.append({
                         "col1": cat_cols[i], "col2": cat_cols[j],
-                        "reason": f"One-to-one value mapping (e.g. {list(s1)[:2]} ? {list(s2)[:2]})",
+                        "reason": f"One-to-one value mapping (e.g. {list(s1)[:2]} ↔ {list(s2)[:2]})",
                         "score": round(score, 1),
                         "action": "Likely same information encoded differently"
                     })
@@ -378,13 +378,13 @@ def detect_duplicate_information_columns(df):
 def recommend_encoding(df, col, is_target=False):
     n = df[col].nunique()
     if is_target:
-        if n == 2:   return "label",   "Binary target ? Label Encoding (0/1)"
-        elif n <= 15: return "label",  "Multiclass target ? Label Encoding"
-        else:         return "frequency", "High-cardinality target ? Frequency Encoding"
+        if n == 2:   return "label",   "Binary target → Label Encoding (0/1)"
+        elif n <= 15: return "label",  "Multiclass target → Label Encoding"
+        else:         return "frequency", "High-cardinality target → Frequency Encoding"
     else:
-        if n == 2:   return "label",   "Binary column ? Label Encoding"
-        elif n <= 10: return "onehot", "Low cardinality ? One-Hot Encoding"
-        else:         return "frequency", "High cardinality ? Frequency Encoding"
+        if n == 2:   return "label",   "Binary column → Label Encoding"
+        elif n <= 10: return "onehot", "Low cardinality → One-Hot Encoding"
+        else:         return "frequency", "High cardinality → Frequency Encoding"
 
 def apply_encoding(df, col, enc_type, ordinal_order=None):
     df = df.copy(); mapping = None
@@ -424,9 +424,9 @@ def export_excel(df):
         df.to_excel(w, index=False, sheet_name="Processed")
     return out.getvalue()
 
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 # PROFESSIONAL WHITE THEME CSS
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
@@ -593,26 +593,26 @@ div.stAlert { border-radius: 10px !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 # SESSION STATE
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 defaults = {"df": None, "original_df": None, "file_name": "", "page": "Upload & Inspect"}
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 # SIDEBAR
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
     <div style='text-align:center; padding:20px 0 24px;'>
-        <div style='font-family:"Inter",sans-serif; font-size:1.3rem; font-weight:700; color:#2563eb;'>?? DataPrep Pro</div>
+        <div style='font-family:"Inter",sans-serif; font-size:1.3rem; font-weight:700; color:#2563eb;'>📊 DataPrep Pro</div>
         <div style='font-size:0.75rem; color:#6b7280; margin-top:4px;'>Smart Preprocessing Dashboard</div>
     </div>
     """, unsafe_allow_html=True)
 
-    pages = ["?? Upload & Inspect", "?? Cleaning & Validation", "?? Encoding & Outliers", "?? Statistics & Export"]
+    pages = ["📁 Upload & Inspect", "🧹 Cleaning & Validation", "🔠 Encoding & Outliers", "📈 Statistics & Export"]
     page_map = {p: p.split(" ", 1)[1] for p in pages}
     page_keys = list(page_map.values())
 
@@ -667,14 +667,14 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 # PAGE 1 — UPLOAD & INSPECT
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 if st.session_state.page == "Upload & Inspect":
 
     st.markdown("""
     <div class='main-header'>
-        <h1>?? Upload & Inspect</h1>
+        <h1>📁 Upload & Inspect</h1>
         <p>Upload your dataset to begin intelligent preprocessing analysis</p>
     </div>
     """, unsafe_allow_html=True)
@@ -693,9 +693,9 @@ if st.session_state.page == "Upload & Inspect":
             conn.execute("INSERT INTO file_metadata VALUES (NULL,?,?,?,?,?)",
                          (uploaded.name, datetime.now().isoformat(), round(size_kb,2), len(df), len(df.columns)))
             conn.commit(); conn.close()
-            st.success(f"? Loaded **{uploaded.name}** — {len(df):,} rows × {len(df.columns)} columns")
+            st.success(f"✅ Loaded **{uploaded.name}** — {len(df):,} rows × {len(df.columns)} columns")
         except Exception as e:
-            st.error(f"? Error loading file: {e}")
+            st.error(f"❌ Error loading file: {e}")
 
     if st.session_state.df is not None:
         df = st.session_state.df
@@ -713,9 +713,9 @@ if st.session_state.page == "Upload & Inspect":
                 st.markdown(f"""<div class='metric-card'><span class='val'>{val}</span><span class='label'>{label}</span></div>""", unsafe_allow_html=True)
 
         st.markdown("&nbsp;")
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["??? Preview","?? Schema","??? Column Types","? Missing","? Add Row"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["👁️ Preview","📋 Schema","🏷️ Column Types","❓ Missing","➕ Add Row"])
 
-        # -- Preview --
+        # ── Preview ──
         with tab1:
             st.markdown(f"<div style='font-size:0.85rem;color:#6b7280;margin-bottom:8px;'>Dataset: <b style='color:#111827;'>{summary['rows']:,} rows × {summary['columns']} columns</b></div>", unsafe_allow_html=True)
             preview_opt = st.selectbox("Show", ["First 5 rows","First 10 rows","First 20 rows","Entire dataset"], key="preview_sel")
@@ -723,7 +723,7 @@ if st.session_state.page == "Upload & Inspect":
             show_df = df if preview_opt == "Entire dataset" else df.head(n_map[preview_opt])
             st.dataframe(show_df, use_container_width=True, height=380)
 
-        # -- Schema --
+        # ── Schema ──
         with tab2:
             mem_per_col = df.memory_usage(deep=True)
             schema_rows = []
@@ -739,19 +739,19 @@ if st.session_state.page == "Upload & Inspect":
                 })
             st.dataframe(pd.DataFrame(schema_rows), use_container_width=True, height=420)
 
-        # -- Column Types --
+        # ── Column Types ──
         with tab3:
             cc1, cc2 = st.columns(2)
             with cc1:
-                for typ, emoji in [("numerical","??"),("categorical","???")]:
+                for typ, emoji in [("numerical","🔢"),("categorical","🏷️")]:
                     st.markdown(f"**{emoji} {typ.title()}** ({len(ct[typ])})")
                     st.write(", ".join(ct[typ]) if ct[typ] else "_None detected_")
             with cc2:
-                for typ, emoji in [("datetime","??"),("boolean","?"),("id","??")]:
+                for typ, emoji in [("datetime","📅"),("boolean","✅"),("id","🔑")]:
                     st.markdown(f"**{emoji} {typ.title()}** ({len(ct[typ])})")
                     st.write(", ".join(ct[typ]) if ct[typ] else "_None detected_")
 
-        # -- Missing --
+        # ── Missing ──
         with tab4:
             miss_report = missing_value_report(df)
             if miss_report:
@@ -778,9 +778,9 @@ if st.session_state.page == "Upload & Inspect":
                 except Exception as e:
                     st.error(f"Chart error: {e}")
             else:
-                st.markdown("<span class='badge badge-success'>? No missing values detected</span>", unsafe_allow_html=True)
+                st.markdown("<span class='badge badge-success'>✅ No missing values detected</span>", unsafe_allow_html=True)
 
-        # -- Add Row --
+        # ── Add Row ──
         with tab5:
             st.markdown("**Manually add a new row to the dataset:**")
             input_data = {}
@@ -798,7 +798,7 @@ if st.session_state.page == "Upload & Inspect":
                     else:
                         input_data[col] = st.text_input(col, key=f"inp_{col}")
 
-            if st.button("? Add Row"):
+            if st.button("➕ Add Row"):
                 try:
                     new_row = {col: input_data.get(col, np.nan) for col in df.columns}
                     st.session_state.df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
@@ -808,26 +808,26 @@ if st.session_state.page == "Upload & Inspect":
                 except Exception as e:
                     st.error(f"Error: {e}")
 
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 # PAGE 2 — CLEANING & VALIDATION
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 elif st.session_state.page == "Cleaning & Validation":
 
     st.markdown("""
     <div class='main-header'>
-        <h1>?? Cleaning & Validation</h1>
+        <h1>🧹 Cleaning & Validation</h1>
         <p>Remove duplicates, fix missing values, and detect data anomalies</p>
     </div>
     """, unsafe_allow_html=True)
 
     if st.session_state.df is None:
-        st.warning("?? Please upload a dataset first on the Upload & Inspect page.")
+        st.warning("⚠️ Please upload a dataset first on the Upload & Inspect page.")
         st.stop()
 
     df = st.session_state.df
-    tab1, tab2, tab3, tab4 = st.tabs(["??? Duplicates","?? Missing Values","?? Validation","?? Similar Columns"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🗑️ Duplicates","🔧 Missing Values","✔️ Validation","🔍 Similar Columns"])
 
-    # -- Duplicates --
+    # ── Duplicates ──
     with tab1:
         st.markdown("<div class='section-header'><h3>Duplicate Row Detection</h3></div>", unsafe_allow_html=True)
         dupe_rows = df[df.duplicated(keep="first")]
@@ -843,22 +843,22 @@ elif st.session_state.page == "Cleaning & Validation":
             st.markdown("**Duplicate Records:**")
             st.dataframe(dupe_rows, use_container_width=True, height=300)
 
-            if st.button("??? Remove All Duplicates"):
+            if st.button("🗑️ Remove All Duplicates"):
                 before = len(df)
                 st.session_state.df = df.drop_duplicates(keep="first").reset_index(drop=True)
                 removed = before - len(st.session_state.df)
                 save_operation(st.session_state.file_name, "Remove Duplicates", f"Removed {removed} rows")
-                st.success(f"? Removed {removed} duplicate rows. Dataset now has {len(st.session_state.df):,} rows.")
+                st.success(f"✅ Removed {removed} duplicate rows. Dataset now has {len(st.session_state.df):,} rows.")
                 st.rerun()
         else:
-            st.markdown("<span class='badge badge-success'>? No duplicates found</span>", unsafe_allow_html=True)
+            st.markdown("<span class='badge badge-success'>✅ No duplicates found</span>", unsafe_allow_html=True)
 
-    # -- Missing Values --
+    # ── Missing Values ──
     with tab2:
         st.markdown("<div class='section-header'><h3>Missing Value Treatment</h3></div>", unsafe_allow_html=True)
         report = missing_value_report(df)
         if not report:
-            st.markdown("<span class='badge badge-success'>? No missing values</span>", unsafe_allow_html=True)
+            st.markdown("<span class='badge badge-success'>✅ No missing values</span>", unsafe_allow_html=True)
         else:
             for item in report:
                 with st.expander(f"**{item['column']}** — {item['missing']} missing ({item['pct']}%) [{item['type']}]"):
@@ -876,60 +876,60 @@ elif st.session_state.page == "Cleaning & Validation":
                         except Exception as e:
                             st.error(str(e))
 
-    # -- Validation --
+    # ── Validation ──
     with tab3:
         st.markdown("<div class='section-header'><h3>Data Validation & Anomaly Detection</h3></div>", unsafe_allow_html=True)
 
         v1, v2 = st.columns(2)
         with v1:
-            st.markdown("**?? Invalid Domain Values**")
+            st.markdown("**⚠️ Invalid Domain Values**")
             inv = detect_invalid_values(df)
             if inv:
                 for col, info in inv.items():
                     st.markdown(f"<span class='badge badge-danger'>{col}</span> {info['issue']} — {info['count']} rows", unsafe_allow_html=True)
             else:
-                st.markdown("<span class='badge badge-success'>? None detected</span>", unsafe_allow_html=True)
+                st.markdown("<span class='badge badge-success'>✅ None detected</span>", unsafe_allow_html=True)
 
             st.markdown("&nbsp;")
-            st.markdown("**?? Invalid Emails**")
+            st.markdown("**📧 Invalid Emails**")
             emails = detect_invalid_email(df)
             if emails:
                 for col, info in emails.items():
                     st.markdown(f"<span class='badge badge-warning'>{col}</span> {info['count']} invalid emails", unsafe_allow_html=True)
             else:
-                st.markdown("<span class='badge badge-success'>? None detected</span>", unsafe_allow_html=True)
+                st.markdown("<span class='badge badge-success'>✅ None detected</span>", unsafe_allow_html=True)
 
         with v2:
-            st.markdown("**? Negative Values**")
+            st.markdown("**➖ Negative Values**")
             negs = detect_negative_values(df)
             if negs:
                 for col, info in negs.items():
                     st.markdown(f"<span class='badge badge-warning'>{col}</span> {info['count']} negative rows", unsafe_allow_html=True)
             else:
-                st.markdown("<span class='badge badge-success'>? None detected</span>", unsafe_allow_html=True)
+                st.markdown("<span class='badge badge-success'>✅ None detected</span>", unsafe_allow_html=True)
 
             st.markdown("&nbsp;")
-            st.markdown("**?? Invalid Phone Numbers**")
+            st.markdown("**📞 Invalid Phone Numbers**")
             phones = detect_invalid_phone(df)
             if phones:
                 for col, info in phones.items():
                     st.markdown(f"<span class='badge badge-warning'>{col}</span> {info['count']} invalid", unsafe_allow_html=True)
             else:
-                st.markdown("<span class='badge badge-success'>? None detected</span>", unsafe_allow_html=True)
+                st.markdown("<span class='badge badge-success'>✅ None detected</span>", unsafe_allow_html=True)
 
         st.markdown("&nbsp;")
-        st.markdown("**?? Future Dates**")
+        st.markdown("**📅 Future Dates**")
         future = detect_future_dates(df)
         if future:
             for col, info in future.items():
                 st.markdown(f"<span class='badge badge-danger'>{col}</span> {info['count']} future dates", unsafe_allow_html=True)
         else:
-            st.markdown("<span class='badge badge-success'>? No future dates detected</span>", unsafe_allow_html=True)
+            st.markdown("<span class='badge badge-success'>✅ No future dates detected</span>", unsafe_allow_html=True)
 
-    # -- Similar Columns --
+    # ── Similar Columns ──
     with tab4:
         st.markdown("<div class='section-header'><h3>Similar / Redundant Column Detection</h3></div>", unsafe_allow_html=True)
-        st.info("?? Similarity is detected based on **data content** — not column names. Methods: correlation, one-to-one value mapping, Jaccard overlap, binary equivalence.")
+        st.info("ℹ️ Similarity is detected based on **data content** — not column names. Methods: correlation, one-to-one value mapping, Jaccard overlap, binary equivalence.")
 
         with st.spinner("Analysing column content similarity…"):
             suggestions = detect_duplicate_information_columns(df)
@@ -937,7 +937,7 @@ elif st.session_state.page == "Cleaning & Validation":
         if suggestions:
             st.warning(f"Found **{len(suggestions)}** potential redundant column pairs.")
             for s in suggestions:
-                with st.expander(f"**{s['col1']}** ? **{s['col2']}**  —  Score: {s['score']}%"):
+                with st.expander(f"**{s['col1']}** ↔ **{s['col2']}**  —  Score: {s['score']}%"):
                     c1s, c2s = st.columns(2)
                     with c1s:
                         st.markdown(f"**Reason:** {s['reason']}")
@@ -959,29 +959,29 @@ elif st.session_state.page == "Cleaning & Validation":
                             st.success(f"Dropped column: {s['col2']}")
                             st.rerun()
         else:
-            st.markdown("<span class='badge badge-success'>? No redundant columns detected by content analysis</span>", unsafe_allow_html=True)
+            st.markdown("<span class='badge badge-success'>✅ No redundant columns detected by content analysis</span>", unsafe_allow_html=True)
 
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 # PAGE 3 — ENCODING & OUTLIERS
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 elif st.session_state.page == "Encoding & Outliers":
 
     st.markdown("""
     <div class='main-header'>
-        <h1>?? Encoding & Outliers</h1>
+        <h1>🔠 Encoding & Outliers</h1>
         <p>Encode categorical features, detect outliers, and analyse distributions</p>
     </div>
     """, unsafe_allow_html=True)
 
     if st.session_state.df is None:
-        st.warning("?? Please upload a dataset first.")
+        st.warning("⚠️ Please upload a dataset first.")
         st.stop()
 
     df = st.session_state.df
     ct = identify_column_types(df)
-    tab1, tab2, tab3, tab4 = st.tabs(["?? Encoding","?? Outliers","?? Skewness","?? Distributions"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🔡 Encoding","📦 Outliers","〰️ Skewness","📊 Distributions"])
 
-    # -- Encoding --
+    # ── Encoding ──
     with tab1:
         st.markdown("<div class='section-header'><h3>Target-First Categorical Encoding</h3></div>", unsafe_allow_html=True)
 
@@ -1001,14 +1001,14 @@ elif st.session_state.page == "Encoding & Outliers":
                                          index=["label","onehot","ordinal","frequency"].index(rec_enc), key="enc_target")
             ordinal_order_t = None
             if chosen_enc_t == "ordinal":
-                ord_str = st.text_input("Ordinal order (comma-separated, low?high)", key="ord_target")
+                ord_str = st.text_input("Ordinal order (comma-separated, low→high)", key="ord_target")
                 if ord_str: ordinal_order_t = [x.strip() for x in ord_str.split(",")]
             if st.button(f"Apply Encoding to Target: {target_col}"):
                 try:
                     new_df, mapping = apply_encoding(df, target_col, chosen_enc_t, ordinal_order_t)
                     st.session_state.df = new_df
                     save_operation(st.session_state.file_name, f"Encoding: {target_col}", chosen_enc_t)
-                    st.success(f"? Applied {chosen_enc_t} encoding to '{target_col}'.")
+                    st.success(f"✅ Applied {chosen_enc_t} encoding to '{target_col}'.")
                     if mapping is not None:
                         st.dataframe(mapping.head(20), use_container_width=True)
                     st.rerun()
@@ -1044,11 +1044,11 @@ elif st.session_state.page == "Encoding & Outliers":
                             with right:
                                 st.markdown("**Mapping:**")
                                 if mapping is not None: st.dataframe(mapping.head(20), use_container_width=True)
-                            st.success(f"? Applied {chosen_enc} to '{col}'.")
+                            st.success(f"✅ Applied {chosen_enc} to '{col}'.")
                             st.rerun()
                         except Exception as e: st.error(str(e))
 
-    # -- Outliers --
+    # ── Outliers ──
     with tab2:
         st.markdown("<div class='section-header'><h3>Outlier Detection & Treatment</h3></div>", unsafe_allow_html=True)
         num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
@@ -1065,8 +1065,8 @@ elif st.session_state.page == "Encoding & Outliers":
                 <div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin:12px 0;'>
                     <b style='color:#2563eb;font-size:1rem;'>IQR Method Explained</b><br><br>
                     <b>Q1</b> = 25th percentile &nbsp;|&nbsp; <b>Q3</b> = 75th percentile<br>
-                    <b>IQR</b> = Q3 - Q1<br>
-                    <b>Lower Bound</b> = Q1 - 1.5 × IQR<br>
+                    <b>IQR</b> = Q3 − Q1<br>
+                    <b>Lower Bound</b> = Q1 − 1.5 × IQR<br>
                     <b>Upper Bound</b> = Q3 + 1.5 × IQR<br>
                     Values outside these bounds are flagged as outliers.
                 </div>
@@ -1092,7 +1092,7 @@ elif st.session_state.page == "Encoding & Outliers":
                 st.markdown("""
                 <div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin:12px 0;'>
                     <b style='color:#2563eb;font-size:1rem;'>Z-Score Method Explained</b><br><br>
-                    <b>Z = (x - mean) / std</b><br>
+                    <b>Z = (x − mean) / std</b><br>
                     Values with |Z| &gt; 3 are considered outliers (covers 99.7% of data under normal distribution).<br><br>
                     A Z-score threshold of <b>3</b> is used by default.
                 </div>
@@ -1110,7 +1110,7 @@ elif st.session_state.page == "Encoding & Outliers":
                     })
                 st.dataframe(pd.DataFrame(stats_rows), use_container_width=True)
 
-            # -- Outlier Visualisation: ALL columns at once --
+            # ── Outlier Visualisation: ALL columns at once ──
             st.markdown("<div class='section-header'><h3>Outlier Visualisation — All Numerical Columns</h3></div>", unsafe_allow_html=True)
             st.markdown("Outliers shown in **red**, normal values in **blue**. All columns displayed together.")
 
@@ -1193,7 +1193,7 @@ elif st.session_state.page == "Encoding & Outliers":
                 ca, cb, cc = st.columns(3)
                 method_key = "iqr" if use_iqr else "zscore"
                 with ca:
-                    if st.button("??? Remove Outliers"):
+                    if st.button("🗑️ Remove Outliers"):
                         try:
                             new_df, r = remove_outliers(df, selected_col, method=method_key)
                             st.session_state.df = new_df
@@ -1201,7 +1201,7 @@ elif st.session_state.page == "Encoding & Outliers":
                             st.success(f"Removed {r['removed']} outlier rows."); st.rerun()
                         except Exception as e: st.error(str(e))
                 with cb:
-                    if st.button("?? Cap Outliers (Winsorise)"):
+                    if st.button("📌 Cap Outliers (Winsorise)"):
                         try:
                             new_df, r = cap_outliers(df, selected_col)
                             st.session_state.df = new_df
@@ -1211,7 +1211,7 @@ elif st.session_state.page == "Encoding & Outliers":
                 with cc:
                     st.info("Select Remove or Cap above.")
 
-    # -- Skewness --
+    # ── Skewness ──
     with tab3:
         st.markdown("<div class='section-header'><h3>Skewness Analysis — All Numerical Columns</h3></div>", unsafe_allow_html=True)
         skew_df = calculate_skewness(df)
@@ -1293,11 +1293,11 @@ elif st.session_state.page == "Encoding & Outliers":
                         t, _ = boxcox(s+shift)
                         st.session_state.df.loc[s.index, skew_col+"_boxcox"] = t
                     save_operation(st.session_state.file_name, f"{transform} Transform: {skew_col}", "applied")
-                    st.success(f"? {transform} transform applied. New column added.")
+                    st.success(f"✅ {transform} transform applied. New column added.")
                     st.rerun()
                 except Exception as e: st.error(str(e))
 
-    # -- Distributions --
+    # ── Distributions ──
     with tab4:
         st.markdown("<div class='section-header'><h3>Distribution Analysis — All Numerical Columns</h3></div>", unsafe_allow_html=True)
         num_cols_d = df.select_dtypes(include=[np.number]).columns.tolist()
@@ -1346,26 +1346,26 @@ elif st.session_state.page == "Encoding & Outliers":
             except Exception as e:
                 st.error(f"Distribution chart error: {e}")
 
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 # PAGE 4 — STATISTICS & EXPORT
-# ---------------------------------------------
+# ─────────────────────────────────────────────
 elif st.session_state.page == "Statistics & Export":
 
     st.markdown("""
     <div class='main-header'>
-        <h1>?? Statistics & Export</h1>
+        <h1>📈 Statistics & Export</h1>
         <p>Explore descriptive statistics, target-based correlations, quality score, and export</p>
     </div>
     """, unsafe_allow_html=True)
 
     if st.session_state.df is None:
-        st.warning("?? Please upload a dataset first.")
+        st.warning("⚠️ Please upload a dataset first.")
         st.stop()
 
     df = st.session_state.df
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["?? Statistics","?? Correlation","?? Quality Score","?? History","?? Export"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Statistics","🔗 Correlation","🏅 Quality Score","📜 History","💾 Export"])
 
-    # -- Statistics --
+    # ── Statistics ──
     with tab1:
         st.markdown("<div class='section-header'><h3>Descriptive Statistics — All Columns</h3></div>", unsafe_allow_html=True)
 
@@ -1402,10 +1402,10 @@ elif st.session_state.page == "Statistics & Export":
             except Exception as e:
                 st.error(f"Chart error: {e}")
 
-    # -- Correlation --
+    # ── Correlation ──
     with tab2:
         st.markdown("<div class='section-header'><h3>Target-Based Feature Correlation</h3></div>", unsafe_allow_html=True)
-        st.info("?? Select a target column. All other features will be ranked by their relationship to it using Pearson, Spearman, and Mutual Information.")
+        st.info("ℹ️ Select a target column. All other features will be ranked by their relationship to it using Pearson, Spearman, and Mutual Information.")
 
         num_df = df.select_dtypes(include=[np.number])
         if num_df.shape[1] < 2:
@@ -1497,7 +1497,7 @@ elif st.session_state.page == "Statistics & Export":
                 except Exception as e:
                     st.error(f"MI chart error: {e}")
 
-    # -- Quality Score --
+    # ── Quality Score ──
     with tab3:
         st.markdown("<div class='section-header'><h3>Data Quality Score</h3></div>", unsafe_allow_html=True)
         score = calculate_data_quality_score(df)
@@ -1564,7 +1564,7 @@ elif st.session_state.page == "Statistics & Export":
             </div>
             """, unsafe_allow_html=True)
 
-    # -- History --
+    # ── History ──
     with tab4:
         st.markdown("<div class='section-header'><h3>Processing History</h3></div>", unsafe_allow_html=True)
         hist = get_processing_history(st.session_state.file_name)
@@ -1578,7 +1578,7 @@ elif st.session_state.page == "Statistics & Export":
                 use_container_width=True, height=400
             )
 
-    # -- Export --
+    # ── Export ──
     with tab5:
         st.markdown("<div class='section-header'><h3>Export Processed Dataset</h3></div>", unsafe_allow_html=True)
         st.markdown(f"""
@@ -1591,21 +1591,21 @@ elif st.session_state.page == "Statistics & Export":
 
         c1e, c2e = st.columns(2)
         with c1e:
-            st.markdown("**?? CSV Export**")
+            st.markdown("**📄 CSV Export**")
             csv_bytes = export_csv(df)
             st.download_button(
-                label="?? Download CSV",
+                label="⬇️ Download CSV",
                 data=csv_bytes,
                 file_name=f"processed_{st.session_state.file_name.rsplit('.',1)[0]}.csv",
                 mime="text/csv",
                 use_container_width=True
             )
         with c2e:
-            st.markdown("**?? Excel Export**")
+            st.markdown("**📊 Excel Export**")
             try:
                 excel_bytes = export_excel(df)
                 st.download_button(
-                    label="?? Download Excel",
+                    label="⬇️ Download Excel",
                     data=excel_bytes,
                     file_name=f"processed_{st.session_state.file_name.rsplit('.',1)[0]}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
