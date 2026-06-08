@@ -251,15 +251,21 @@ def detect_negative_values(df):
                 r[col] = {"count": len(n), "reason": "Domain requires non-negative values"}
     return r
 
-def validate_single_value(col_name, value, df_context=None):
-    """Validate a single value for a column, returns (status, reason)."""
+def validate_single_value(col_name, value, df_context=None, target_col=None):
+    """Validate a single value for a column, returns (status, reason). Only valid or invalid."""
     cl = col_name.lower()
+
+    # Target column: only 2 values allowed
+    if target_col and col_name == target_col and df_context is not None:
+        allowed = list(df_context[col_name].dropna().unique())
+        if len(allowed) <= 2 and value not in allowed:
+            return "invalid", f"Target column only allows: {allowed}"
+
     try:
         fval = float(value)
     except (TypeError, ValueError):
-        # non-numeric: basic checks
         if value is None or (isinstance(value, float) and np.isnan(value)):
-            return "suspicious", "Missing / null value"
+            return "invalid", "Missing / null value"
         return "valid", ""
 
     # Domain checks
@@ -280,16 +286,6 @@ def validate_single_value(col_name, value, df_context=None):
             return "invalid", f"Physical measurement {fval} cannot be negative"
     if is_non_negative_column(col_name) and fval < 0:
         return "invalid", f"Column '{col_name}' should not contain negative values"
-
-    # Suspicious checks
-    if any(k in cl for k in ["age"]) and (fval > 120 or fval == 0):
-        return "suspicious", f"Unusual age value: {fval}"
-    if df_context is not None and col_name in df_context.columns:
-        s = df_context[col_name].dropna()
-        if len(s) > 10:
-            mean, std = s.mean(), s.std()
-            if std > 0 and abs(fval - mean) > 5 * std:
-                return "suspicious", f"Value {fval} is >5σ from mean ({mean:.2f})"
 
     return "valid", ""
 
@@ -844,21 +840,34 @@ if st.session_state.page == "Upload & Inspect":
             st.markdown("**Manually add a new row to the dataset:**")
             st.caption("🔒 Numeric fields are bounded by the column's observed min/max values.")
             input_data = {}
+
+            # Detect target column set on the Encoding page
+            _target_enc = st.session_state.get("target_enc", "— None —")
+            _target_col = _target_enc if _target_enc != "— None —" else None
+            if _target_col:
+                st.caption(f"🎯 Target column detected: **{_target_col}** — only its existing 2 values are allowed.")
+
             form_cols = st.columns(min(3, len(df.columns)))
             for i, col in enumerate(df.columns):
                 with form_cols[i % 3]:
                     dtype = str(df[col].dtype)
-                    if "int" in dtype or "float" in dtype:
+
+                    # Target column → restrict to exactly its unique values (max 2)
+                    if _target_col and col == _target_col:
+                        unique_vals = list(df[col].dropna().unique())
+                        if len(unique_vals) > 2:
+                            unique_vals = unique_vals[:2]  # enforce binary
+                        input_data[col] = st.selectbox(
+                            f"{col} 🎯 [target — {len(unique_vals)} values]",
+                            unique_vals, key=f"inp_{col}"
+                        )
+                    elif "int" in dtype or "float" in dtype:
                         col_series = df[col].dropna()
                         col_min = float(col_series.min()) if len(col_series) else None
                         col_max = float(col_series.max()) if len(col_series) else None
                         col_mean = float(col_series.mean()) if len(col_series) else 0.0
-                        # Build label with range hint
-                        range_hint = ""
-                        if col_min is not None and col_max is not None:
-                            range_hint = f" [{col_min:g} – {col_max:g}]"
+                        range_hint = f" [{col_min:g} – {col_max:g}]" if col_min is not None and col_max is not None else ""
                         label = col + range_hint
-                        # Default value clamped to range
                         default_val = float(round(col_mean, 4)) if len(col_series) else 0.0
                         kwargs = dict(label=label, value=default_val, key=f"inp_{col}")
                         if col_min is not None:
@@ -877,27 +886,26 @@ if st.session_state.page == "Upload & Inspect":
             if st.button("➕ Add Row"):
                 new_row = {col: input_data.get(col, np.nan) for col in df.columns}
 
+                # read target column from encoding page session state (if set)
+                target_col_used = _target_col
+
                 # ── Validate the new row ──
                 val_results = []
                 for col, val in new_row.items():
-                    status, reason = validate_single_value(col, val, df)
+                    status, reason = validate_single_value(col, val, df, target_col=target_col_used)
                     val_results.append({"Column": col, "Value": val, "Status": status.title(), "Reason": reason or "—"})
 
                 n_valid   = sum(1 for r in val_results if r["Status"] == "Valid")
                 n_invalid = sum(1 for r in val_results if r["Status"] == "Invalid")
-                n_susp    = sum(1 for r in val_results if r["Status"] == "Suspicious")
 
                 st.markdown("---")
                 st.markdown("<div class='section-header'><h3>Recently Added Row Validation</h3></div>", unsafe_allow_html=True)
 
-                # Color-coded table
+                # Color-coded table — only green/red
                 def _row_style(row):
                     if row["Status"] == "Invalid":
                         return ["background-color:#fef2f2; color:#dc2626"]*len(row)
-                    elif row["Status"] == "Suspicious":
-                        return ["background-color:#fffbeb; color:#d97706"]*len(row)
-                    else:
-                        return ["background-color:#f0fdf4; color:#16a34a"]*len(row)
+                    return ["background-color:#f0fdf4; color:#16a34a"]*len(row)
 
                 val_df = pd.DataFrame(val_results)
                 try:
@@ -911,12 +919,11 @@ if st.session_state.page == "Upload & Inspect":
                 <div style='display:flex;gap:16px;margin:12px 0;flex-wrap:wrap;'>
                     <span class='badge badge-success'>✅ {n_valid} Valid Fields</span>
                     <span class='badge badge-danger'>❌ {n_invalid} Invalid Fields</span>
-                    <span class='badge badge-warning'>⚠️ {n_susp} Suspicious Fields</span>
                 </div>
                 """, unsafe_allow_html=True)
 
-                if n_invalid > 0 or n_susp > 0:
-                    st.warning("⚠️ This row contains invalid or suspicious values.")
+                if n_invalid > 0:
+                    st.warning("⚠️ This row contains invalid values.")
                     c_keep, c_edit, c_del = st.columns(3)
                     with c_keep:
                         if st.button("✅ Keep Row Anyway", key="keep_invalid_row"):
@@ -1661,7 +1668,6 @@ elif st.session_state.page == "Statistics & Export":
         dup_rows_q     = int(df.duplicated().sum())
         miss_cells_q   = int(df.isnull().sum().sum())
         inv_q          = detect_invalid_values(df)
-        susp_count_q   = sum(v["count"] for v in inv_q.values())
         score_q        = calculate_data_quality_score(df)
 
         rq1, rq2, rq3, rq4 = st.columns(4)
@@ -1675,11 +1681,10 @@ elif st.session_state.page == "Statistics & Export":
                 st.markdown(f"""<div class='metric-card'><span class='val' style='color:{color};'>{val}</span><span class='label'>{label}</span></div>""", unsafe_allow_html=True)
 
         st.markdown("&nbsp;")
-        rq5, rq6, rq7 = st.columns(3)
+        rq5, rq6 = st.columns(2)
         for widget, label, val, color in [
-            (rq5, "Missing Values",    f"{miss_cells_q:,}", "#d97706"),
-            (rq6, "Suspicious Values", f"{susp_count_q:,}", "#7c3aed"),
-            (rq7, "Quality Score",     f"{score_q}/100",    "#16a34a" if score_q >= 80 else "#d97706" if score_q >= 60 else "#dc2626"),
+            (rq5, "Missing Values", f"{miss_cells_q:,}", "#d97706"),
+            (rq6, "Quality Score",  f"{score_q}/100",    "#16a34a" if score_q >= 80 else "#d97706" if score_q >= 60 else "#dc2626"),
         ]:
             with widget:
                 st.markdown(f"""<div class='metric-card'><span class='val' style='color:{color};'>{val}</span><span class='label'>{label}</span></div>""", unsafe_allow_html=True)
@@ -1692,9 +1697,6 @@ elif st.session_state.page == "Statistics & Export":
                 Dataset contains <b style='color:#111827;'>{total_rows:,}</b> total rows across <b style='color:#111827;'>{len(df.columns)}</b> columns.<br>
                 <b style='color:#16a34a;'>{valid_rows_q:,}</b> rows pass all validation checks.
                 <b style='color:#dc2626;'>{invalid_rows_q:,}</b> rows have at least one invalid value.
-                <b style='color:#d97706;'>{dup_rows_q:,}</b> duplicate rows detected.
-                <b style='color:#d97706;'>{miss_cells_q:,}</b> missing cells across the dataset.
-                Overall data quality score: <b style='color:{"#16a34a" if score_q >= 80 else "#d97706" if score_q >= 60 else "#dc2626"};'>{score_q}/100</b>.
             </div>
         </div>
         """, unsafe_allow_html=True)
