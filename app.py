@@ -838,7 +838,6 @@ if st.session_state.page == "Upload & Inspect":
         # ── Add Row ──
         with tab5:
             st.markdown("**Manually add a new row to the dataset:**")
-            st.caption("🔒 Numeric fields are bounded by the column's observed min/max values.")
             input_data = {}
 
             # Detect target column set on the Encoding page
@@ -862,19 +861,7 @@ if st.session_state.page == "Upload & Inspect":
                             unique_vals, key=f"inp_{col}"
                         )
                     elif "int" in dtype or "float" in dtype:
-                        col_series = df[col].dropna()
-                        col_min = float(col_series.min()) if len(col_series) else None
-                        col_max = float(col_series.max()) if len(col_series) else None
-                        col_mean = float(col_series.mean()) if len(col_series) else 0.0
-                        range_hint = f" [{col_min:g} – {col_max:g}]" if col_min is not None and col_max is not None else ""
-                        label = col + range_hint
-                        default_val = float(round(col_mean, 4)) if len(col_series) else 0.0
-                        kwargs = dict(label=label, value=default_val, key=f"inp_{col}")
-                        if col_min is not None:
-                            kwargs["min_value"] = col_min
-                        if col_max is not None:
-                            kwargs["max_value"] = col_max
-                        input_data[col] = st.number_input(**kwargs)
+                        input_data[col] = st.number_input(col, value=0.0, key=f"inp_{col}")
                     elif col in ct["boolean"]:
                         input_data[col] = st.selectbox(col, [True, False], key=f"inp_{col}")
                     elif col in ct["categorical"] and df[col].nunique() < 50:
