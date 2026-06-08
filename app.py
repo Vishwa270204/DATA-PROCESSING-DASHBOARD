@@ -872,8 +872,6 @@ if st.session_state.page == "Upload & Inspect":
 
             if st.button("➕ Add Row"):
                 new_row = {col: input_data.get(col, np.nan) for col in df.columns}
-
-                # read target column from encoding page session state (if set)
                 target_col_used = _target_col
 
                 # ── Validate the new row ──
@@ -882,13 +880,39 @@ if st.session_state.page == "Upload & Inspect":
                     status, reason = validate_single_value(col, val, df, target_col=target_col_used)
                     val_results.append({"Column": col, "Value": val, "Status": status.title(), "Reason": reason or "—"})
 
+                n_invalid = sum(1 for r in val_results if r["Status"] == "Invalid")
+
+                if n_invalid == 0:
+                    # All valid — insert immediately
+                    before = len(df)
+                    st.session_state.df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+                    save_operation(st.session_state.file_name, "Add Row", new_row)
+                    st.session_state.pop("_pending_row", None)
+                    st.session_state.pop("_pending_val_results", None)
+                    st.success(f"✅ New Row Added Successfully! Dataset: {before} → {len(st.session_state.df)} rows.")
+                    tail_df = st.session_state.df.tail(5).copy()
+                    tail_df.index = range(len(st.session_state.df) - len(tail_df), len(st.session_state.df))
+                    st.dataframe(tail_df.style.apply(
+                        lambda x: ["background-color:#bbf7d0; font-weight:bold"]*len(x)
+                            if x.name == tail_df.index[-1] else [""]*len(x),
+                        axis=1
+                    ), use_container_width=True)
+                    st.rerun()
+                else:
+                    # Has invalid values — store in session state and show review
+                    st.session_state["_pending_row"] = new_row
+                    st.session_state["_pending_val_results"] = val_results
+
+            # ── Show pending row review (persists across reruns) ──
+            if st.session_state.get("_pending_row") and st.session_state.get("_pending_val_results"):
+                pending_row = st.session_state["_pending_row"]
+                val_results = st.session_state["_pending_val_results"]
                 n_valid   = sum(1 for r in val_results if r["Status"] == "Valid")
                 n_invalid = sum(1 for r in val_results if r["Status"] == "Invalid")
 
                 st.markdown("---")
                 st.markdown("<div class='section-header'><h3>Recently Added Row Validation</h3></div>", unsafe_allow_html=True)
 
-                # Color-coded table — only green/red
                 def _row_style(row):
                     if row["Status"] == "Invalid":
                         return ["background-color:#fef2f2; color:#dc2626"]*len(row)
@@ -902,7 +926,6 @@ if st.session_state.page == "Upload & Inspect":
                 except Exception:
                     st.dataframe(val_df, use_container_width=True, hide_index=True)
 
-                # Summary
                 st.markdown(f"""
                 <div style='display:flex;gap:16px;margin:12px 0;flex-wrap:wrap;'>
                     <span class='badge badge-success'>✅ {n_valid} Valid Fields</span>
@@ -910,37 +933,25 @@ if st.session_state.page == "Upload & Inspect":
                 </div>
                 """, unsafe_allow_html=True)
 
-                if n_invalid > 0:
-                    st.warning("⚠️ This row contains invalid values.")
-                    c_keep, c_edit, c_del = st.columns(3)
-                    with c_keep:
-                        if st.button("✅ Keep Row Anyway", key="keep_invalid_row"):
-                            before = len(df)
-                            st.session_state.df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-                            save_operation(st.session_state.file_name, "Add Row (with issues)", new_row)
-                            st.success(f"Row added. Dataset: {before} → {len(st.session_state.df)} rows.")
-                            st.rerun()
-                    with c_edit:
-                        st.info("💡 Edit the values above and click **➕ Add Row** again.")
-                    with c_del:
-                        if st.button("🗑️ Discard Row", key="discard_row"):
-                            st.info("Row discarded.")
-                else:
-                    before = len(df)
-                    st.session_state.df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-                    save_operation(st.session_state.file_name, "Add Row", new_row)
-                    st.success(f"✅ New Row Added Successfully! Dataset: {before} → {len(st.session_state.df)} rows.")
-
-                    # Show tail with highlight
-                    st.markdown("**Dataset tail (last 5 rows) — newest row highlighted:**")
-                    tail_df = st.session_state.df.tail(5).copy()
-                    tail_df.index = range(len(st.session_state.df) - len(tail_df), len(st.session_state.df))
-                    st.dataframe(tail_df.style.apply(
-                        lambda x: ["background-color:#bbf7d0; font-weight:bold"]*len(x)
-                            if x.name == tail_df.index[-1] else [""]*len(x),
-                        axis=1
-                    ), use_container_width=True)
-                    st.rerun()
+                st.warning("⚠️ This row contains invalid values.")
+                c_keep, c_edit, c_del = st.columns(3)
+                with c_keep:
+                    if st.button("✅ Keep Row Anyway", key="keep_invalid_row"):
+                        before = len(st.session_state.df)
+                        st.session_state.df = pd.concat([st.session_state.df, pd.DataFrame([pending_row])], ignore_index=True)
+                        save_operation(st.session_state.file_name, "Add Row (with issues)", pending_row)
+                        st.session_state.pop("_pending_row", None)
+                        st.session_state.pop("_pending_val_results", None)
+                        st.success(f"Row added. Dataset: {before} → {len(st.session_state.df)} rows.")
+                        st.rerun()
+                with c_edit:
+                    st.info("💡 Edit the values above and click **➕ Add Row** again.")
+                with c_del:
+                    if st.button("🗑️ Discard Row", key="discard_row"):
+                        st.session_state.pop("_pending_row", None)
+                        st.session_state.pop("_pending_val_results", None)
+                        st.info("Row discarded.")
+                        st.rerun()
 
 # ─────────────────────────────────────────────
 # PAGE 2 — CLEANING & VALIDATION
