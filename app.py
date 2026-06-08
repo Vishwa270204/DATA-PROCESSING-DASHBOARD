@@ -209,24 +209,70 @@ def descriptive_statistics(df):
 
 def detect_invalid_values(df):
     issues = {}
+    invalid_mask = pd.Series(False, index=df.index)
     for col in df.select_dtypes(include=[np.number]).columns:
         cl = col.lower()
-        if any(k in cl for k in ["age"]):
-            b = df[(df[col] < 0) | (df[col] > 150)]
-            if len(b): issues[col] = {"issue": "Age out of range (0–150)", "count": len(b)}
-        elif any(k in cl for k in ["pct","percent","rate"]):
-            b = df[(df[col] < 0) | (df[col] > 100)]
-            if len(b): issues[col] = {"issue": "Percentage out of range", "count": len(b)}
-        elif any(k in cl for k in ["salary","income","revenue","price","cost","amount"]):
-            b = df[df[col] < 0]
-            if len(b): issues[col] = {"issue": "Negative monetary value", "count": len(b)}
-    return issues
+        # Age validation
+        if "age" in cl:
+            bad_rows = df[(df[col] < 0) | (df[col] > 150)]
+            if len(bad_rows):
+                issues[col] = {
+                    "issue": "Age out of range (0–150)",
+                    "count": len(bad_rows),
+                    "rows": bad_rows.index.tolist()
+                }
+                invalid_mask |= (
+                    (df[col] < 0) |
+                    (df[col] > 150)
+                )
+        # Percentage validation
+        elif any(k in cl for k in ["pct", "percent", "rate"]):
+            bad_rows = df[
+                (df[col] < 0) |
+                (df[col] > 100)
+            ]
+            if len(bad_rows):
+                issues[col] = {
+                    "issue": "Percentage out of range",
+                    "count": len(bad_rows),
+                    "rows": bad_rows.index.tolist()
+                }
+
+                invalid_mask |= (
+                    (df[col] < 0) |
+                    (df[col] > 100)
+                )
+
+        # Non-negative columns
+        elif (
+            any(k in cl for k in NON_NEGATIVE_KEYWORDS)
+            and
+            not any(k in cl for k in SIGNED_KEYWORDS)
+        ):
+            numeric_col = pd.to_numeric(
+            df[col],
+            errors="coerce    )
+
+            bad_rows = df[df[col] < 0]
+
+            if len(bad_rows):
+                issues[col] = {
+                    "issue": "Negative value not allowed",
+                    "count": len(bad_rows),
+                    "rows": bad_rows.index.tolist()
+                }
+                invalid_mask |= (numeric_col < 0)
+
+    invalid_rows = df[invalid_mask].copy()
+
+    return issues, invalid_rows
 
 NON_NEGATIVE_KEYWORDS = [
-    "age", "salary", "income", "revenue", "debt", "experience", "weight",
-    "height", "price", "cost", "quantity", "amount", "months", "years",
-    "positive_node", "positivenode", "tumor", "size", "count", "duration",
-    "population", "rate", "pct", "percent", "score", "grade", "rank",
+    "age", "salary", "income", "revenue", "debt", "experience",
+    "weight", "height", "price", "cost", "quantity", "amount",
+    "months", "years", "node", "positive", "survival",
+    "tumor", "size", "count", "duration", "population",
+    "rate", "pct", "percent", "score", "grade", "rank",
     "distance", "area", "volume", "length", "width"
 ]
 SIGNED_KEYWORDS = [
@@ -725,7 +771,11 @@ with st.sidebar:
         File: <b style='color:#6b7280;'>{st.session_state.file_name or "None"}</b>
     </div>
     """, unsafe_allow_html=True)
+if "last_added_row" not in st.session_state:
+    st.session_state.last_added_row = None
 
+if "last_added_row_validation" not in st.session_state:
+    st.session_state.last_added_row_validation = None
 # ─────────────────────────────────────────────
 # PAGE 1 — UPLOAD & INSPECT
 # ─────────────────────────────────────────────
@@ -859,7 +909,9 @@ if st.session_state.page == "Upload & Inspect":
 
             if st.button("➕ Add Row"):
                 new_row = {col: input_data.get(col, np.nan) for col in df.columns}
-
+                val_df = pd.DataFrame(val_results)
+                st.session_state.last_added_row = new_row
+                st.session_state.last_added_row_validation = val_results
                 # ── Validate the new row ──
                 val_results = []
                 for col, val in new_row.items():
@@ -904,7 +956,29 @@ if st.session_state.page == "Upload & Inspect":
                     with c_keep:
                         if st.button("✅ Keep Row Anyway", key="keep_invalid_row"):
                             before = len(df)
-                            st.session_state.df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+                            new_df = pd.concat([df, pd.DataFrame([new_row])],ignore_index=True)
+                            st.session_state.df = new_df
+                            # Recalculate invalid rows immediately
+                            invalid_mask = pd.Series(False, index=new_df.index)
+                            NON_NEGATIVE_KEYWORDS = [
+                                "age","salary","income","debt",
+                                "loan","experience","price",
+                                "quantity","height","weight",
+                                "month","year","size"
+                            ]
+                            for col in new_df.columns:
+                                if not pd.api.types.is_numeric_dtype(new_df[col]):
+                                    continue
+                                if any(k in col.lower() for k in NON_NEGATIVE_KEYWORDS):
+                                    invalid_mask |= (
+                                        pd.to_numeric(
+                                            new_df[col],
+                                            errors="coerce"
+                                        ) < 0
+                                    )
+                            st.session_state.invalid_rows = new_df[
+                                invalid_mask
+                            ]
                             save_operation(st.session_state.file_name, "Add Row (with issues)", new_row)
                             st.success(f"Row added. Dataset: {before} → {len(st.session_state.df)} rows.")
                             st.rerun()
@@ -918,7 +992,18 @@ if st.session_state.page == "Upload & Inspect":
                     st.session_state.df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                     save_operation(st.session_state.file_name, "Add Row", new_row)
                     st.success(f"✅ New Row Added Successfully! Dataset: {before} → {len(st.session_state.df)} rows.")
-
+                    if n_invalid > 0:
+                        st.error(
+                            f"Validation Status: {n_invalid} Invalid Fields Found"
+                        )
+                    elif n_susp > 0:
+                        st.warning(
+                            f"Validation Status: {n_susp} Suspicious Fields Found"
+                        )
+                    else:
+                        st.success(
+                            "Validation Status: All Values Valid"
+                        )
                     # Show tail with highlight
                     st.markdown("**Dataset tail (last 5 rows) — newest row highlighted:**")
                     tail_df = st.session_state.df.tail(5).copy()
@@ -928,6 +1013,18 @@ if st.session_state.page == "Upload & Inspect":
                             if x.name == tail_df.index[-1] else [""]*len(x),
                         axis=1
                     ), use_container_width=True)
+                    st.markdown("### Last Added Row")
+                    st.dataframe(
+                        pd.DataFrame([new_row]),
+                        use_container_width=True
+                    )
+                    
+                    st.markdown("### Validation Result")
+                    
+                    st.dataframe(
+                        pd.DataFrame(val_results),
+                        use_container_width=True
+                    )
                     st.rerun()
 
 # ─────────────────────────────────────────────
@@ -967,8 +1064,14 @@ elif st.session_state.page == "Cleaning & Validation":
 
             if st.button("🗑️ Remove All Duplicates"):
                 before = len(df)
-                st.session_state.df = df.drop_duplicates(keep="first").reset_index(drop=True)
+                new_df = pd.concat(
+                    [df, pd.DataFrame([new_row])],
+                    ignore_index=True
+                )
+                st.session_state.df = new_df
                 removed = before - len(st.session_state.df)
+                st.session_state.last_added_row = new_row
+                st.session_state.last_added_row_validation = val_results
                 save_operation(st.session_state.file_name, "Remove Duplicates", f"Removed {removed} rows")
                 st.success(f"✅ Removed {removed} duplicate rows. Dataset now has {len(st.session_state.df):,} rows.")
                 st.rerun()
