@@ -222,72 +222,12 @@ def detect_invalid_values(df):
             if len(b): issues[col] = {"issue": "Negative monetary value", "count": len(b)}
     return issues
 
-NON_NEGATIVE_KEYWORDS = [
-    "age", "salary", "income", "revenue", "debt", "experience", "weight",
-    "height", "price", "cost", "quantity", "amount", "months", "years",
-    "positive_node", "positivenode", "tumor", "size", "count", "duration",
-    "population", "rate", "pct", "percent", "score", "grade", "rank",
-    "distance", "area", "volume", "length", "width"
-]
-SIGNED_KEYWORDS = [
-    "profit", "loss", "temperature", "balance", "change", "growth",
-    "return", "difference", "delta", "variance", "gain", "net",
-    "flow", "deviation", "residual"
-]
-
-def is_non_negative_column(col_name):
-    cl = col_name.lower().replace(" ", "_")
-    if any(kw in cl for kw in SIGNED_KEYWORDS):
-        return False
-    return any(kw in cl for kw in NON_NEGATIVE_KEYWORDS)
-
 def detect_negative_values(df):
-    """Only flag negative values in columns that semantically cannot be negative."""
     r = {}
     for col in df.select_dtypes(include=[np.number]).columns:
-        if is_non_negative_column(col):
-            n = df[df[col] < 0]
-            if len(n):
-                r[col] = {"count": len(n), "reason": "Domain requires non-negative values"}
+        n = df[df[col] < 0]
+        if len(n): r[col] = {"count": len(n)}
     return r
-
-def validate_single_value(col_name, value, df_context=None, target_col=None):
-    """Validate a single value for a column, returns (status, reason). Only valid or invalid."""
-    cl = col_name.lower()
-
-    # Target column: only 2 values allowed
-    if target_col and col_name == target_col and df_context is not None:
-        allowed = list(df_context[col_name].dropna().unique())
-        if len(allowed) <= 2 and value not in allowed:
-            return "invalid", f"Target column only allows: {allowed}"
-
-    try:
-        fval = float(value)
-    except (TypeError, ValueError):
-        if value is None or (isinstance(value, float) and np.isnan(value)):
-            return "invalid", "Missing / null value"
-        return "valid", ""
-
-    # Domain checks
-    if any(k in cl for k in ["age"]):
-        if fval < 0 or fval > 150:
-            return "invalid", f"Age {fval} out of valid range (0–150)"
-    if any(k in cl for k in ["pct", "percent", "rate"]) and "growth" not in cl and "change" not in cl:
-        if fval < 0 or fval > 100:
-            return "invalid", f"Percentage {fval} out of range (0–100)"
-    if any(k in cl for k in ["salary", "income", "revenue", "price", "cost", "amount", "debt"]):
-        if fval < 0:
-            return "invalid", f"Monetary value {fval} cannot be negative"
-    if any(k in cl for k in ["experience", "years", "months", "duration"]):
-        if fval < 0:
-            return "invalid", f"Time value {fval} cannot be negative"
-    if any(k in cl for k in ["weight", "height", "tumor", "size"]):
-        if fval < 0:
-            return "invalid", f"Physical measurement {fval} cannot be negative"
-    if is_non_negative_column(col_name) and fval < 0:
-        return "invalid", f"Column '{col_name}' should not contain negative values"
-
-    return "valid", ""
 
 def detect_invalid_email(df):
     pat = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$"); r = {}
@@ -397,28 +337,33 @@ def detect_duplicate_information_columns(df):
                     })
             except: pass
 
-    # Method 4 – Row-level similarity ≥95% (exact or normalised)
-    for i in range(len(cat_cols)):
-        for j in range(i+1, len(cat_cols)):
+    # Method 4 – Boolean / binary equivalence (Yes/No vs 1/0 vs True/False)
+    binary_map = {
+        frozenset({"yes","no"}), frozenset({"1","0"}),
+        frozenset({"true","false"}), frozenset({"m","f"}),
+        frozenset({"male","female"}), frozenset({"y","n"})
+    }
+    bool_cols = cat_cols + ct["boolean"]
+    for i in range(len(bool_cols)):
+        for j in range(i+1, len(bool_cols)):
             already = any(
-                (s["col1"] == cat_cols[i] and s["col2"] == cat_cols[j]) or
-                (s["col1"] == cat_cols[j] and s["col2"] == cat_cols[i])
+                (s["col1"] == bool_cols[i] and s["col2"] == bool_cols[j]) or
+                (s["col1"] == bool_cols[j] and s["col2"] == bool_cols[i])
                 for s in suggestions
             )
             if already: continue
             try:
-                pair = df[[cat_cols[i], cat_cols[j]]].dropna()
-                if len(pair) < 10: continue
-                a = pair[cat_cols[i]].astype(str).str.strip().str.lower()
-                b = pair[cat_cols[j]].astype(str).str.strip().str.lower()
-                row_match = (a == b).mean()
-                if row_match >= 0.95:
-                    suggestions.append({
-                        "col1": cat_cols[i], "col2": cat_cols[j],
-                        "reason": f"Row-level value match: {row_match*100:.1f}% of rows contain identical values",
-                        "score": round(row_match * 100, 1),
-                        "action": "Columns appear to be exact duplicates"
-                    })
+                s1 = norm_set(df[bool_cols[i]])
+                s2 = norm_set(df[bool_cols[j]])
+                if len(s1) <= 2 and len(s2) <= 2 and len(s1) > 0 and len(s2) > 0:
+                    both_binary = (s1 in binary_map or len(s1) <= 2) and (s2 in binary_map or len(s2) <= 2)
+                    if both_binary and s1 != s2:
+                        suggestions.append({
+                            "col1": bool_cols[i], "col2": bool_cols[j],
+                            "reason": f"Both binary columns with equivalent meaning ({list(s1)} vs {list(s2)})",
+                            "score": 90.0,
+                            "action": "Likely same binary signal"
+                        })
             except: pass
 
     # Deduplicate
@@ -838,43 +783,13 @@ if st.session_state.page == "Upload & Inspect":
         # ── Add Row ──
         with tab5:
             st.markdown("**Manually add a new row to the dataset:**")
-            st.caption("🔒 Numeric fields are bounded by the column's observed min/max values.")
             input_data = {}
-
-            # Detect target column set on the Encoding page
-            _target_enc = st.session_state.get("target_enc", "— None —")
-            _target_col = _target_enc if _target_enc != "— None —" else None
-            if _target_col:
-                st.caption(f"🎯 Target column detected: **{_target_col}** — only its existing 2 values are allowed.")
-
             form_cols = st.columns(min(3, len(df.columns)))
             for i, col in enumerate(df.columns):
                 with form_cols[i % 3]:
                     dtype = str(df[col].dtype)
-
-                    # Target column → restrict to exactly its unique values (max 2)
-                    if _target_col and col == _target_col:
-                        unique_vals = list(df[col].dropna().unique())
-                        if len(unique_vals) > 2:
-                            unique_vals = unique_vals[:2]  # enforce binary
-                        input_data[col] = st.selectbox(
-                            f"{col} 🎯 [target — {len(unique_vals)} values]",
-                            unique_vals, key=f"inp_{col}"
-                        )
-                    elif "int" in dtype or "float" in dtype:
-                        col_series = df[col].dropna()
-                        col_min = float(col_series.min()) if len(col_series) else None
-                        col_max = float(col_series.max()) if len(col_series) else None
-                        col_mean = float(col_series.mean()) if len(col_series) else 0.0
-                        range_hint = f" [{col_min:g} – {col_max:g}]" if col_min is not None and col_max is not None else ""
-                        label = col + range_hint
-                        default_val = float(round(col_mean, 4)) if len(col_series) else 0.0
-                        kwargs = dict(label=label, value=default_val, key=f"inp_{col}")
-                        if col_min is not None:
-                            kwargs["min_value"] = col_min
-                        if col_max is not None:
-                            kwargs["max_value"] = col_max
-                        input_data[col] = st.number_input(**kwargs)
+                    if "int" in dtype or "float" in dtype:
+                        input_data[col] = st.number_input(col, value=0.0, key=f"inp_{col}")
                     elif col in ct["boolean"]:
                         input_data[col] = st.selectbox(col, [True, False], key=f"inp_{col}")
                     elif col in ct["categorical"] and df[col].nunique() < 50:
@@ -884,76 +799,14 @@ if st.session_state.page == "Upload & Inspect":
                         input_data[col] = st.text_input(col, key=f"inp_{col}")
 
             if st.button("➕ Add Row"):
-                new_row = {col: input_data.get(col, np.nan) for col in df.columns}
-
-                # read target column from encoding page session state (if set)
-                target_col_used = _target_col
-
-                # ── Validate the new row ──
-                val_results = []
-                for col, val in new_row.items():
-                    status, reason = validate_single_value(col, val, df, target_col=target_col_used)
-                    val_results.append({"Column": col, "Value": val, "Status": status.title(), "Reason": reason or "—"})
-
-                n_valid   = sum(1 for r in val_results if r["Status"] == "Valid")
-                n_invalid = sum(1 for r in val_results if r["Status"] == "Invalid")
-
-                st.markdown("---")
-                st.markdown("<div class='section-header'><h3>Recently Added Row Validation</h3></div>", unsafe_allow_html=True)
-
-                # Color-coded table — only green/red
-                def _row_style(row):
-                    if row["Status"] == "Invalid":
-                        return ["background-color:#fef2f2; color:#dc2626"]*len(row)
-                    return ["background-color:#f0fdf4; color:#16a34a"]*len(row)
-
-                val_df = pd.DataFrame(val_results)
-                val_df["Value"] = val_df["Value"].astype(str)
                 try:
-                    styled = val_df.style.apply(_row_style, axis=1)
-                    st.dataframe(styled, use_container_width=True, hide_index=True)
-                except Exception:
-                    st.dataframe(val_df, use_container_width=True, hide_index=True)
-
-                # Summary
-                st.markdown(f"""
-                <div style='display:flex;gap:16px;margin:12px 0;flex-wrap:wrap;'>
-                    <span class='badge badge-success'>✅ {n_valid} Valid Fields</span>
-                    <span class='badge badge-danger'>❌ {n_invalid} Invalid Fields</span>
-                </div>
-                """, unsafe_allow_html=True)
-
-                if n_invalid > 0:
-                    st.warning("⚠️ This row contains invalid values.")
-                    c_keep, c_edit, c_del = st.columns(3)
-                    with c_keep:
-                        if st.button("✅ Keep Row Anyway", key="keep_invalid_row"):
-                            before = len(df)
-                            st.session_state.df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-                            save_operation(st.session_state.file_name, "Add Row (with issues)", new_row)
-                            st.success(f"Row added. Dataset: {before} → {len(st.session_state.df)} rows.")
-                            st.rerun()
-                    with c_edit:
-                        st.info("💡 Edit the values above and click **➕ Add Row** again.")
-                    with c_del:
-                        if st.button("🗑️ Discard Row", key="discard_row"):
-                            st.info("Row discarded.")
-                else:
-                    before = len(df)
+                    new_row = {col: input_data.get(col, np.nan) for col in df.columns}
                     st.session_state.df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                     save_operation(st.session_state.file_name, "Add Row", new_row)
-                    st.success(f"✅ New Row Added Successfully! Dataset: {before} → {len(st.session_state.df)} rows.")
-
-                    # Show tail with highlight
-                    st.markdown("**Dataset tail (last 5 rows) — newest row highlighted:**")
-                    tail_df = st.session_state.df.tail(5).copy()
-                    tail_df.index = range(len(st.session_state.df) - len(tail_df), len(st.session_state.df))
-                    st.dataframe(tail_df.style.apply(
-                        lambda x: ["background-color:#bbf7d0; font-weight:bold"]*len(x)
-                            if x.name == tail_df.index[-1] else [""]*len(x),
-                        axis=1
-                    ), use_container_width=True)
+                    st.success("Row added successfully!")
                     st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {e}")
 
 # ─────────────────────────────────────────────
 # PAGE 2 — CLEANING & VALIDATION
@@ -1047,13 +900,13 @@ elif st.session_state.page == "Cleaning & Validation":
                 st.markdown("<span class='badge badge-success'>✅ None detected</span>", unsafe_allow_html=True)
 
         with v2:
-            st.markdown("**➖ Negative Values (domain-aware)**")
+            st.markdown("**➖ Negative Values**")
             negs = detect_negative_values(df)
             if negs:
                 for col, info in negs.items():
-                    st.markdown(f"<span class='badge badge-warning'>{col}</span> {info['count']} negative rows — {info['reason']}", unsafe_allow_html=True)
+                    st.markdown(f"<span class='badge badge-warning'>{col}</span> {info['count']} negative rows", unsafe_allow_html=True)
             else:
-                st.markdown("<span class='badge badge-success'>✅ None detected (signed columns excluded)</span>", unsafe_allow_html=True)
+                st.markdown("<span class='badge badge-success'>✅ None detected</span>", unsafe_allow_html=True)
 
             st.markdown("&nbsp;")
             st.markdown("**📞 Invalid Phone Numbers**")
@@ -1073,75 +926,10 @@ elif st.session_state.page == "Cleaning & Validation":
         else:
             st.markdown("<span class='badge badge-success'>✅ No future dates detected</span>", unsafe_allow_html=True)
 
-        # ── Valid / Invalid Row Segregation ──
-        st.markdown("---")
-        st.markdown("<div class='section-header'><h3>Valid / Invalid Row Segregation</h3></div>", unsafe_allow_html=True)
-
-        def _build_invalid_mask(df):
-            """Return boolean Series — True if row has at least one invalid value."""
-            mask = pd.Series(False, index=df.index)
-            for col in df.columns:
-                cl = col.lower()
-                if pd.api.types.is_numeric_dtype(df[col]):
-                    if any(k in cl for k in ["age"]):
-                        mask |= (df[col] < 0) | (df[col] > 150)
-                    if any(k in cl for k in ["pct","percent"]) and "growth" not in cl:
-                        mask |= (df[col] < 0) | (df[col] > 100)
-                    if is_non_negative_column(col):
-                        mask |= df[col] < 0
-            # Invalid emails
-            pat_email = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$")
-            for col in df.select_dtypes(include="object").columns:
-                if any(k in col.lower() for k in ["email","mail"]):
-                    bad = df[col].dropna().apply(lambda x: not bool(pat_email.match(str(x))))
-                    mask.loc[bad[bad].index] = True
-            # Future dates
-            now = pd.Timestamp.now()
-            for col in df.columns:
-                if any(k in col.lower() for k in ["birth","dob","born","date","created","joined"]):
-                    try:
-                        parsed = pd.to_datetime(df[col], errors="coerce")
-                        mask |= (parsed > now).fillna(False)
-                    except: pass
-            return mask
-
-        invalid_mask = _build_invalid_mask(df)
-        valid_df   = df[~invalid_mask]
-        invalid_df = df[invalid_mask]
-
-        ci1, ci2 = st.columns(2)
-        with ci1:
-            st.markdown(f"""<div class='metric-card'><span class='val' style='color:#16a34a;'>{len(valid_df):,}</span><span class='label'>Valid Rows</span></div>""", unsafe_allow_html=True)
-        with ci2:
-            st.markdown(f"""<div class='metric-card'><span class='val' style='color:#dc2626;'>{len(invalid_df):,}</span><span class='label'>Invalid Rows</span></div>""", unsafe_allow_html=True)
-
-        st.markdown("&nbsp;")
-
-        with st.expander(f"✅ Valid Rows ({len(valid_df):,})", expanded=False):
-            st.dataframe(valid_df.head(200), use_container_width=True, height=320)
-
-        if len(invalid_df) > 0:
-            with st.expander(f"❌ Invalid Rows ({len(invalid_df):,})", expanded=True):
-                st.dataframe(invalid_df, use_container_width=True, height=320)
-                c_rm, c_exp, c_rev = st.columns(3)
-                with c_rm:
-                    if st.button("🗑️ Remove Invalid Rows"):
-                        before = len(df)
-                        st.session_state.df = valid_df.reset_index(drop=True)
-                        save_operation(st.session_state.file_name, "Remove Invalid Rows", f"Removed {before - len(valid_df)} rows")
-                        st.success(f"✅ Removed {before - len(valid_df)} invalid rows. {len(st.session_state.df):,} rows remain.")
-                        st.rerun()
-                with c_exp:
-                    csv_inv = invalid_df.to_csv(index=False).encode("utf-8")
-                    st.download_button("⬇️ Export Invalid Rows", data=csv_inv,
-                                       file_name="invalid_rows.csv", mime="text/csv")
-                with c_rev:
-                    st.info(f"Showing all {len(invalid_df)} invalid rows above.")
-
     # ── Similar Columns ──
     with tab4:
         st.markdown("<div class='section-header'><h3>Similar / Redundant Column Detection</h3></div>", unsafe_allow_html=True)
-        st.info("ℹ️ A column pair is flagged ONLY when: (1) ≥95% row-level match, (2) one-to-one value mapping exists, or (3) near-perfect numerical correlation (>0.98). Binary columns sharing the same domain (e.g. Estrogen Status / Progesterone Status) are NOT flagged.")
+        st.info("ℹ️ Similarity is detected based on **data content** — not column names. Methods: correlation, one-to-one value mapping, Jaccard overlap, binary equivalence.")
 
         with st.spinner("Analysing column content similarity…"):
             suggestions = detect_duplicate_information_columns(df)
@@ -1156,13 +944,13 @@ elif st.session_state.page == "Cleaning & Validation":
                         st.markdown(f"**Recommendation:** {s['action']}")
                         st.markdown(f"**Similarity Score:** `{s['score']}%`")
                     with c2s:
-                        # Actual row-aligned sample values
+                        # Side-by-side value preview
                         try:
-                            sample = df[[s["col1"], s["col2"]]].dropna().head(10).reset_index(drop=True)
-                            sample.index = sample.index + 1
-                            sample.index.name = "Row"
-                            st.markdown("**Sample Data (row-aligned):**")
-                            st.dataframe(sample, use_container_width=True)
+                            preview = pd.DataFrame({
+                                s["col1"]: df[s["col1"]].dropna().unique()[:10],
+                                s["col2"]: df[s["col2"]].dropna().unique()[:10]
+                            })
+                            st.dataframe(preview, use_container_width=True)
                         except: pass
                     if st.button(f"Drop '{s['col2']}'", key=f"drop_{s['col1']}_{s['col2']}"):
                         if s["col2"] in st.session_state.df.columns:
@@ -1575,7 +1363,7 @@ elif st.session_state.page == "Statistics & Export":
         st.stop()
 
     df = st.session_state.df
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 Statistics","🔗 Correlation","📋 Quality Report","🏅 Quality Score","📜 History","💾 Export"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Statistics","🔗 Correlation","🏅 Quality Score","📜 History","💾 Export"])
 
     # ── Statistics ──
     with tab1:
@@ -1616,94 +1404,101 @@ elif st.session_state.page == "Statistics & Export":
 
     # ── Correlation ──
     with tab2:
-        st.markdown("<div class='section-header'><h3>Pairwise Column Correlation (All Numerical Columns)</h3></div>", unsafe_allow_html=True)
-        st.info("ℹ️ Each chart shows how strongly one column correlates with every other numerical column. No target selection required.")
+        st.markdown("<div class='section-header'><h3>Target-Based Feature Correlation</h3></div>", unsafe_allow_html=True)
+        st.info("ℹ️ Select a target column. All other features will be ranked by their relationship to it using Pearson, Spearman, and Mutual Information.")
 
         num_df = df.select_dtypes(include=[np.number])
         if num_df.shape[1] < 2:
             st.info("Need at least 2 numerical columns for correlation.")
         else:
-            num_cols_list = num_df.columns.tolist()
-            for col_a in num_cols_list:
-                others = [c for c in num_cols_list if c != col_a]
-                if not others:
-                    continue
-                pearson_vals = [round(num_df[col_a].corr(num_df[c], method="pearson"), 4) for c in others]
-                sorted_pairs = sorted(zip(others, pearson_vals), key=lambda x: abs(x[1]), reverse=False)
-                sorted_cols, sorted_vals = zip(*sorted_pairs) if sorted_pairs else ([], [])
-                colors = ["#dc2626" if v < 0 else "#2563eb" for v in sorted_vals]
+            target_corr = st.selectbox("Select Target Column", num_df.columns.tolist(), key="corr_target")
+            features    = [c for c in num_df.columns if c != target_corr]
+
+            if features:
+                y = df[target_corr].dropna()
+                X = df[features].loc[y.index].fillna(df[features].median())
+
+                # Pearson
+                pearson   = [df[f].corr(df[target_corr], method="pearson")  for f in features]
+                spearman  = [df[f].corr(df[target_corr], method="spearman") for f in features]
+
+                # Mutual information
                 try:
-                    fig = go.Figure(go.Bar(
-                        x=list(sorted_vals), y=list(sorted_cols),
-                        orientation="h",
-                        marker_color=colors,
-                        text=[f"{v:.3f}" for v in sorted_vals],
+                    mi = mutual_info_regression(X, y, discrete_features=False, random_state=42)
+                    mi_norm = mi / max(mi.max(), 1e-9)
+                except:
+                    mi_norm = [0.0] * len(features)
+
+                corr_result = pd.DataFrame({
+                    "Feature":    features,
+                    "Pearson":    [round(v, 4) for v in pearson],
+                    "Spearman":   [round(v, 4) for v in spearman],
+                    "MI (norm.)": [round(v, 4) for v in mi_norm]
+                }).sort_values("Pearson", key=abs, ascending=False)
+
+                st.dataframe(corr_result, use_container_width=True)
+
+                # Pearson horizontal bar
+                try:
+                    sorted_p = corr_result.sort_values("Pearson", key=abs, ascending=True)
+                    colors_p = ["#dc2626" if v < 0 else "#2563eb" for v in sorted_p["Pearson"]]
+                    fig_p = go.Figure(go.Bar(
+                        x=sorted_p["Pearson"], y=sorted_p["Feature"],
+                        orientation="h", marker_color=colors_p,
+                        text=[f"{v:.3f}" for v in sorted_p["Pearson"]],
                         textposition="outside"
                     ))
-                    fig.update_layout(
-                        title=f"Pearson Correlation: <b>{col_a}</b> vs all other columns",
-                        xaxis=dict(range=[-1, 1], title="Correlation Coefficient"),
-                        yaxis=dict(title=""),
-                        template="plotly_white",
-                        height=max(280, len(others) * 38 + 100),
-                        paper_bgcolor="#ffffff",
-                        plot_bgcolor="#f8f9fc",
-                        margin=dict(l=20, r=80, t=60, b=40)
+                    fig_p.update_layout(
+                        title=f"Pearson Correlation — Features vs '{target_corr}'",
+                        xaxis=dict(range=[-1,1]), template="plotly_white",
+                        height=max(300, len(features)*40+120),
+                        paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc"
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig_p, use_container_width=True)
                 except Exception as e:
-                    st.error(f"Chart error for {col_a}: {e}")
+                    st.error(f"Pearson chart error: {e}")
 
-    # ── Quality Report ──
-    with tab3:
-        st.markdown("<div class='section-header'><h3>Data Quality Report</h3></div>", unsafe_allow_html=True)
+                # Spearman
+                try:
+                    sorted_s = corr_result.sort_values("Spearman", key=abs, ascending=True)
+                    colors_s = ["#dc2626" if v < 0 else "#16a34a" for v in sorted_s["Spearman"]]
+                    fig_s = go.Figure(go.Bar(
+                        x=sorted_s["Spearman"], y=sorted_s["Feature"],
+                        orientation="h", marker_color=colors_s,
+                        text=[f"{v:.3f}" for v in sorted_s["Spearman"]],
+                        textposition="outside"
+                    ))
+                    fig_s.update_layout(
+                        title=f"Spearman Correlation — Features vs '{target_corr}'",
+                        xaxis=dict(range=[-1,1]), template="plotly_white",
+                        height=max(300, len(features)*40+120),
+                        paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc"
+                    )
+                    st.plotly_chart(fig_s, use_container_width=True)
+                except Exception as e:
+                    st.error(f"Spearman chart error: {e}")
 
-        total_rows = len(df)
-        inv_mask_q = pd.Series(False, index=df.index)
-        for col in df.columns:
-            if pd.api.types.is_numeric_dtype(df[col]):
-                if is_non_negative_column(col):
-                    inv_mask_q |= df[col] < 0
-        valid_rows_q   = int((~inv_mask_q).sum())
-        invalid_rows_q = int(inv_mask_q.sum())
-        dup_rows_q     = int(df.duplicated().sum())
-        miss_cells_q   = int(df.isnull().sum().sum())
-        inv_q          = detect_invalid_values(df)
-        score_q        = calculate_data_quality_score(df)
-
-        rq1, rq2, rq3, rq4 = st.columns(4)
-        for widget, label, val, color in [
-            (rq1, "Total Rows",      f"{total_rows:,}",    "#2563eb"),
-            (rq2, "Valid Rows",      f"{valid_rows_q:,}",  "#16a34a"),
-            (rq3, "Invalid Rows",    f"{invalid_rows_q:,}","#dc2626"),
-            (rq4, "Duplicate Rows",  f"{dup_rows_q:,}",    "#d97706"),
-        ]:
-            with widget:
-                st.markdown(f"""<div class='metric-card'><span class='val' style='color:{color};'>{val}</span><span class='label'>{label}</span></div>""", unsafe_allow_html=True)
-
-        st.markdown("&nbsp;")
-        rq5, rq6 = st.columns(2)
-        for widget, label, val, color in [
-            (rq5, "Missing Values", f"{miss_cells_q:,}", "#d97706"),
-            (rq6, "Quality Score",  f"{score_q}/100",    "#16a34a" if score_q >= 80 else "#d97706" if score_q >= 60 else "#dc2626"),
-        ]:
-            with widget:
-                st.markdown(f"""<div class='metric-card'><span class='val' style='color:{color};'>{val}</span><span class='label'>{label}</span></div>""", unsafe_allow_html=True)
-
-        st.markdown("&nbsp;")
-        st.markdown(f"""
-        <div style='padding:16px;background:#f8f9fc;border:1px solid #e2e6f0;border-radius:12px;'>
-            <div style='font-weight:600;color:#374151;margin-bottom:8px;'>Report Summary</div>
-            <div style='font-size:0.9rem;color:#6b7280;line-height:1.8;'>
-                Dataset contains <b style='color:#111827;'>{total_rows:,}</b> total rows across <b style='color:#111827;'>{len(df.columns)}</b> columns.<br>
-                <b style='color:#16a34a;'>{valid_rows_q:,}</b> rows pass all validation checks.
-                <b style='color:#dc2626;'>{invalid_rows_q:,}</b> rows have at least one invalid value.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+                # Mutual information
+                try:
+                    sorted_mi = corr_result.sort_values("MI (norm.)", ascending=True)
+                    fig_mi = go.Figure(go.Bar(
+                        x=sorted_mi["MI (norm.)"], y=sorted_mi["Feature"],
+                        orientation="h", marker_color="#7c3aed",
+                        text=[f"{v:.3f}" for v in sorted_mi["MI (norm.)"]],
+                        textposition="outside"
+                    ))
+                    fig_mi.update_layout(
+                        title=f"Mutual Information (Normalised) — Features vs '{target_corr}'",
+                        template="plotly_white",
+                        height=max(300, len(features)*40+120),
+                        paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc"
+                    )
+                    st.plotly_chart(fig_mi, use_container_width=True)
+                except Exception as e:
+                    st.error(f"MI chart error: {e}")
 
     # ── Quality Score ──
-    with tab4:
+    with tab3:
         st.markdown("<div class='section-header'><h3>Data Quality Score</h3></div>", unsafe_allow_html=True)
         score = calculate_data_quality_score(df)
         color = "#16a34a" if score >= 80 else "#d97706" if score >= 60 else "#dc2626"
@@ -1770,7 +1565,7 @@ elif st.session_state.page == "Statistics & Export":
             """, unsafe_allow_html=True)
 
     # ── History ──
-    with tab5:
+    with tab4:
         st.markdown("<div class='section-header'><h3>Processing History</h3></div>", unsafe_allow_html=True)
         hist = get_processing_history(st.session_state.file_name)
         if hist.empty:
@@ -1784,7 +1579,7 @@ elif st.session_state.page == "Statistics & Export":
             )
 
     # ── Export ──
-    with tab6:
+    with tab5:
         st.markdown("<div class='section-header'><h3>Export Processed Dataset</h3></div>", unsafe_allow_html=True)
         st.markdown(f"""
         <div style='padding:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;margin-bottom:20px;'>
