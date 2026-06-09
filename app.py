@@ -558,14 +558,46 @@ if st.session_state.page == "Upload & Inspect":
 
     uploaded = st.file_uploader("Choose a file", type=["csv","xlsx","xls"],
                                 help="Supports CSV, Excel (.xlsx/.xls)")
-    if uploaded and st.session_state.df is None:
-        try:
-            df = load_file(uploaded, uploaded.name)
-    
-            st.session_state.df = df
-            st.session_state.original_df = df.copy()
-            st.session_state.file_name = uploaded.name
+   if uploaded:
+    try:
+
+        # New file uploaded → reset session data
+        if uploaded.name != st.session_state.get("file_name", ""):
+
+            st.session_state.df = None
+            st.session_state.original_df = None
+
             st.session_state.encoded_columns = []
+
+            if "cleaning_history" in st.session_state:
+                st.session_state.cleaning_history = []
+
+            if "operations" in st.session_state:
+                st.session_state.operations = []
+
+        df = load_file(uploaded, uploaded.name)
+
+        st.session_state.df = df
+        st.session_state.original_df = df.copy()
+        st.session_state.file_name = uploaded.name
+
+        size_kb = uploaded.size / 1024
+
+        conn = sqlite3.connect(DB_NAME)
+        conn.execute(
+            "INSERT INTO file_metadata VALUES (NULL,?,?,?,?,?)",
+            (
+                uploaded.name,
+                datetime.now().isoformat(),
+                round(size_kb, 2),
+                len(df),
+                len(df.columns)
+            )
+        )
+        conn.commit()
+        conn.close()
+
+        st.success(f"✅ Loaded **{uploaded.name}**")
             size_kb = uploaded.size / 1024
             conn = sqlite3.connect(DB_NAME)
             conn.execute("INSERT INTO file_metadata VALUES (NULL,?,?,?,?,?)",
