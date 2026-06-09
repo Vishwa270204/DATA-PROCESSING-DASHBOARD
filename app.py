@@ -499,7 +499,8 @@ defaults = {
     "original_df": None,
     "file_name": "",
     "page": "Upload & Inspect",
-    "encoded_columns": [],   # FIX 2 – track which columns have been encoded
+    "encoded_columns": [],
+    "encoders": {}
 }
 for k, v in defaults.items():
     if k not in st.session_state:
