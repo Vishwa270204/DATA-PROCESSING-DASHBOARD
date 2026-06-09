@@ -883,22 +883,22 @@ if st.session_state.page == "Upload & Inspect":
                 n_invalid = sum(1 for r in val_results if r["Status"] == "Invalid")
 
                 if n_invalid == 0:
-                before = len(st.session_state.df)                          # ← was: len(df)
-                st.session_state.df = pd.concat(
-                    [st.session_state.df, pd.DataFrame([new_row])],        # ← was: [df, ...]
-                    ignore_index=True
-                )
-                save_operation(st.session_state.file_name, "Add Row", new_row)
-                st.session_state.pop("_pending_row", None)
-                st.session_state.pop("_pending_val_results", None)
-                st.success(f"✅ New Row Added! Dataset: {before} → {len(st.session_state.df)} rows.")
-                tail_df = st.session_state.df.tail(5).copy()
-                tail_df.index = range(len(st.session_state.df) - len(tail_df), len(st.session_state.df))
-                st.dataframe(tail_df.style.apply(
-                    lambda x: ["background-color:#bbf7d0; font-weight:bold"]*len(x)
-                        if x.name == tail_df.index[-1] else [""]*len(x), axis=1
-                ), use_container_width=True)
-                st.rerun()
+                    before = len(st.session_state.df)                          # ← was: len(df)
+                    st.session_state.df = pd.concat(
+                        [st.session_state.df, pd.DataFrame([new_row])],        # ← was: [df, ...]
+                        ignore_index=True
+                    )
+                    save_operation(st.session_state.file_name, "Add Row", new_row)
+                    st.session_state.pop("_pending_row", None)
+                    st.session_state.pop("_pending_val_results", None)
+                    st.success(f"✅ New Row Added! Dataset: {before} → {len(st.session_state.df)} rows.")
+                    tail_df = st.session_state.df.tail(5).copy()
+                    tail_df.index = range(len(st.session_state.df) - len(tail_df), len(st.session_state.df))
+                    st.dataframe(tail_df.style.apply(
+                        lambda x: ["background-color:#bbf7d0; font-weight:bold"]*len(x)
+                            if x.name == tail_df.index[-1] else [""]*len(x), axis=1
+                            ), use_container_width=True)
+                    st.rerun()
                 else:
                     # Has invalid values — store in session state and show review
                     st.session_state["_pending_row"] = new_row
