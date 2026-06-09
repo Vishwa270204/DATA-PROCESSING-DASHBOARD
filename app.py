@@ -709,17 +709,16 @@ if st.session_state.page == "Upload & Inspect":
             st.markdown("**Manually add a new row to the dataset:**")
 
             # Always read the CURRENT df from session state so count is accurate
-            current_df = st.session_state.original_df
-            ct_live = identify_column_types(current_df)
+            current_df = st.session_state.get("original_df")
+            if current_df is None or current_df.empty:
+                st.warning("Please upload a dataset first.")
+                st.stop()
+            ct_live = identify_column_types(current_df)            
             input_data = {}
-
             _target_enc = st.session_state.get("target_enc", "— None —")
             _target_col = _target_enc if _target_enc != "— None —" else None
             if _target_col:
                 st.caption(f"🎯 Target column: **{_target_col}** — only existing values allowed.")
-
-            
-
             form_cols = st.columns(min(3, len(current_df.columns)))
             for i, col in enumerate(current_df.columns):
                 with form_cols[i % 3]:
