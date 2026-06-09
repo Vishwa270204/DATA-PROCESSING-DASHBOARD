@@ -1059,7 +1059,7 @@ elif st.session_state.page == "Encoding & Outliers":
                     st.rerun()
             st.subheader("🟢 Label Encoding")
             if label_cols:
-                selected_col = st.multiselect(
+                selected_cols = st.multiselect(
                     "Select column for Label Encoding",
                     label_cols,
                     key="label_select"
