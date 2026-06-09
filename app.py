@@ -587,7 +587,7 @@ if st.session_state.page == "Upload & Inspect":
                 st.session_state.df = df
                 st.session_state.original_df = df.copy()
                 st.session_state.file_name = uploaded.name
-    
+                st.rerun()
                 st.session_state.encoded_columns = []
     
                 if "cleaning_history" in st.session_state:
