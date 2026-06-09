@@ -631,15 +631,16 @@ if st.session_state.page == "Upload & Inspect":
                 st.success(
                     f"✅ Loaded **{uploaded.name}** — "
                     f"{len(df):,} rows × {len(df.columns)} columns"
-                )
-                
+            )
         except Exception as e:
             st.error(f"❌ Error loading file: {e}")
     if st.session_state.df is not None:
-        df = st.session_state.df
-        summary = get_dataset_summary(df)
-        ct = identify_column_types(df)
-
+        raw_df = st.session_state.original_df
+        processed_df = st.session_state.processed_df
+        # Use RAW data for UI
+        df = raw_df        
+        summary = get_dataset_summary(raw_df)
+        ct = identify_column_types(raw_df)
         cols_m = st.columns(5)
         for col_w, label, val in zip(cols_m,
             ["Rows","Columns","Missing %","Duplicates","Memory MB"],
@@ -648,10 +649,8 @@ if st.session_state.page == "Upload & Inspect":
              f"{summary['memory_mb']}"]):
             with col_w:
                 st.markdown(f"""<div class='metric-card'><span class='val'>{val}</span><span class='label'>{label}</span></div>""", unsafe_allow_html=True)
-
         st.markdown("&nbsp;")
         tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["👁️ Preview","📋 Schema","🏷️ Column Types","❓ Missing","➕ Add Row","Encoded data"])
-
         with tab1:
             st.markdown(f"<div style='font-size:0.85rem;color:#6b7280;margin-bottom:8px;'>Dataset: <b style='color:#111827;'>{summary['rows']:,} rows × {summary['columns']} columns</b></div>", unsafe_allow_html=True)
             preview_opt = st.selectbox("Show", ["First 5 rows","First 10 rows","First 20 rows","Entire dataset"], key="preview_sel")
@@ -817,27 +816,21 @@ if st.session_state.page == "Upload & Inspect":
                         st.info("Row discarded.")
                         st.rerun()
         with tab6:
-        
             st.subheader("🔄 Encoded / Processed Dataset")
-        
             if st.session_state.get("processed_df") is not None:
-        
                 st.info(
                     "This dataset is used for ML and analysis. "
                     "The original dataset remains unchanged."
                 )
-        
                 st.dataframe(
                     st.session_state.processed_df,
                     use_container_width=True,
                     height=500
                 )
-        
                 st.write(
                     f"Rows: {len(st.session_state.processed_df):,} | "
                     f"Columns: {len(st.session_state.processed_df.columns):,}"
                 )
-        
             else:
                 st.warning("No processed dataset available.")
 # ═══════════════════════════════════════════════
@@ -1012,12 +1005,14 @@ elif st.session_state.page == "Encoding & Outliers":
     with tab1:
         st.markdown("<div class='section-header'><h3>Target-First Categorical Encoding</h3></div>", unsafe_allow_html=True)
 
-        all_cols = list(df.columns)
+        encoding_df = st.session_state.original_df
+        all_cols = list(st.session_state.original_df.columns)
+        ct = identify_column_types(encoding_df)
         if "target_col" not in st.session_state:
             st.session_state.target_col = "— None —"
         target_col = st.selectbox("Select Target Variable",["— None —"] + all_cols,key="target_col")
         if target_col != "— None —":
-            rec_enc, rec_exp = recommend_encoding(df, target_col, is_target=True)
+            rec_enc, rec_exp =recommend_encoding(st.session_state.original_df, target_col, is_target=True)
             already_encoded  = target_col in st.session_state.encoded_columns
 
             st.markdown(f"""
@@ -1066,7 +1061,7 @@ elif st.session_state.page == "Encoding & Outliers":
         ]
         ordinal_candidates = [
             c for c in enc_candidates
-            if df[c].dtype == "object"    
+            if encoding_df[c].dtype == "object"    
         ]
         total_feature_cats = len([c for c in ct["categorical"] + ct["boolean"] if c != target_col])
         done_count = len([c for c in encoded_set if c != target_col])
@@ -1084,20 +1079,14 @@ elif st.session_state.page == "Encoding & Outliers":
             onehot_cols = []
             label_cols = []
             frequency_cols = []
-        
             for col in enc_candidates:
-        
-                rec, _ = recommend_encoding(df, col)
-        
+                rec, _ = recommend_encoding(st.session_state.original_df, col)
                 if rec == "onehot":
                     onehot_cols.append(col)
-        
                 elif rec == "label":
                     label_cols.append(col)
-        
                 elif rec == "frequency":
                     frequency_cols.append(col)
-        
             # Ordinal candidates
             ordinal_candidates = [
                 c for c in enc_candidates
@@ -1108,96 +1097,71 @@ elif st.session_state.page == "Encoding & Outliers":
             # One-Hot Encoding
             # ─────────────────────────────────────
             if onehot_cols:
-        
                 st.subheader("🔵 One-Hot Encoding")
-        
                 selected_cols = st.multiselect(
                     "Select columns for One-Hot Encoding",
                     onehot_cols,
                     key="onehot_select"
                 )
-        
                 if st.button("Apply One-Hot Encoding"):
-        
                     for col in selected_cols:
-        
                         new_df, mapping = apply_encoding(
                             st.session_state.processed_df,
                             col,
                             "onehot"
                         )
-        
                         st.session_state.processed_df = new_df
                         st.session_state.df = new_df   # temporary compatibility
-        
                         if col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(col)
-        
                     st.success(f"✅ Encoded {len(selected_cols)} column(s)")
                     st.rerun()
-        
             # ─────────────────────────────────────
             # Label Encoding
             # ─────────────────────────────────────
             if label_cols:
-        
                 st.subheader("🏷️ Label Encoding")
-        
                 selected_cols = st.multiselect(
                     "Select columns for Label Encoding",
                     label_cols,
                     key="label_select"
                 )
-        
                 if st.button("Apply Label Encoding"):
-        
                     for col in selected_cols:
-        
                         new_df, mapping = apply_encoding(
                             st.session_state.processed_df,
                             col,
                             "label"
                         )
-        
                         st.session_state.processed_df = new_df
                         st.session_state.df = new_df   # temporary compatibility
                         if col not in st.session_state.encoded_columns:
-                            st.session_state.encoded_columns.append(col)
-        
+                            st.session_state.encoded_columns.append(col)        
                     st.success(f"✅ Encoded {len(selected_cols)} column(s)")
                     st.rerun()
-        
             # ─────────────────────────────────────
             # Frequency Encoding
             # ─────────────────────────────────────
             if frequency_cols:
-        
                 st.subheader("📊 Frequency Encoding")
-        
                 selected_cols = st.multiselect(
                     "Select columns for Frequency Encoding",
                     frequency_cols,
                     key="freq_select"
                 )
-        
                 if st.button("Apply Frequency Encoding"):
-        
                     for col in selected_cols:
-        
                         new_df, mapping = apply_encoding(
                             st.session_state.processed_df,
                             col,
                             "frequency"
                         )
-        
                         st.session_state.processed_df = new_df
                         st.session_state.df = new_df   # temporary compatibility
                         if col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(col)
-        
                     st.success(f"✅ Encoded {len(selected_cols)} column(s)")
                     st.rerun()
-        
             # ─────────────────────────────────────
             # Ordinal Encoding
             # ─────────────────────────────────────
@@ -1232,11 +1196,9 @@ elif st.session_state.page == "Encoding & Outliers":
                         st.session_state.df = new_df   # temporary compatibility
                         if col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(col)
-        
                         st.success(
                             f"✅ Encoded {len(selected_cols)} column(s)"
                         )
-        
                         st.rerun()
     # ── Outliers  ── FIX 3: go.Strip → go.Box + go.Scatter overlay ──────────
     with tab2:
