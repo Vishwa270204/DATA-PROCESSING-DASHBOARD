@@ -563,69 +563,69 @@ if st.session_state.page == "Upload & Inspect":
     )
 
     if uploaded:
-    try:
-
-        # Only load when a NEW file is selected
-        if uploaded.name != st.session_state.get("file_name", ""):
-
-            df = load_file(uploaded, uploaded.name)
-
-            st.session_state.df = df
-            st.session_state.original_df = df.copy()
-            st.session_state.file_name = uploaded.name
-
-            st.session_state.encoded_columns = []
-
-            if "cleaning_history" in st.session_state:
-                st.session_state.cleaning_history = []
-
-            if "operations" in st.session_state:
-                st.session_state.operations = []
-
-            size_kb = uploaded.size / 1024
-
-            conn = sqlite3.connect(DB_NAME)
-            conn.execute(
-                "INSERT INTO file_metadata VALUES (NULL,?,?,?,?,?)",
-                (
-                    uploaded.name,
-                    datetime.now().isoformat(),
-                    round(size_kb, 2),
-                    len(df),
-                    len(df.columns)
+        try:
+    
+            # Only load when a NEW file is selected
+            if uploaded.name != st.session_state.get("file_name", ""):
+    
+                df = load_file(uploaded, uploaded.name)
+    
+                st.session_state.df = df
+                st.session_state.original_df = df.copy()
+                st.session_state.file_name = uploaded.name
+    
+                st.session_state.encoded_columns = []
+    
+                if "cleaning_history" in st.session_state:
+                    st.session_state.cleaning_history = []
+    
+                if "operations" in st.session_state:
+                    st.session_state.operations = []
+    
+                size_kb = uploaded.size / 1024
+    
+                conn = sqlite3.connect(DB_NAME)
+                conn.execute(
+                    "INSERT INTO file_metadata VALUES (NULL,?,?,?,?,?)",
+                    (
+                        uploaded.name,
+                        datetime.now().isoformat(),
+                        round(size_kb, 2),
+                        len(df),
+                        len(df.columns)
+                    )
                 )
-            )
-            conn.commit()
-            conn.close()
-
-            st.success(
-                f"✅ Loaded **{uploaded.name}** — "
-                f"{len(df):,} rows × {len(df.columns)} columns"
-            )
-            st.session_state.df = df
-            st.session_state.original_df = df.copy()
-            st.session_state.file_name = uploaded.name
-
-            size_kb = uploaded.size / 1024
-
-            conn = sqlite3.connect(DB_NAME)
-            conn.execute(
-                "INSERT INTO file_metadata VALUES (NULL,?,?,?,?,?)",
-                (
-                    uploaded.name,
-                    datetime.now().isoformat(),
-                    round(size_kb, 2),
-                    len(df),
-                    len(df.columns)
+                conn.commit()
+                conn.close()
+    
+                st.success(
+                    f"✅ Loaded **{uploaded.name}** — "
+                    f"{len(df):,} rows × {len(df.columns)} columns"
                 )
-            )
-            conn.commit()
-            conn.close()
-
-            st.success(
-                f"✅ Loaded **{uploaded.name}** — "
-                f"{len(df):,} rows × {len(df.columns)} columns"
-            )
+                st.session_state.df = df
+                st.session_state.original_df = df.copy()
+                st.session_state.file_name = uploaded.name
+    
+                size_kb = uploaded.size / 1024
+    
+                conn = sqlite3.connect(DB_NAME)
+                conn.execute(
+                    "INSERT INTO file_metadata VALUES (NULL,?,?,?,?,?)",
+                    (
+                        uploaded.name,
+                        datetime.now().isoformat(),
+                        round(size_kb, 2),
+                        len(df),
+                        len(df.columns)
+                    )
+                )
+                conn.commit()
+                conn.close()
+    
+                st.success(
+                    f"✅ Loaded **{uploaded.name}** — "
+                    f"{len(df):,} rows × {len(df.columns)} columns"
+                )
 
         except Exception as e:
             st.error(f"❌ Error loading file: {e}")
