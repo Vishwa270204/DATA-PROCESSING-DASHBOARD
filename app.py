@@ -1228,9 +1228,8 @@ elif st.session_state.page == "Encoding & Outliers":
                             )
                         st.session_state.processed_df = new_df
                         st.session_state.df = new_df   # temporary compatibility
-        
-                            if col not in st.session_state.encoded_columns:
-                                st.session_state.encoded_columns.append(col)
+                        if col not in st.session_state.encoded_columns:
+                            st.session_state.encoded_columns.append(col)
         
                         st.success(
                             f"✅ Encoded {len(selected_cols)} column(s)"
