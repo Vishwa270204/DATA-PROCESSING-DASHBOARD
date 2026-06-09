@@ -497,6 +497,7 @@ div.stAlert{border-radius:10px!important;}
 defaults = {
     "df": None,
     "original_df": None,
+    "processed_df": None,
     "file_name": "",
     "page": "Upload & Inspect",
     "encoded_columns": [],
@@ -593,8 +594,9 @@ if st.session_state.page == "Upload & Inspect":
     
                 df = load_file(uploaded, uploaded.name)
     
-                st.session_state.df = df
-                st.session_state.original_df = df.copy()
+                st.session_state.processed_df = df.copy()
+                # Keep temporarily if other parts of your code still use df
+                st.session_state.df = st.session_state.processed_df
                 st.session_state.file_name = uploaded.name
                 st.rerun()
                 st.session_state.encoded_columns = []
@@ -1096,12 +1098,12 @@ elif st.session_state.page == "Encoding & Outliers":
                     for col in selected_cols:
         
                         new_df, mapping = apply_encoding(
-                            st.session_state.df,
+                            st.session_state.processed_df,
                             col,
                             "onehot"
                         )
         
-                        st.session_state.df = new_df
+                        st.session_state.processed_df = new_df
         
                         if col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(col)
@@ -1127,12 +1129,12 @@ elif st.session_state.page == "Encoding & Outliers":
                     for col in selected_cols:
         
                         new_df, mapping = apply_encoding(
-                            st.session_state.df,
+                            st.session_state.processed_df,
                             col,
                             "label"
                         )
         
-                        st.session_state.df = new_df
+                        st.session_state.processed_df = new_df
         
                         if col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(col)
@@ -1158,12 +1160,12 @@ elif st.session_state.page == "Encoding & Outliers":
                     for col in selected_cols:
         
                         new_df, mapping = apply_encoding(
-                            st.session_state.df,
+                            st.session_state.processed_df,
                             col,
                             "frequency"
                         )
         
-                        st.session_state.df = new_df
+                       st.session_state.processed_df = new_df
         
                         if col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(col)
@@ -1204,13 +1206,13 @@ elif st.session_state.page == "Encoding & Outliers":
                         for col in selected_cols:
         
                             new_df, mapping = apply_encoding(
-                                st.session_state.df,
+                                st.session_state.processed_df,
                                 col,
                                 "ordinal",
                                 ordinal_order
                             )
         
-                            st.session_state.df = new_df
+                            st.session_state.processed_df = new_df
         
                             if col not in st.session_state.encoded_columns:
                                 st.session_state.encoded_columns.append(col)
@@ -1254,7 +1256,7 @@ elif st.session_state.page == "Encoding & Outliers":
                 stats_rows = [{"Column":c,"Mean":round(i["mean"],3),"Std":round(i["std"],3),
                                 "Threshold":f"|Z|>{i['threshold']}","Outliers":i["count"],"Outlier %":i["pct"]}
                                for c,i in outlier_data.items()]
-            st.dataframe(pd.DataFrame(stats_rows), use_container_width=True)
+            (pd.DataFrame(stats_rows), use_container_width=True)
 
             # ── FIX 3: Box plots (go.Box) + outlier scatter overlay ──
             st.markdown("<div class='section-header'><h3>Box Plot — Outliers Highlighted</h3></div>", unsafe_allow_html=True)
@@ -1367,7 +1369,7 @@ elif st.session_state.page == "Encoding & Outliers":
         if skew_df.empty:
             st.info("No numerical columns.")
         else:
-            st.dataframe(skew_df, use_container_width=True)
+            (skew_df, use_container_width=True)
             num_cols_sk = df.select_dtypes(include=[np.number]).columns.tolist()
             n_r = (len(num_cols_sk)+1)//2
             try:
@@ -1472,12 +1474,12 @@ elif st.session_state.page == "Statistics & Export":
         st.markdown("<div class='section-header'><h3>Descriptive Statistics</h3></div>", unsafe_allow_html=True)
         try:
             desc_all = df.describe(include="all").T.reset_index().rename(columns={"index":"Column"})
-            st.dataframe(desc_all, use_container_width=True, height=380)
+            (desc_all, use_container_width=True, height=380)
         except Exception as e: st.error(f"Error: {e}")
         st.markdown("<div class='section-header'><h3>Extended Numerical Statistics</h3></div>", unsafe_allow_html=True)
         stats_df = descriptive_statistics(df)
         if not stats_df.empty:
-            st.dataframe(stats_df, use_container_width=True, height=380)
+            (stats_df, use_container_width=True, height=380)
         else:
             st.info("No numerical columns.")
         st.markdown("<div class='section-header'><h3>Categorical Summary</h3></div>", unsafe_allow_html=True)
