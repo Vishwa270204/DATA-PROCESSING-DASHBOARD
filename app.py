@@ -1368,7 +1368,7 @@ elif st.session_state.page == "Encoding & Outliers":
         if skew_df.empty:
             st.info("No numerical columns.")
         else:
-            (skew_df, use_container_width=True)
+           st.dataframe(skew_df,use_container_width=True)
             num_cols_sk = df.select_dtypes(include=[np.number]).columns.tolist()
             n_r = (len(num_cols_sk)+1)//2
             try:
