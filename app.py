@@ -903,6 +903,7 @@ if st.session_state.page == "Upload & Inspect":
                     # Has invalid values — store in session state and show review
                     st.session_state["_pending_row"] = new_row
                     st.session_state["_pending_val_results"] = val_results
+                    st.rerun()
 
             # ── Show pending row review (persists across reruns) ──
             if st.session_state.get("_pending_row") and st.session_state.get("_pending_val_results"):
