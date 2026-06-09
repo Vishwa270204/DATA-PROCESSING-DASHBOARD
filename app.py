@@ -871,23 +871,19 @@ if st.session_state.page == "Upload & Inspect":
                         input_data[col] = st.text_input(col, key=f"inp_{col}")
 
             if st.button("➕ Add Row"):
-                new_row = {col: input_data.get(col, np.nan) for col in df.columns}
+                new_row = {col: input_data.get(col, np.nan) for col in st.session_state.df.columns}
                 target_col_used = _target_col
 
-                # ── Validate the new row ──
                 val_results = []
                 for col, val in new_row.items():
-                    status, reason = validate_single_value(col, val, df, target_col=target_col_used)
+                    status, reason = validate_single_value(col, val, st.session_state.df, target_col=target_col_used)
                     val_results.append({"Column": col, "Value": val, "Status": status.title(), "Reason": reason or "—"})
 
                 n_invalid = sum(1 for r in val_results if r["Status"] == "Invalid")
 
                 if n_invalid == 0:
-                    before = len(st.session_state.df)                          # ← was: len(df)
-                    st.session_state.df = pd.concat(
-                        [st.session_state.df, pd.DataFrame([new_row])],        # ← was: [df, ...]
-                        ignore_index=True
-                    )
+                    before = len(st.session_state.df)
+                    st.session_state.df = pd.concat([st.session_state.df, pd.DataFrame([new_row])], ignore_index=True)
                     save_operation(st.session_state.file_name, "Add Row", new_row)
                     st.session_state.pop("_pending_row", None)
                     st.session_state.pop("_pending_val_results", None)
@@ -896,15 +892,14 @@ if st.session_state.page == "Upload & Inspect":
                     tail_df.index = range(len(st.session_state.df) - len(tail_df), len(st.session_state.df))
                     st.dataframe(tail_df.style.apply(
                         lambda x: ["background-color:#bbf7d0; font-weight:bold"]*len(x)
-                            if x.name == tail_df.index[-1] else [""]*len(x), axis=1
-                            ), use_container_width=True)
+                            if x.name == tail_df.index[-1] else [""]*len(x),
+                        axis=1
+                    ), use_container_width=True)
                     st.rerun()
                 else:
-                    # Has invalid values — store in session state and show review
                     st.session_state["_pending_row"] = new_row
                     st.session_state["_pending_val_results"] = val_results
                     st.rerun()
-
             # ── Show pending row review (persists across reruns) ──
             if st.session_state.get("_pending_row") and st.session_state.get("_pending_val_results"):
                 pending_row = st.session_state["_pending_row"]
