@@ -1003,7 +1003,9 @@ elif st.session_state.page == "Encoding & Outliers":
         encoded_set = set(st.session_state.encoded_columns)
         enc_candidates = [
             c for c in ct["categorical"] + ct["boolean"]
-            if c != target_col and c not in encoded_set
+            if c != target_col
+            and c not in encoded_set
+            and not c.endswith("_encoded")
         ]
         total_feature_cats = len([c for c in ct["categorical"] + ct["boolean"] if c != target_col])
         done_count = len([c for c in encoded_set if c != target_col])
@@ -1038,21 +1040,22 @@ elif st.session_state.page == "Encoding & Outliers":
                     ordinal_cols.append(col)
             st.subheader("🔵 One-Hot Encoding")
             if onehot_cols:
-                selected_col = st.selectbox(
-                    "Select column for One-Hot Encoding",
+                selected_cols = st.multiselect(
+                    "Select columns for One-Hot Encoding",
                     onehot_cols,
                     key="onehot_select"
                 )
                 if st.button("Apply One-Hot Encoding"):
-                    new_df, mapping = apply_encoding(
-                        df,
-                        selected_col,
-                        "onehot"
-                    )
-                    st.session_state.df = new_df
-                    if selected_col not in st.session_state.encoded_columns:
-                        st.session_state.encoded_columns.append(selected_col)
-                    st.success(f"Encoded {selected_col}")
+                    for col in selected_cols:
+                        new_df, mapping = apply_encoding(
+                            st.session_state.df,
+                            col,
+                            "onehot"
+                        )
+                        st.session_state.df = new_df
+                        if col not in st.session_state.encoded_columns:
+                            st.session_state.encoded_columns.append(col)
+                    st.success(f"Encoded {len(selected_cols)} column(s)")
                     st.rerun()
             st.subheader("🟢 Label Encoding")
             if label_cols:
