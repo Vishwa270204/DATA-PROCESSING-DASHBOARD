@@ -1473,7 +1473,7 @@ elif st.session_state.page == "Statistics & Export":
         st.markdown("<div class='section-header'><h3>Descriptive Statistics</h3></div>", unsafe_allow_html=True)
         try:
             desc_all = df.describe(include="all").T.reset_index().rename(columns={"index":"Column"})
-            (desc_all, use_container_width=True, height=380)
+            st.dataframe(desc_all, use_container_width=True, height=380)
         except Exception as e: st.error(f"Error: {e}")
         st.markdown("<div class='section-header'><h3>Extended Numerical Statistics</h3></div>", unsafe_allow_html=True)
         stats_df = descriptive_statistics(df)
