@@ -1256,8 +1256,7 @@ elif st.session_state.page == "Encoding & Outliers":
                                 "Threshold":f"|Z|>{i['threshold']}","Outliers":i["count"],"Outlier %":i["pct"]}
                                for c,i in outlier_data.items()]
            
-           (pd.DataFrame(stats_rows), use_container_width=True)
-
+            st.dataframe(pd.DataFrame(stats_rows),use_container_width=True)
             # ── FIX 3: Box plots (go.Box) + outlier scatter overlay ──
             st.markdown("<div class='section-header'><h3>Box Plot — Outliers Highlighted</h3></div>", unsafe_allow_html=True)
             st.caption("Blue boxes = normal distribution. Red dots = outlier values beyond whiskers.")
