@@ -378,30 +378,22 @@ def detect_duplicate_information_columns(df):
     return unique
 
 def recommend_encoding(df, col, is_target=False):
-
     n = df[col].nunique()
-
     if is_target:
-
         if n == 2:
             return "label", "Binary target"
-
         elif n <= 15:
             return "label", "Multiclass target"
-
         else:
             return "frequency", "High-cardinality target"
-
     else:
-
         if n == 2:
             return "label", "Binary column"
-
         elif n <= 10:
             return "onehot", "Low-cardinality column"
-
         else:
             return "frequency", "High-cardinality column"
+
 def apply_encoding(df, col, enc_type, ordinal_order=None):
     df = df.copy(); mapping = None
     if enc_type == "label":
@@ -482,6 +474,11 @@ html,body,[class*="css"]{font-family:'Inter',sans-serif!important;background-col
 .info-box .ib-label{font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
 .info-box .ib-val{font-family:'JetBrains Mono',monospace;font-size:1rem;font-weight:700;color:var(--text);}
 div.stAlert{border-radius:10px!important;}
+.col-rule-card{background:#ffffff;border:1px solid #e2e6f0;border-radius:12px;padding:16px 20px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);}
+.col-rule-card .col-name{font-weight:700;font-size:0.95rem;color:#111827;font-family:'JetBrains Mono',monospace;}
+.col-rule-card .col-dtype{font-size:0.75rem;color:#6b7280;background:#f1f3f9;padding:2px 8px;border-radius:12px;margin-left:8px;}
+.violation-row{background:#fef2f2;border-left:3px solid #dc2626;border-radius:0 8px 8px 0;padding:8px 14px;margin:4px 0;font-size:0.83rem;color:#991b1b;}
+.ok-row{background:#f0fdf4;border-left:3px solid #16a34a;border-radius:0 8px 8px 0;padding:8px 14px;margin:4px 0;font-size:0.83rem;color:#166534;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -491,7 +488,8 @@ defaults = {
     "original_df": None,
     "file_name": "",
     "page": "Upload & Inspect",
-    "encoded_columns": [],   # FIX 2 – track which columns have been encoded
+    "encoded_columns": [],
+    "col_validation_rules": {},   # NEW: per-column min/max rules
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -578,47 +576,31 @@ if st.session_state.page == "Upload & Inspect":
 
     if uploaded:
         try:
-    
-            # Only load when a NEW file is selected
             if uploaded.name != st.session_state.get("file_name", ""):
-    
                 df = load_file(uploaded, uploaded.name)
-    
                 st.session_state.df = df
                 st.session_state.original_df = df.copy()
                 st.session_state.file_name = uploaded.name
-                st.rerun()
                 st.session_state.encoded_columns = []
-    
+                st.session_state.col_validation_rules = {}
+
                 if "cleaning_history" in st.session_state:
                     st.session_state.cleaning_history = []
-    
                 if "operations" in st.session_state:
                     st.session_state.operations = []
-    
+
                 size_kb = uploaded.size / 1024
-    
                 conn = sqlite3.connect(DB_NAME)
                 conn.execute(
                     "INSERT INTO file_metadata VALUES (NULL,?,?,?,?,?)",
-                    (
-                        uploaded.name,
-                        datetime.now().isoformat(),
-                        round(size_kb, 2),
-                        len(df),
-                        len(df.columns)
-                    )
+                    (uploaded.name, datetime.now().isoformat(), round(size_kb, 2), len(df), len(df.columns))
                 )
-                conn.commit()
-                conn.close()
-    
-                st.success(
-                    f"✅ Loaded **{uploaded.name}** — "
-                    f"{len(df):,} rows × {len(df.columns)} columns"
-                )
-                
+                conn.commit(); conn.close()
+                st.success(f"✅ Loaded **{uploaded.name}** — {len(df):,} rows × {len(df.columns)} columns")
+                st.rerun()
         except Exception as e:
             st.error(f"❌ Error loading file: {e}")
+
     if st.session_state.df is not None:
         df = st.session_state.df
         summary = get_dataset_summary(df)
@@ -693,11 +675,8 @@ if st.session_state.page == "Upload & Inspect":
             else:
                 st.markdown("<span class='badge badge-success'>✅ No missing values detected</span>", unsafe_allow_html=True)
 
-        # ── Add Row  ── FIX 1: row count updates correctly ─────────────────────
         with tab5:
             st.markdown("**Manually add a new row to the dataset:**")
-
-            # Always read the CURRENT df from session state so count is accurate
             current_df = st.session_state.df
             ct_live = identify_column_types(current_df)
             input_data = {}
@@ -706,8 +685,6 @@ if st.session_state.page == "Upload & Inspect":
             _target_col = _target_enc if _target_enc != "— None —" else None
             if _target_col:
                 st.caption(f"🎯 Target column: **{_target_col}** — only existing values allowed.")
-
-            
 
             form_cols = st.columns(min(3, len(current_df.columns)))
             for i, col in enumerate(current_df.columns):
@@ -738,7 +715,6 @@ if st.session_state.page == "Upload & Inspect":
                 n_invalid = sum(1 for r in val_results if r["Status"] == "Invalid")
 
                 if n_invalid == 0:
-                    # FIX 1: build updated_df from current snapshot, assign, rerun
                     updated_df = pd.concat([current_df, pd.DataFrame([new_row])], ignore_index=True)
                     st.session_state.df = updated_df
                     save_operation(st.session_state.file_name, "Add Row", new_row)
@@ -750,7 +726,6 @@ if st.session_state.page == "Upload & Inspect":
                     st.session_state["_pending_row"] = new_row
                     st.session_state["_pending_val_results"] = val_results
 
-            # Pending row review
             if st.session_state.get("_pending_row") and st.session_state.get("_pending_val_results"):
                 pending_row   = st.session_state["_pending_row"]
                 val_results   = st.session_state["_pending_val_results"]
@@ -862,46 +837,332 @@ elif st.session_state.page == "Cleaning & Validation":
                         except Exception as e:
                             st.error(str(e))
 
+    # ═══════════════════════════════════════════════
+    # VALIDATION TAB — fully redesigned
+    # ═══════════════════════════════════════════════
     with tab3:
-        st.markdown("<div class='section-header'><h3>Data Validation & Anomaly Detection</h3></div>", unsafe_allow_html=True)
-        v1, v2 = st.columns(2)
-        with v1:
-            st.markdown("**⚠️ Invalid Domain Values**")
-            inv = detect_invalid_values(df)
-            for col, info in inv.items():
-                st.markdown(f"<span class='badge badge-danger'>{col}</span> {info['issue']} — {info['count']} rows", unsafe_allow_html=True)
-            if not inv: st.markdown("<span class='badge badge-success'>✅ None detected</span>", unsafe_allow_html=True)
-            st.markdown("&nbsp;")
-            st.markdown("**📧 Invalid Emails**")
-            emails = detect_invalid_email(df)
-            for col, info in emails.items():
-                st.markdown(f"<span class='badge badge-warning'>{col}</span> {info['count']} invalid emails", unsafe_allow_html=True)
-            if not emails: st.markdown("<span class='badge badge-success'>✅ None detected</span>", unsafe_allow_html=True)
-        with v2:
-            st.markdown("**➖ Negative Values (domain-aware)**")
-            negs = detect_negative_values(df)
-            for col, info in negs.items():
-                st.markdown(f"<span class='badge badge-warning'>{col}</span> {info['count']} negative rows — {info['reason']}", unsafe_allow_html=True)
-            if not negs: st.markdown("<span class='badge badge-success'>✅ None detected</span>", unsafe_allow_html=True)
-            st.markdown("&nbsp;")
-            st.markdown("**📞 Invalid Phone Numbers**")
-            phones = detect_invalid_phone(df)
-            for col, info in phones.items():
-                st.markdown(f"<span class='badge badge-warning'>{col}</span> {info['count']} invalid", unsafe_allow_html=True)
-            if not phones: st.markdown("<span class='badge badge-success'>✅ None detected</span>", unsafe_allow_html=True)
+        st.markdown("<div class='section-header'><h3>📐 Per-Column Validation Rules & Anomaly Detection</h3></div>", unsafe_allow_html=True)
+
+        df = st.session_state.df
+        num_cols_v  = df.select_dtypes(include=[np.number]).columns.tolist()
+        obj_cols_v  = df.select_dtypes(include="object").columns.tolist()
+        all_cols_v  = df.columns.tolist()
+
+        # ── Section 1: Configure per-column min/max rules ────────────────────
+        st.markdown("#### 🔧 Configure Column Validation Rules")
+        st.caption("Set custom Min / Max bounds for each numeric column. Tick **Enable** to activate. Changes apply instantly to the violation summary below.")
+
+        if "col_validation_rules" not in st.session_state:
+            st.session_state.col_validation_rules = {}
+
+        rules = st.session_state.col_validation_rules
+
+        # Initialise defaults for any new numeric columns
+        for col in num_cols_v:
+            if col not in rules:
+                col_min = float(df[col].min()) if not df[col].dropna().empty else 0.0
+                col_max = float(df[col].max()) if not df[col].dropna().empty else 100.0
+                rules[col] = {
+                    "enabled": False,
+                    "min": col_min,
+                    "max": col_max,
+                    "allow_null": True,
+                }
+
+        if not num_cols_v:
+            st.info("No numeric columns found for rule configuration.")
+        else:
+            rule_header_cols = st.columns([2.5, 1, 1.2, 1.2, 1.2])
+            rule_header_cols[0].markdown("**Column**")
+            rule_header_cols[1].markdown("**Enable**")
+            rule_header_cols[2].markdown("**Min**")
+            rule_header_cols[3].markdown("**Max**")
+            rule_header_cols[4].markdown("**Allow Null**")
+
+            st.markdown("<hr style='margin:4px 0 10px 0;border-color:#e2e6f0;'>", unsafe_allow_html=True)
+
+            for col in num_cols_v:
+                rule = rules[col]
+                actual_min = float(df[col].min()) if not df[col].dropna().empty else 0.0
+                actual_max = float(df[col].max()) if not df[col].dropna().empty else 100.0
+                dtype_label = str(df[col].dtype)
+
+                rc = st.columns([2.5, 1, 1.2, 1.2, 1.2])
+                with rc[0]:
+                    st.markdown(
+                        f"<div style='padding-top:8px;'>"
+                        f"<span style='font-family:JetBrains Mono,monospace;font-weight:600;font-size:0.88rem;color:#111827;'>{col}</span>"
+                        f"<span style='font-size:0.7rem;color:#6b7280;background:#f1f3f9;padding:2px 7px;border-radius:10px;margin-left:8px;'>{dtype_label}</span><br>"
+                        f"<span style='font-size:0.72rem;color:#9ca3af;'>actual: [{actual_min:.2f}, {actual_max:.2f}]</span>"
+                        f"</div>", unsafe_allow_html=True
+                    )
+                with rc[1]:
+                    rule["enabled"] = st.checkbox("", value=rule["enabled"], key=f"rule_en_{col}", label_visibility="collapsed")
+                with rc[2]:
+                    rule["min"] = st.number_input(
+                        "min", value=float(rule["min"]),
+                        key=f"rule_min_{col}", label_visibility="collapsed",
+                        disabled=not rule["enabled"],
+                        step=1.0 if "int" in dtype_label else 0.01,
+                        format="%.2f"
+                    )
+                with rc[3]:
+                    rule["max"] = st.number_input(
+                        "max", value=float(rule["max"]),
+                        key=f"rule_max_{col}", label_visibility="collapsed",
+                        disabled=not rule["enabled"],
+                        step=1.0 if "int" in dtype_label else 0.01,
+                        format="%.2f"
+                    )
+                with rc[4]:
+                    rule["allow_null"] = st.checkbox(
+                        "", value=rule["allow_null"],
+                        key=f"rule_null_{col}", label_visibility="collapsed",
+                        disabled=not rule["enabled"]
+                    )
+
+                st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
+
+            st.session_state.col_validation_rules = rules
+
+        # ── Section 2: Run validation & show per-column results ──────────────
+        st.markdown("---")
+        st.markdown("#### 🔍 Validation Results — All Columns")
+
+        # Build combined violation mask
+        def build_custom_mask(df, rules):
+            mask = pd.Series(False, index=df.index)
+            for col, rule in rules.items():
+                if not rule.get("enabled", False): continue
+                if col not in df.columns: continue
+                lo, hi = rule["min"], rule["max"]
+                col_mask = (df[col] < lo) | (df[col] > hi)
+                if not rule.get("allow_null", True):
+                    col_mask = col_mask | df[col].isnull()
+                else:
+                    col_mask = col_mask & df[col].notna()
+                mask |= col_mask
+            return mask
+
+        custom_mask = build_custom_mask(df, rules)
+
+        # ── Per-column breakdown cards ────────────────────────────────────────
+        pat_email = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$")
+        pat_phone = re.compile(r"^[\+]?[\d\s\-\(\)]{7,15}$")
+
+        COLUMN_ICONS = {
+            "numerical": "🔢", "categorical": "🏷️",
+            "datetime": "📅", "boolean": "☑️", "id": "🔑"
+        }
+
+        ct_v = identify_column_types(df)
+
+        def get_col_type_label(col):
+            for t, cols in ct_v.items():
+                if col in cols: return t
+            return "other"
+
+        def check_column(col):
+            """Returns list of violation dicts for a single column."""
+            violations = []
+            dtype = get_col_type_label(col)
+            s = df[col]
+            cl = col.lower()
+
+            # 1. Custom min/max rule
+            if col in rules and rules[col].get("enabled", False):
+                lo = rules[col]["min"]; hi = rules[col]["max"]
+                bad = df[s.notna() & ((s < lo) | (s > hi))]
+                if len(bad):
+                    violations.append({
+                        "type": "range",
+                        "msg": f"Custom range [{lo:.2f}, {hi:.2f}] — {len(bad)} row(s) out of bounds",
+                        "count": len(bad),
+                        "severity": "danger"
+                    })
+                if not rules[col].get("allow_null", True):
+                    null_c = s.isnull().sum()
+                    if null_c:
+                        violations.append({
+                            "type": "null",
+                            "msg": f"Null not allowed — {null_c} missing value(s)",
+                            "count": null_c,
+                            "severity": "danger"
+                        })
+
+            # 2. Built-in domain checks for numeric cols
+            if pd.api.types.is_numeric_dtype(s):
+                if any(k in cl for k in ["age"]):
+                    bad = df[(s < 0) | (s > 150)]
+                    if len(bad):
+                        violations.append({"type": "domain", "msg": f"Age out of range (0–150) — {len(bad)} row(s)", "count": len(bad), "severity": "warning"})
+                if any(k in cl for k in ["pct","percent"]) and "growth" not in cl and "change" not in cl:
+                    bad = df[(s < 0) | (s > 100)]
+                    if len(bad):
+                        violations.append({"type": "domain", "msg": f"Percentage out of 0–100 range — {len(bad)} row(s)", "count": len(bad), "severity": "warning"})
+                if is_non_negative_column(col):
+                    bad = df[s < 0]
+                    if len(bad):
+                        violations.append({"type": "negative", "msg": f"Negative values in non-negative column — {len(bad)} row(s)", "count": len(bad), "severity": "warning"})
+
+            # 3. Email format
+            if any(k in cl for k in ["email","mail","e-mail"]) and s.dtype == object:
+                bad_mask = s.dropna().apply(lambda x: not bool(pat_email.match(str(x))))
+                if bad_mask.sum():
+                    violations.append({"type": "email", "msg": f"Invalid email format — {bad_mask.sum()} row(s)", "count": int(bad_mask.sum()), "severity": "warning"})
+
+            # 4. Phone format
+            if any(k in cl for k in ["phone","mobile","tel","contact"]) and s.dtype == object:
+                bad_mask = s.dropna().apply(lambda x: not bool(pat_phone.match(str(x))))
+                if bad_mask.sum():
+                    violations.append({"type": "phone", "msg": f"Invalid phone format — {bad_mask.sum()} row(s)", "count": int(bad_mask.sum()), "severity": "warning"})
+
+            # 5. Future dates
+            if any(k in cl for k in ["birth","dob","born","date","created","joined"]):
+                try:
+                    parsed = pd.to_datetime(s, errors="coerce")
+                    n = (parsed > pd.Timestamp.now()).sum()
+                    if n:
+                        violations.append({"type": "future_date", "msg": f"Future date(s) detected — {n} row(s)", "count": int(n), "severity": "danger"})
+                except: pass
+
+            # 6. Missing values
+            null_c = s.isnull().sum()
+            if null_c:
+                violations.append({"type": "missing", "msg": f"{null_c} missing value(s) ({round(null_c/len(df)*100,1)}%)", "count": int(null_c), "severity": "info"})
+
+            return violations
+
+        # Render per-column cards
+        total_violations = 0
+        all_col_results = []
+        for col in all_cols_v:
+            viols = check_column(col)
+            all_col_results.append((col, viols))
+            total_violations += sum(v["count"] for v in viols if v["type"] != "missing")
+
+        # Summary bar
+        n_clean = sum(1 for _, v in all_col_results if not [x for x in v if x["type"] != "missing"])
+        n_issue = len(all_cols_v) - n_clean
+
+        sm1, sm2, sm3, sm4 = st.columns(4)
+        with sm1: st.markdown(f"""<div class='metric-card'><span class='val'>{len(all_cols_v)}</span><span class='label'>Total Columns</span></div>""", unsafe_allow_html=True)
+        with sm2: st.markdown(f"""<div class='metric-card'><span class='val' style='color:#16a34a;'>{n_clean}</span><span class='label'>Clean Columns</span></div>""", unsafe_allow_html=True)
+        with sm3: st.markdown(f"""<div class='metric-card'><span class='val' style='color:#dc2626;'>{n_issue}</span><span class='label'>Columns w/ Issues</span></div>""", unsafe_allow_html=True)
+        with sm4: st.markdown(f"""<div class='metric-card'><span class='val' style='color:#d97706;'>{total_violations:,}</span><span class='label'>Total Violations</span></div>""", unsafe_allow_html=True)
 
         st.markdown("&nbsp;")
-        st.markdown("**📅 Future Dates**")
-        future = detect_future_dates(df)
-        for col, info in future.items():
-            st.markdown(f"<span class='badge badge-danger'>{col}</span> {info['count']} future dates", unsafe_allow_html=True)
-        if not future: st.markdown("<span class='badge badge-success'>✅ No future dates detected</span>", unsafe_allow_html=True)
 
+        # Filter option
+        filter_mode = st.radio("Show", ["All Columns", "Issues Only", "Clean Only"], horizontal=True, key="val_filter")
+
+        for col, viols in all_col_results:
+            has_real_issue = any(v["type"] != "missing" for v in viols)
+            if filter_mode == "Issues Only" and not has_real_issue:
+                continue
+            if filter_mode == "Clean Only" and has_real_issue:
+                continue
+
+            dtype_label = str(df[col].dtype)
+            col_type    = get_col_type_label(col)
+            icon        = COLUMN_ICONS.get(col_type, "📌")
+            null_c      = df[col].isnull().sum()
+            uniq_c      = df[col].nunique()
+            enabled_rule = col in rules and rules[col].get("enabled", False)
+
+            # Card header colour
+            if has_real_issue:
+                hdr_bg, hdr_border, hdr_dot = "#fef2f2", "#fecaca", "#dc2626"
+                status_badge = f"<span style='font-size:0.72rem;background:#fee2e2;color:#dc2626;border:1px solid #fecaca;padding:2px 8px;border-radius:10px;font-weight:600;'>⚠️ Issues</span>"
+            else:
+                hdr_bg, hdr_border, hdr_dot = "#f0fdf4", "#bbf7d0", "#16a34a"
+                status_badge = f"<span style='font-size:0.72rem;background:#dcfce7;color:#16a34a;border:1px solid #bbf7d0;padding:2px 8px;border-radius:10px;font-weight:600;'>✅ Clean</span>"
+
+            rule_badge = ""
+            if enabled_rule:
+                lo = rules[col]["min"]; hi = rules[col]["max"]
+                rule_badge = f"<span style='font-size:0.7rem;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;padding:2px 8px;border-radius:10px;margin-left:6px;'>📐 [{lo:.1f}, {hi:.1f}]</span>"
+
+            with st.expander(f"{icon} {col}  ·  {dtype_label}  ·  {null_c} null  ·  {uniq_c} unique", expanded=has_real_issue):
+                # Mini stat row
+                st.markdown(f"""
+                <div style='display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;'>
+                    {status_badge}{rule_badge}
+                    <span style='font-size:0.72rem;color:#6b7280;background:#f1f3f9;padding:2px 8px;border-radius:10px;'>{col_type}</span>
+                    <span style='font-size:0.72rem;color:#6b7280;background:#f1f3f9;padding:2px 8px;border-radius:10px;'>{len(df):,} rows</span>
+                </div>
+                """, unsafe_allow_html=True)
+
+                if not viols:
+                    st.markdown("<div class='ok-row'>✅ No issues detected for this column.</div>", unsafe_allow_html=True)
+                else:
+                    SEV_STYLES = {
+                        "danger":  ("🔴", "#fef2f2", "#dc2626", "#fecaca"),
+                        "warning": ("🟡", "#fffbeb", "#d97706", "#fde68a"),
+                        "info":    ("🔵", "#eff6ff", "#2563eb", "#bfdbfe"),
+                    }
+                    for v in viols:
+                        emoji, bg, fg, border = SEV_STYLES.get(v["severity"], ("⚪","#f9fafb","#374151","#e5e7eb"))
+                        st.markdown(f"""
+                        <div style='background:{bg};border:1px solid {border};border-left:4px solid {fg};
+                                    border-radius:0 8px 8px 0;padding:9px 14px;margin:5px 0;
+                                    font-size:0.83rem;color:{fg};font-weight:500;'>
+                            {emoji} &nbsp;{v['msg']}
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                # Quick actions for numeric columns with violations
+                real_viols = [v for v in viols if v["type"] != "missing"]
+                if real_viols and pd.api.types.is_numeric_dtype(df[col]):
+                    st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+                    act1, act2, act3 = st.columns(3)
+                    with act1:
+                        if st.button(f"🗑️ Drop violating rows", key=f"drop_viol_{col}"):
+                            # Build mask for this column only
+                            col_mask = pd.Series(False, index=df.index)
+                            if col in rules and rules[col].get("enabled"):
+                                lo2, hi2 = rules[col]["min"], rules[col]["max"]
+                                col_mask |= (df[col].notna() & ((df[col] < lo2) | (df[col] > hi2)))
+                            if is_non_negative_column(col):
+                                col_mask |= (df[col] < 0)
+                            before_n = len(df)
+                            new_df = df[~col_mask].reset_index(drop=True)
+                            st.session_state.df = new_df
+                            save_operation(st.session_state.file_name, f"Drop Violations: {col}", f"Removed {before_n - len(new_df)} rows")
+                            st.success(f"Removed {before_n - len(new_df)} violating rows.")
+                            st.rerun()
+                    with act2:
+                        if st.button(f"📌 Cap to valid range", key=f"cap_viol_{col}"):
+                            lo2 = rules[col]["min"] if (col in rules and rules[col].get("enabled")) else float(df[col].min())
+                            hi2 = rules[col]["max"] if (col in rules and rules[col].get("enabled")) else float(df[col].max())
+                            n_capped = ((df[col] < lo2) | (df[col] > hi2)).sum()
+                            st.session_state.df[col] = df[col].clip(lower=lo2, upper=hi2)
+                            save_operation(st.session_state.file_name, f"Cap Violations: {col}", f"Capped {n_capped} rows to [{lo2},{hi2}]")
+                            st.success(f"Capped {n_capped} value(s) to [{lo2:.2f}, {hi2:.2f}].")
+                            st.rerun()
+                    with act3:
+                        if st.button(f"📊 Show violating rows", key=f"show_viol_{col}"):
+                            col_mask2 = pd.Series(False, index=df.index)
+                            if col in rules and rules[col].get("enabled"):
+                                lo3, hi3 = rules[col]["min"], rules[col]["max"]
+                                col_mask2 |= (df[col].notna() & ((df[col] < lo3) | (df[col] > hi3)))
+                            if is_non_negative_column(col):
+                                col_mask2 |= (df[col] < 0)
+                            viol_rows = df[col_mask2]
+                            if len(viol_rows):
+                                st.dataframe(viol_rows, use_container_width=True, height=220)
+                            else:
+                                st.info("No matching rows found.")
+
+        # ── Section 3: Valid / Invalid Row Segregation ───────────────────────
         st.markdown("---")
-        st.markdown("<div class='section-header'><h3>Valid / Invalid Row Segregation</h3></div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-header'><h3>✂️ Valid / Invalid Row Segregation</h3></div>", unsafe_allow_html=True)
 
         def _build_invalid_mask(df):
             mask = pd.Series(False, index=df.index)
+            # custom rules
+            mask |= build_custom_mask(df, st.session_state.col_validation_rules)
+            # built-in domain rules
             for col in df.columns:
                 cl = col.lower()
                 if pd.api.types.is_numeric_dtype(df[col]):
@@ -911,7 +1172,6 @@ elif st.session_state.page == "Cleaning & Validation":
                         mask |= (df[col] < 0) | (df[col] > 100)
                     if is_non_negative_column(col):
                         mask |= df[col] < 0
-            pat_email = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$")
             for col in df.select_dtypes(include="object").columns:
                 if any(k in col.lower() for k in ["email","mail"]):
                     bad = df[col].dropna().apply(lambda x: not bool(pat_email.match(str(x))))
@@ -968,7 +1228,6 @@ elif st.session_state.page == "Encoding & Outliers":
     ct = identify_column_types(df)
     tab1, tab2, tab3, tab4 = st.tabs(["🔡 Encoding","📦 Outliers","〰️ Skewness","📊 Distributions"])
 
-    # ── Encoding  ── FIX 2: exclude already-encoded columns ──────────────────
     with tab1:
         st.markdown("<div class='section-header'><h3>Target-First Categorical Encoding</h3></div>", unsafe_allow_html=True)
 
@@ -1015,17 +1274,12 @@ elif st.session_state.page == "Encoding & Outliers":
         st.markdown("---")
         st.markdown("**Feature Column Encoding**")
 
-        # FIX 2: exclude columns that have already been encoded
         encoded_set = set(st.session_state.encoded_columns)
         enc_candidates = [
             c for c in ct["categorical"] + ct["boolean"]
             if c != target_col
             and c not in encoded_set
             and not c.endswith("_encoded")
-        ]
-        ordinal_candidates = [
-            c for c in enc_candidates
-            if df[c].dtype == "object"    
         ]
         total_feature_cats = len([c for c in ct["categorical"] + ct["boolean"] if c != target_col])
         done_count = len([c for c in encoded_set if c != target_col])
@@ -1039,173 +1293,71 @@ elif st.session_state.page == "Encoding & Outliers":
             else:
                 st.info("No categorical feature columns found.")
         else:
-            # Recommendation buckets
             onehot_cols = []
             label_cols = []
             frequency_cols = []
-        
+
             for col in enc_candidates:
-        
                 rec, _ = recommend_encoding(df, col)
-        
-                if rec == "onehot":
-                    onehot_cols.append(col)
-        
-                elif rec == "label":
-                    label_cols.append(col)
-        
-                elif rec == "frequency":
-                    frequency_cols.append(col)
-        
-            # Ordinal candidates
-            ordinal_candidates = [
-                c for c in enc_candidates
-                if str(df[c].dtype) in ["object", "category"]
-            ]
-        
-            # ─────────────────────────────────────
-            # One-Hot Encoding
-            # ─────────────────────────────────────
+                if rec == "onehot":    onehot_cols.append(col)
+                elif rec == "label":   label_cols.append(col)
+                elif rec == "frequency": frequency_cols.append(col)
+
+            ordinal_candidates = [c for c in enc_candidates if str(df[c].dtype) in ["object", "category"]]
+
             if onehot_cols:
-        
                 st.subheader("🔵 One-Hot Encoding")
-        
-                selected_cols = st.multiselect(
-                    "Select columns for One-Hot Encoding",
-                    onehot_cols,
-                    key="onehot_select"
-                )
-        
+                selected_cols = st.multiselect("Select columns for One-Hot Encoding", onehot_cols, key="onehot_select")
                 if st.button("Apply One-Hot Encoding"):
-        
                     for col in selected_cols:
-        
-                        new_df, mapping = apply_encoding(
-                            st.session_state.df,
-                            col,
-                            "onehot"
-                        )
-        
+                        new_df, mapping = apply_encoding(st.session_state.df, col, "onehot")
                         st.session_state.df = new_df
-        
                         if col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(col)
-        
                     st.success(f"✅ Encoded {len(selected_cols)} column(s)")
                     st.rerun()
-        
-            # ─────────────────────────────────────
-            # Label Encoding
-            # ─────────────────────────────────────
+
             if label_cols:
-        
                 st.subheader("🏷️ Label Encoding")
-        
-                selected_cols = st.multiselect(
-                    "Select columns for Label Encoding",
-                    label_cols,
-                    key="label_select"
-                )
-        
+                selected_cols = st.multiselect("Select columns for Label Encoding", label_cols, key="label_select")
                 if st.button("Apply Label Encoding"):
-        
                     for col in selected_cols:
-        
-                        new_df, mapping = apply_encoding(
-                            st.session_state.df,
-                            col,
-                            "label"
-                        )
-        
+                        new_df, mapping = apply_encoding(st.session_state.df, col, "label")
                         st.session_state.df = new_df
-        
                         if col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(col)
-        
                     st.success(f"✅ Encoded {len(selected_cols)} column(s)")
                     st.rerun()
-        
-            # ─────────────────────────────────────
-            # Frequency Encoding
-            # ─────────────────────────────────────
+
             if frequency_cols:
-        
                 st.subheader("📊 Frequency Encoding")
-        
-                selected_cols = st.multiselect(
-                    "Select columns for Frequency Encoding",
-                    frequency_cols,
-                    key="freq_select"
-                )
-        
+                selected_cols = st.multiselect("Select columns for Frequency Encoding", frequency_cols, key="freq_select")
                 if st.button("Apply Frequency Encoding"):
-        
                     for col in selected_cols:
-        
-                        new_df, mapping = apply_encoding(
-                            st.session_state.df,
-                            col,
-                            "frequency"
-                        )
-        
+                        new_df, mapping = apply_encoding(st.session_state.df, col, "frequency")
                         st.session_state.df = new_df
-        
                         if col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(col)
-        
                     st.success(f"✅ Encoded {len(selected_cols)} column(s)")
                     st.rerun()
-        
-            # ─────────────────────────────────────
-            # Ordinal Encoding
-            # ─────────────────────────────────────
+
             if ordinal_candidates:
-        
                 st.subheader("📈 Ordinal Encoding")
-        
-                selected_cols = st.multiselect(
-                    "Select columns",
-                    ordinal_candidates,
-                    key="ordinal_select"
-                )
-        
-                ord_str = st.text_input(
-                    "Order (comma-separated)",
-                    placeholder="low,medium,high",
-                    key="ordinal_order"
-                )
-        
+                selected_cols = st.multiselect("Select columns", ordinal_candidates, key="ordinal_select")
+                ord_str = st.text_input("Order (comma-separated)", placeholder="low,medium,high", key="ordinal_order")
                 if st.button("Apply Ordinal Encoding"):
-        
                     if not ord_str:
                         st.warning("Please enter the ordinal order.")
                     else:
-        
-                        ordinal_order = [
-                            x.strip()
-                            for x in ord_str.split(",")
-                        ]
-        
+                        ordinal_order = [x.strip() for x in ord_str.split(",")]
                         for col in selected_cols:
-        
-                            new_df, mapping = apply_encoding(
-                                st.session_state.df,
-                                col,
-                                "ordinal",
-                                ordinal_order
-                            )
-        
+                            new_df, mapping = apply_encoding(st.session_state.df, col, "ordinal", ordinal_order)
                             st.session_state.df = new_df
-        
                             if col not in st.session_state.encoded_columns:
                                 st.session_state.encoded_columns.append(col)
-        
-                        st.success(
-                            f"✅ Encoded {len(selected_cols)} column(s)"
-                        )
-        
+                        st.success(f"✅ Encoded {len(selected_cols)} column(s)")
                         st.rerun()
-    # ── Outliers  ── FIX 3: go.Strip → go.Box + go.Scatter overlay ──────────
+
     with tab2:
         st.markdown("<div class='section-header'><h3>Outlier Detection & Treatment</h3></div>", unsafe_allow_html=True)
         num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
@@ -1217,92 +1369,58 @@ elif st.session_state.page == "Encoding & Outliers":
 
             if use_iqr:
                 outlier_data = detect_outliers_iqr(df)
-                st.markdown("""
-                <div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin:12px 0;'>
+                st.markdown("""<div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin:12px 0;'>
                     <b style='color:#2563eb;'>IQR Method</b><br><br>
                     Q1 = 25th pct &nbsp;|&nbsp; Q3 = 75th pct &nbsp;|&nbsp; IQR = Q3 − Q1<br>
                     Lower = Q1 − 1.5×IQR &nbsp;|&nbsp; Upper = Q3 + 1.5×IQR
-                </div>
-                """, unsafe_allow_html=True)
+                </div>""", unsafe_allow_html=True)
                 stats_rows = [{"Column":c,"Q1":round(i["Q1"],3),"Q3":round(i["Q3"],3),
                                 "IQR":round(i["IQR"],3),"Lower":round(i["lower"],3),
                                 "Upper":round(i["upper"],3),"Outliers":i["count"],"Outlier %":i["pct"]}
                                for c,i in outlier_data.items()]
             else:
                 outlier_data = detect_outliers_zscore(df)
-                st.markdown("""
-                <div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin:12px 0;'>
+                st.markdown("""<div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin:12px 0;'>
                     <b style='color:#2563eb;'>Z-Score Method</b><br><br>
                     Z = (x − mean) / std &nbsp;|&nbsp; Values with |Z| &gt; 3 are outliers.
-                </div>
-                """, unsafe_allow_html=True)
+                </div>""", unsafe_allow_html=True)
                 stats_rows = [{"Column":c,"Mean":round(i["mean"],3),"Std":round(i["std"],3),
                                 "Threshold":f"|Z|>{i['threshold']}","Outliers":i["count"],"Outlier %":i["pct"]}
                                for c,i in outlier_data.items()]
             st.dataframe(pd.DataFrame(stats_rows), use_container_width=True)
 
-            # ── FIX 3: Box plots (go.Box) + outlier scatter overlay ──
             st.markdown("<div class='section-header'><h3>Box Plot — Outliers Highlighted</h3></div>", unsafe_allow_html=True)
             st.caption("Blue boxes = normal distribution. Red dots = outlier values beyond whiskers.")
             try:
                 n_cols_plot = len(num_cols)
                 h_space = max(0.02, min(0.1, 0.8/max(n_cols_plot,1)))
-                fig_box = make_subplots(
-                    rows=1, cols=n_cols_plot,
-                    subplot_titles=num_cols,
-                    horizontal_spacing=h_space
-                )
+                fig_box = make_subplots(rows=1, cols=n_cols_plot, subplot_titles=num_cols, horizontal_spacing=h_space)
                 legend_added = False
                 for i, col in enumerate(num_cols, start=1):
                     info = outlier_data.get(col, {})
                     outlier_idx = set(info.get("rows", []))
                     series = df[col].dropna()
                     out_series = series[series.index.isin(outlier_idx)]
-
-                    # Box trace — all data (whiskers auto-clip to IQR fence)
-                    fig_box.add_trace(go.Box(
-                        y=series,
-                        name=col,
-                        marker_color="rgba(37,99,235,0.55)",
-                        line_color="#2563eb",
-                        fillcolor="rgba(37,99,235,0.15)",
-                        boxpoints=False,          # hide built-in point overlay
-                        showlegend=not legend_added,
-                        legendgroup="normal",
-                        legendgrouptitle_text="" if legend_added else "Normal",
-                    ), row=1, col=i)
-
-                    # Scatter overlay for outlier points in red
+                    fig_box.add_trace(go.Box(y=series, name=col, marker_color="rgba(37,99,235,0.55)",
+                        line_color="#2563eb", fillcolor="rgba(37,99,235,0.15)", boxpoints=False,
+                        showlegend=not legend_added, legendgroup="normal"), row=1, col=i)
                     if len(out_series) > 0:
-                        fig_box.add_trace(go.Scatter(
-                            y=out_series,
-                            x=[col]*len(out_series),
-                            mode="markers",
+                        fig_box.add_trace(go.Scatter(y=out_series, x=[col]*len(out_series), mode="markers",
                             marker=dict(color="rgba(220,38,38,0.85)", size=7, symbol="circle-open"),
-                            name="Outlier" if not legend_added else "",
-                            legendgroup="outlier",
-                            showlegend=not legend_added,
-                        ), row=1, col=i)
-
+                            name="Outlier" if not legend_added else "", legendgroup="outlier",
+                            showlegend=not legend_added), row=1, col=i)
                     legend_added = True
-
-                fig_box.update_layout(
-                    title="Box Plots — Outliers (Red ◯) vs Normal Range",
-                    template="plotly_white",
-                    height=max(420, 380),
-                    paper_bgcolor="#ffffff",
-                    plot_bgcolor="#f8f9fc",
-                    showlegend=True,
-                )
+                fig_box.update_layout(title="Box Plots — Outliers (Red ◯) vs Normal Range",
+                    template="plotly_white", height=max(420,380), paper_bgcolor="#ffffff",
+                    plot_bgcolor="#f8f9fc", showlegend=True)
                 st.plotly_chart(fig_box, use_container_width=True)
             except Exception as e:
                 st.error(f"Box plot error: {e}")
 
-            # Density histogram overlay
             try:
                 n_r = (len(num_cols)+2)//3
-                fig_dens = make_subplots(rows=n_r, cols=3,
-                    subplot_titles=num_cols, horizontal_spacing=0.08, vertical_spacing=0.12)
+                fig_dens = make_subplots(rows=n_r, cols=3, subplot_titles=num_cols,
+                    horizontal_spacing=0.08, vertical_spacing=0.12)
                 for idx, col in enumerate(num_cols):
                     r, c = divmod(idx, 3)
                     info = outlier_data.get(col, {})
