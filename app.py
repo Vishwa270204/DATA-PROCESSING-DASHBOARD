@@ -816,7 +816,7 @@ elif st.session_state.page == "Cleaning & Validation":
         st.stop()
 
     df = st.session_state.df
-    tab1, tab2, tab3, tab4 = st.tabs(["🗑️ Duplicates","🔧 Missing Values","✔️ Validation","🔍 Similar Columns"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🗑️ Duplicates","🔧 Missing Values","✔️ Validation"])
 
     with tab1:
         st.markdown("<div class='section-header'><h3>Duplicate Row Detection</h3></div>", unsafe_allow_html=True)
@@ -948,33 +948,6 @@ elif st.session_state.page == "Cleaning & Validation":
                     st.download_button("⬇️ Export Invalid Rows",
                                        data=invalid_df.to_csv(index=False).encode("utf-8"),
                                        file_name="invalid_rows.csv", mime="text/csv")
-
-    with tab4:
-        st.markdown("<div class='section-header'><h3>Similar / Redundant Column Detection</h3></div>", unsafe_allow_html=True)
-        st.info("ℹ️ Flagged only when: ≥95% row-level match, one-to-one value mapping, or near-perfect correlation (>0.98).")
-        with st.spinner("Analysing column similarity…"):
-            suggestions = detect_duplicate_information_columns(df)
-        if suggestions:
-            st.warning(f"Found **{len(suggestions)}** potential redundant column pairs.")
-            for s in suggestions:
-                with st.expander(f"**{s['col1']}** ↔ **{s['col2']}**  —  Score: {s['score']}%"):
-                    c1s, c2s = st.columns(2)
-                    with c1s:
-                        st.markdown(f"**Reason:** {s['reason']}")
-                        st.markdown(f"**Recommendation:** {s['action']}")
-                    with c2s:
-                        try:
-                            sample = df[[s["col1"], s["col2"]]].dropna().head(10).reset_index(drop=True)
-                            st.dataframe(sample, use_container_width=True)
-                        except: pass
-                    if st.button(f"Drop '{s['col2']}'", key=f"drop_{s['col1']}_{s['col2']}"):
-                        if s["col2"] in st.session_state.df.columns:
-                            st.session_state.df = st.session_state.df.drop(columns=[s["col2"]])
-                            save_operation(st.session_state.file_name, "Drop Column", s["col2"])
-                            st.success(f"Dropped: {s['col2']}")
-                            st.rerun()
-        else:
-            st.markdown("<span class='badge badge-success'>✅ No redundant columns detected</span>", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════
 # PAGE 3 — ENCODING & OUTLIERS
