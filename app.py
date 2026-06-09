@@ -759,7 +759,7 @@ if st.session_state.page == "Upload & Inspect":
                     save_operation(st.session_state.file_name, "Add Row", new_row)
                     st.session_state.pop("_pending_row", None)
                     st.session_state.pop("_pending_val_results", None)
-                    st.success(f"✅ Row added! Dataset: {len(current_df):,} → {len(updated_df):,} rows.")
+                    st.success(f"✅ Row added! Dataset: {len(current_df):,} → {len(updated_original):,} rows.")
                     st.rerun()
                 else:
                     st.session_state["_pending_row"] = new_row
