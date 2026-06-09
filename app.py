@@ -744,11 +744,6 @@ if st.session_state.page == "Upload & Inspect":
 
             if st.button("➕ Add Row"):
                 new_row = {col: input_data.get(col, np.nan) for col in current_df.columns}
-                for col in new_row:
-                    if col in st.session_state.encoders:
-                        mapping = st.session_state.encoders[col]
-                        if new_row[col] in mapping:
-                            new_row[col] = mapping[new_row[col]]
                 val_results = []
                 for col, val in new_row.items():
                     status, reason = validate_single_value(col, val, current_df, target_col=_target_col)
