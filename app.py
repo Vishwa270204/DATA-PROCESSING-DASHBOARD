@@ -1062,6 +1062,10 @@ elif st.session_state.page == "Encoding & Outliers":
             and c not in encoded_set
             and not c.endswith("_encoded")
         ]
+        ordinal_candidates = [
+            c for c in enc_candidates
+            if df[c].dtype == "object"    
+        ]
         total_feature_cats = len([c for c in ct["categorical"] + ct["boolean"] if c != target_col])
         done_count = len([c for c in encoded_set if c != target_col])
 
