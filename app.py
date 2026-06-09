@@ -776,7 +776,7 @@ if st.session_state.page == "Upload & Inspect":
             preview_opt = st.selectbox("Show", ["First 5 rows","First 10 rows","First 20 rows","Entire dataset"], key="preview_sel")
             n_map = {"First 5 rows":5,"First 10 rows":10,"First 20 rows":20}
             show_df = df if preview_opt == "Entire dataset" else df.head(n_map[preview_opt])
-            st.dataframe(show_df, use_container_width=True, height=380)
+            st.dataframe(show_df, width='stretch', height=380)
 
         # ── Schema ──
         with tab2:
@@ -792,7 +792,7 @@ if st.session_state.page == "Upload & Inspect":
                     "Unique Values": int(df[col].nunique()),
                     "Memory (KB)":   round(mem_per_col.get(col, 0) / 1024, 3)
                 })
-            st.dataframe(pd.DataFrame(schema_rows), use_container_width=True, height=420)
+            st.dataframe(pd.DataFrame(schema_rows), width='stretch', height=420)
 
         # ── Column Types ──
         with tab3:
@@ -814,7 +814,7 @@ if st.session_state.page == "Upload & Inspect":
                     "Column": r["column"], "Missing Count": r["missing"],
                     "Missing %": r["pct"], "Type": r["type"]
                 } for r in miss_report])
-                st.dataframe(miss_df, use_container_width=True)
+                st.dataframe(miss_df, width='stretch')
                 try:
                     fig = go.Figure(go.Bar(
                         x=[r["column"] for r in miss_report],
@@ -829,7 +829,7 @@ if st.session_state.page == "Upload & Inspect":
                         yaxis_title="Missing %", xaxis_title="Column",
                         paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc"
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                 except Exception as e:
                     st.error(f"Chart error: {e}")
             else:
@@ -894,7 +894,7 @@ if st.session_state.page == "Upload & Inspect":
                         lambda x: ["background-color:#bbf7d0; font-weight:bold"]*len(x)
                             if x.name == tail_df.index[-1] else [""]*len(x),
                         axis=1
-                    ), use_container_width=True)
+                    ), width='stretch')
                     st.rerun()
                 else:
                     st.session_state["_pending_row"] = new_row
@@ -919,9 +919,9 @@ if st.session_state.page == "Upload & Inspect":
                 val_df["Value"] = val_df["Value"].astype(str)
                 try:
                     styled = val_df.style.apply(_row_style, axis=1)
-                    st.dataframe(styled, use_container_width=True, hide_index=True)
+                    st.dataframe(styled, width='stretch', hide_index=True)
                 except Exception:
-                    st.dataframe(val_df, use_container_width=True, hide_index=True)
+                    st.dataframe(val_df, width='stretch', hide_index=True)
 
                 st.markdown(f"""
                 <div style='display:flex;gap:16px;margin:12px 0;flex-wrap:wrap;'>
@@ -983,7 +983,7 @@ elif st.session_state.page == "Cleaning & Validation":
 
             st.markdown("&nbsp;")
             st.markdown("**Duplicate Records:**")
-            st.dataframe(dupe_rows, use_container_width=True, height=300)
+            st.dataframe(dupe_rows, width='stretch', height=300)
 
             if st.button("🗑️ Remove All Duplicates"):
                 before = len(df)
@@ -1113,11 +1113,11 @@ elif st.session_state.page == "Cleaning & Validation":
         st.markdown("&nbsp;")
 
         with st.expander(f"✅ Valid Rows ({len(valid_df):,})", expanded=False):
-            st.dataframe(valid_df.head(200), use_container_width=True, height=320)
+            st.dataframe(valid_df.head(200), width='stretch', height=320)
 
         if len(invalid_df) > 0:
             with st.expander(f"❌ Invalid Rows ({len(invalid_df):,})", expanded=True):
-                st.dataframe(invalid_df, use_container_width=True, height=320)
+                st.dataframe(invalid_df, width='stretch', height=320)
                 c_rm, c_exp, c_rev = st.columns(3)
                 with c_rm:
                     if st.button("🗑️ Remove Invalid Rows"):
@@ -1157,7 +1157,7 @@ elif st.session_state.page == "Cleaning & Validation":
                             sample.index = sample.index + 1
                             sample.index.name = "Row"
                             st.markdown("**Sample Data (row-aligned):**")
-                            st.dataframe(sample, use_container_width=True)
+                            st.dataframe(sample, width='stretch')
                         except: pass
                     if st.button(f"Drop '{s['col2']}'", key=f"drop_{s['col1']}_{s['col2']}"):
                         if s["col2"] in st.session_state.df.columns:
@@ -1217,7 +1217,7 @@ elif st.session_state.page == "Encoding & Outliers":
                     save_operation(st.session_state.file_name, f"Encoding: {target_col}", chosen_enc_t)
                     st.success(f"✅ Applied {chosen_enc_t} encoding to '{target_col}'.")
                     if mapping is not None:
-                        st.dataframe(mapping.head(20), use_container_width=True)
+                        st.dataframe(mapping.head(20), width='stretch')
                     st.rerun()
                 except Exception as e: st.error(str(e))
 
@@ -1235,7 +1235,7 @@ elif st.session_state.page == "Encoding & Outliers":
                     left, right = st.columns([1,1])
                     with left:
                         st.markdown("**Value Distribution:**")
-                        st.dataframe(df[col].value_counts().reset_index().head(10), use_container_width=True)
+                        st.dataframe(df[col].value_counts().reset_index().head(10), width='stretch')
                     chosen_enc = st.selectbox("Encoding method", ["label","onehot","ordinal","frequency"],
                                               index=["label","onehot","ordinal","frequency"].index(rec),
                                               key=f"enc_{col}")
@@ -1250,7 +1250,7 @@ elif st.session_state.page == "Encoding & Outliers":
                             save_operation(st.session_state.file_name, f"Encoding: {col}", chosen_enc)
                             with right:
                                 st.markdown("**Mapping:**")
-                                if mapping is not None: st.dataframe(mapping.head(20), use_container_width=True)
+                                if mapping is not None: st.dataframe(mapping.head(20), width='stretch')
                             st.success(f"✅ Applied {chosen_enc} to '{col}'.")
                             st.rerun()
                         except Exception as e: st.error(str(e))
@@ -1292,7 +1292,7 @@ elif st.session_state.page == "Encoding & Outliers":
                         "Outliers": info["count"],
                         "Outlier %": info["pct"]
                     })
-                st.dataframe(pd.DataFrame(stats_rows), use_container_width=True)
+                st.dataframe(pd.DataFrame(stats_rows), width='stretch')
 
             else:
                 outlier_data = detect_outliers_zscore(df)
@@ -1315,7 +1315,7 @@ elif st.session_state.page == "Encoding & Outliers":
                         "Outliers": info["count"],
                         "Outlier %": info["pct"]
                     })
-                st.dataframe(pd.DataFrame(stats_rows), use_container_width=True)
+                st.dataframe(pd.DataFrame(stats_rows), width='stretch')
 
             # ── Outlier Visualisation: ALL columns at once ──
             st.markdown("<div class='section-header'><h3>Outlier Visualisation — All Numerical Columns</h3></div>", unsafe_allow_html=True)
@@ -1354,7 +1354,7 @@ elif st.session_state.page == "Encoding & Outliers":
                     paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc",
                     showlegend=True
                 )
-                st.plotly_chart(fig_scatter, use_container_width=True)
+                st.plotly_chart(fig_scatter, width='stretch')
             except Exception as e:
                 st.error(f"Strip plot error: {e}")
 
@@ -1389,7 +1389,7 @@ elif st.session_state.page == "Encoding & Outliers":
                     height=max(350, n_r * 300),
                     paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc"
                 )
-                st.plotly_chart(fig_dens, use_container_width=True)
+                st.plotly_chart(fig_dens, width='stretch')
             except Exception as e:
                 st.error(f"Density plot error: {e}")
 
@@ -1425,7 +1425,7 @@ elif st.session_state.page == "Encoding & Outliers":
         if skew_df.empty:
             st.info("No numerical columns.")
         else:
-            st.dataframe(skew_df, use_container_width=True)
+            st.dataframe(skew_df, width='stretch')
 
             # Distribution + KDE for every column, no dropdown
             num_cols_sk = df.select_dtypes(include=[np.number]).columns.tolist()
@@ -1478,7 +1478,7 @@ elif st.session_state.page == "Encoding & Outliers":
                     height=max(400, n_r * 320),
                     paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc"
                 )
-                st.plotly_chart(fig_sk, use_container_width=True)
+                st.plotly_chart(fig_sk, width='stretch')
             except Exception as e:
                 st.error(f"Skewness chart error: {e}")
 
@@ -1549,7 +1549,7 @@ elif st.session_state.page == "Encoding & Outliers":
                     height=max(400, n_r_d * 320),
                     paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc"
                 )
-                st.plotly_chart(fig_d, use_container_width=True)
+                st.plotly_chart(fig_d, width='stretch')
             except Exception as e:
                 st.error(f"Distribution chart error: {e}")
 
@@ -1579,14 +1579,14 @@ elif st.session_state.page == "Statistics & Export":
         # Full describe
         try:
             desc_all = df.describe(include="all").T.reset_index().rename(columns={"index":"Column"})
-            st.dataframe(desc_all, use_container_width=True, height=380)
+            st.dataframe(desc_all, width='stretch', height=380)
         except Exception as e:
             st.error(f"Error: {e}")
 
         st.markdown("<div class='section-header'><h3>Extended Numerical Statistics</h3></div>", unsafe_allow_html=True)
         stats_df = descriptive_statistics(df)
         if not stats_df.empty:
-            st.dataframe(stats_df, use_container_width=True, height=380)
+            st.dataframe(stats_df, width='stretch', height=380)
         else:
             st.info("No numerical columns.")
 
@@ -1605,7 +1605,7 @@ elif st.session_state.page == "Statistics & Export":
                     template="plotly_white", height=350,
                     paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc"
                 )
-                st.plotly_chart(fig_vc, use_container_width=True)
+                st.plotly_chart(fig_vc, width='stretch')
             except Exception as e:
                 st.error(f"Chart error: {e}")
 
@@ -1645,7 +1645,7 @@ elif st.session_state.page == "Statistics & Export":
                         plot_bgcolor="#f8f9fc",
                         margin=dict(l=20, r=80, t=60, b=40)
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                 except Exception as e:
                     st.error(f"Chart error for {col_a}: {e}")
 
@@ -1726,7 +1726,7 @@ elif st.session_state.page == "Statistics & Export":
                 template="plotly_white", height=320,
                 paper_bgcolor="#ffffff"
             )
-            st.plotly_chart(fig_g, use_container_width=True)
+            st.plotly_chart(fig_g, width='stretch')
         except Exception as e:
             st.error(f"Gauge error: {e}")
 
@@ -1775,7 +1775,7 @@ elif st.session_state.page == "Statistics & Export":
                 hist[["timestamp","operation","details"]].rename(columns={
                     "timestamp":"Timestamp","operation":"Operation","details":"Details"
                 }),
-                use_container_width=True, height=400
+                width='stretch', height=400
             )
 
     # ── Export ──
@@ -1798,7 +1798,7 @@ elif st.session_state.page == "Statistics & Export":
                 data=csv_bytes,
                 file_name=f"processed_{st.session_state.file_name.rsplit('.',1)[0]}.csv",
                 mime="text/csv",
-                use_container_width=True
+                width='stretch'
             )
         with c2e:
             st.markdown("**📊 Excel Export**")
@@ -1809,11 +1809,11 @@ elif st.session_state.page == "Statistics & Export":
                     data=excel_bytes,
                     file_name=f"processed_{st.session_state.file_name.rsplit('.',1)[0]}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
+                    width='stretch'
                 )
             except Exception as e:
                 st.error(f"Excel export error: {e}")
 
         st.markdown("&nbsp;")
         with st.expander("Preview export (first 20 rows)"):
-            st.dataframe(df.head(20), use_container_width=True)
+            st.dataframe(df.head(20), width='stretch')
