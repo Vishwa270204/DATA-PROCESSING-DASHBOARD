@@ -650,7 +650,7 @@ if st.session_state.page == "Upload & Inspect":
             with col_w:
                 st.markdown(f"""<div class='metric-card'><span class='val'>{val}</span><span class='label'>{label}</span></div>""", unsafe_allow_html=True)
         st.markdown("&nbsp;")
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["👁️ Preview","📋 Schema","🏷️ Column Types","❓ Missing","➕ Add Row","Encoded data"])
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["👁️ Preview","📋 Schema","🏷️ Column Types","❓ Missing","➕ Add Row","🔄 Encoded data"])
         with tab1:
             st.markdown(f"<div style='font-size:0.85rem;color:#6b7280;margin-bottom:8px;'>Dataset: <b style='color:#111827;'>{summary['rows']:,} rows × {summary['columns']} columns</b></div>", unsafe_allow_html=True)
             preview_opt = st.selectbox("Show", ["First 5 rows","First 10 rows","First 20 rows","Entire dataset"], key="preview_sel")
