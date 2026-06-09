@@ -98,7 +98,7 @@ def identify_column_types(df):
         else: ct["categorical"].append(col)
     return ct
 
-
+@st.cache_data
 def get_dataset_summary(df):
     return {
         "rows": len(df), "columns": len(df.columns),
@@ -459,7 +459,7 @@ def apply_encoding(df, col, enc_type, ordinal_order=None):
         mapping = freq.reset_index(); mapping.columns = ["Original","Frequency"]
     return df, mapping
 
-
+@st.cache_data
 def calculate_data_quality_score(df):
     miss_pct = df.isnull().sum().sum() / df.size * 100
     dup_pct  = df.duplicated().sum() / len(df) * 100
@@ -776,7 +776,7 @@ if st.session_state.page == "Upload & Inspect":
             preview_opt = st.selectbox("Show", ["First 5 rows","First 10 rows","First 20 rows","Entire dataset"], key="preview_sel")
             n_map = {"First 5 rows":5,"First 10 rows":10,"First 20 rows":20}
             show_df = df if preview_opt == "Entire dataset" else df.head(n_map[preview_opt])
-            st.dataframe(show_df, width='stretch', height=380)
+            st.dataframe(show_df, use_container_width=True, height=380)
 
         # ── Schema ──
         with tab2:
@@ -792,7 +792,7 @@ if st.session_state.page == "Upload & Inspect":
                     "Unique Values": int(df[col].nunique()),
                     "Memory (KB)":   round(mem_per_col.get(col, 0) / 1024, 3)
                 })
-            st.dataframe(pd.DataFrame(schema_rows), width='stretch', height=420)
+            st.dataframe(pd.DataFrame(schema_rows), use_container_width=True, height=420)
 
         # ── Column Types ──
         with tab3:
@@ -814,7 +814,7 @@ if st.session_state.page == "Upload & Inspect":
                     "Column": r["column"], "Missing Count": r["missing"],
                     "Missing %": r["pct"], "Type": r["type"]
                 } for r in miss_report])
-                st.dataframe(miss_df, width='stretch')
+                st.dataframe(miss_df, use_container_width=True)
                 try:
                     fig = go.Figure(go.Bar(
                         x=[r["column"] for r in miss_report],
@@ -829,7 +829,7 @@ if st.session_state.page == "Upload & Inspect":
                         yaxis_title="Missing %", xaxis_title="Column",
                         paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc"
                     )
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 except Exception as e:
                     st.error(f"Chart error: {e}")
             else:
@@ -871,35 +871,38 @@ if st.session_state.page == "Upload & Inspect":
                         input_data[col] = st.text_input(col, key=f"inp_{col}")
 
             if st.button("➕ Add Row"):
-                new_row = {col: input_data.get(col, np.nan) for col in st.session_state.df.columns}
+                new_row = {col: input_data.get(col, np.nan) for col in df.columns}
                 target_col_used = _target_col
 
+                # ── Validate the new row ──
                 val_results = []
                 for col, val in new_row.items():
-                    status, reason = validate_single_value(col, val, st.session_state.df, target_col=target_col_used)
+                    status, reason = validate_single_value(col, val, df, target_col=target_col_used)
                     val_results.append({"Column": col, "Value": val, "Status": status.title(), "Reason": reason or "—"})
 
                 n_invalid = sum(1 for r in val_results if r["Status"] == "Invalid")
 
                 if n_invalid == 0:
-                    before = len(st.session_state.df)
-                    st.session_state.df = pd.concat([st.session_state.df, pd.DataFrame([new_row])], ignore_index=True)
+                    # All valid — insert immediately
+                    before = len(df)
+                    st.session_state.df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                     save_operation(st.session_state.file_name, "Add Row", new_row)
                     st.session_state.pop("_pending_row", None)
                     st.session_state.pop("_pending_val_results", None)
-                    st.success(f"✅ New Row Added! Dataset: {before} → {len(st.session_state.df)} rows.")
+                    st.success(f"✅ New Row Added Successfully! Dataset: {before} → {len(st.session_state.df)} rows.")
                     tail_df = st.session_state.df.tail(5).copy()
                     tail_df.index = range(len(st.session_state.df) - len(tail_df), len(st.session_state.df))
                     st.dataframe(tail_df.style.apply(
                         lambda x: ["background-color:#bbf7d0; font-weight:bold"]*len(x)
                             if x.name == tail_df.index[-1] else [""]*len(x),
                         axis=1
-                    ), width='stretch')
+                    ), use_container_width=True)
                     st.rerun()
                 else:
+                    # Has invalid values — store in session state and show review
                     st.session_state["_pending_row"] = new_row
                     st.session_state["_pending_val_results"] = val_results
-                    st.rerun()
+
             # ── Show pending row review (persists across reruns) ──
             if st.session_state.get("_pending_row") and st.session_state.get("_pending_val_results"):
                 pending_row = st.session_state["_pending_row"]
@@ -919,9 +922,9 @@ if st.session_state.page == "Upload & Inspect":
                 val_df["Value"] = val_df["Value"].astype(str)
                 try:
                     styled = val_df.style.apply(_row_style, axis=1)
-                    st.dataframe(styled, width='stretch', hide_index=True)
+                    st.dataframe(styled, use_container_width=True, hide_index=True)
                 except Exception:
-                    st.dataframe(val_df, width='stretch', hide_index=True)
+                    st.dataframe(val_df, use_container_width=True, hide_index=True)
 
                 st.markdown(f"""
                 <div style='display:flex;gap:16px;margin:12px 0;flex-wrap:wrap;'>
@@ -949,7 +952,6 @@ if st.session_state.page == "Upload & Inspect":
                         st.session_state.pop("_pending_val_results", None)
                         st.info("Row discarded.")
                         st.rerun()
-
 # ─────────────────────────────────────────────
 # PAGE 2 — CLEANING & VALIDATION
 # ─────────────────────────────────────────────
