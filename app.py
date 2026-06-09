@@ -1087,7 +1087,7 @@ elif st.session_state.page == "Encoding & Outliers":
                             st.session_state.encoded_columns.append(col)
                     st.success(f"Encoded {len(selected_cols)} column(s)")
                     st.rerun()
-            st.subheader("🟢 Label Encoding")
+            st.subheader("🏷️ Label Encoding")
             if label_cols:
                 selected_cols = st.multiselect(
                     "Select column for Label Encoding",
@@ -1106,25 +1106,64 @@ elif st.session_state.page == "Encoding & Outliers":
                             st.session_state.encoded_columns.append(col)
                     st.success(f"Encoded {len(selected_cols)} column(s)")
                     st.rerun()      
-            st.subheader("🟠 Frequency Encoding")
+            st.subheader("📊 Frequency Encoding")
             if frequency_cols:
-                selected_col = st.selectbox(
+                selected_cols = st.multiselect(
                     "Select column for Frequency Encoding",
                     frequency_cols,
                     key="freq_select"
                 )
+                
                 if st.button("Apply Frequency Encoding"):
-                    new_df, mapping = apply_encoding(
-                        df,
-                        selected_col,
-                        "frequency"
-                    )
-                    st.session_state.df = new_df
-                    if selected_col not in st.session_state.encoded_columns:
-                        st.session_state.encoded_columns.append(selected_col)
-                    st.success(f"Encoded {selected_col}")
+                    for col in selected_cols:
+                        new_df, mapping = apply_encoding(
+                            st.session_state.df,
+                            col,
+                            "frequency"
+                        )
+                        st.session_state.df = new_df
+                        if col not in st.session_state.encoded_columns:
+                            st.session_state.encoded_columns.append(col)
+                    st.success(f"Encoded {len(selected_cols)} column(s)")
                     st.rerun()
-  # ── Outliers  ── FIX 3: go.Strip → go.Box + go.Scatter overlay ──────────
+            st.subheader("📈  Ordinal Encoding")
+            if ordinal_cols:
+                selected_cols = st.multiselect(
+                "Select columns for Ordinal Encoding",
+                ordinal_cols,
+                key="ordinal_select")
+                ord_str = st.text_input(
+                    "Ordinal order (comma-separated)",
+                    key="ordinal_order"
+                )
+            
+                if st.button("Apply Ordinal Encoding"):
+            
+                    ordinal_order = None
+            
+                    if ord_str:
+                        ordinal_order = [
+                            x.strip()
+                            for x in ord_str.split(",")
+                        ]
+            
+                    for col in selected_cols:
+            
+                        new_df, mapping = apply_encoding(
+                            st.session_state.df,
+                            col,
+                            "ordinal",
+                            ordinal_order
+                        )
+            
+                        st.session_state.df = new_df
+            
+                        if col not in st.session_state.encoded_columns:
+                            st.session_state.encoded_columns.append(col)
+            
+                    st.success(f"✅ Encoded {len(selected_cols)} column(s)")
+                    st.rerun()  
+    # ── Outliers  ── FIX 3: go.Strip → go.Box + go.Scatter overlay ──────────
     with tab2:
         st.markdown("<div class='section-header'><h3>Outlier Detection & Treatment</h3></div>", unsafe_allow_html=True)
         num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
