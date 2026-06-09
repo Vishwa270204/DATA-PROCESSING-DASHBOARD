@@ -1478,7 +1478,7 @@ elif st.session_state.page == "Statistics & Export":
         st.markdown("<div class='section-header'><h3>Extended Numerical Statistics</h3></div>", unsafe_allow_html=True)
         stats_df = descriptive_statistics(df)
         if not stats_df.empty:
-            (stats_df, use_container_width=True, height=380)
+            st.dataframe(stats_df, use_container_width=True, height=380)
         else:
             st.info("No numerical columns.")
         st.markdown("<div class='section-header'><h3>Categorical Summary</h3></div>", unsafe_allow_html=True)
