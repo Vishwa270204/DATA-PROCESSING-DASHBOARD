@@ -1059,21 +1059,22 @@ elif st.session_state.page == "Encoding & Outliers":
                     st.rerun()
             st.subheader("🟢 Label Encoding")
             if label_cols:
-                selected_col = st.selectbox(
+                selected_col = st.multiselect(
                     "Select column for Label Encoding",
                     label_cols,
                     key="label_select"
                 )
                 if st.button("Apply Label Encoding"):
-                    new_df, mapping = apply_encoding(
-                        df,
-                        selected_col,
-                        "label"
-                    )
-                    st.session_state.df = new_df
-                    if selected_col not in st.session_state.encoded_columns:
-                        st.session_state.encoded_columns.append(selected_col)
-                    st.success(f"Encoded {selected_col}")
+                    for col in selected_cols:
+                        new_df, mapping = apply_encoding(
+                            st.session_state.df,
+                            col,
+                            "label"
+                        )
+                        st.session_state.df = new_df
+                        if col not in st.session_state.encoded_columns:
+                            st.session_state.encoded_columns.append(col)
+                    st.success(f"Encoded {len(selected_cols)} column(s)")
                     st.rerun()      
             st.subheader("🟠 Frequency Encoding")
             if frequency_cols:
