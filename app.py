@@ -649,7 +649,7 @@ if st.session_state.page == "Upload & Inspect":
                 st.markdown(f"""<div class='metric-card'><span class='val'>{val}</span><span class='label'>{label}</span></div>""", unsafe_allow_html=True)
 
         st.markdown("&nbsp;")
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["👁️ Preview","📋 Schema","🏷️ Column Types","❓ Missing","➕ Add Row"])
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["👁️ Preview","📋 Schema","🏷️ Column Types","❓ Missing","➕ Add Row","Encoded data"])
 
         with tab1:
             st.markdown(f"<div style='font-size:0.85rem;color:#6b7280;margin-bottom:8px;'>Dataset: <b style='color:#111827;'>{summary['rows']:,} rows × {summary['columns']} columns</b></div>", unsafe_allow_html=True)
@@ -814,7 +814,30 @@ if st.session_state.page == "Upload & Inspect":
                         st.session_state.pop("_pending_val_results", None)
                         st.info("Row discarded.")
                         st.rerun()
-
+        with tab6:
+        
+            st.subheader("🔄 Encoded / Processed Dataset")
+        
+            if st.session_state.get("processed_df") is not None:
+        
+                st.info(
+                    "This dataset is used for ML and analysis. "
+                    "The original dataset remains unchanged."
+                )
+        
+                st.dataframe(
+                    st.session_state.processed_df,
+                    use_container_width=True,
+                    height=500
+                )
+        
+                st.write(
+                    f"Rows: {len(st.session_state.processed_df):,} | "
+                    f"Columns: {len(st.session_state.processed_df.columns):,}"
+                )
+        
+            else:
+                st.warning("No processed dataset available.")
 # ═══════════════════════════════════════════════
 # PAGE 2 — CLEANING & VALIDATION
 # ═══════════════════════════════════════════════
@@ -1017,7 +1040,8 @@ elif st.session_state.page == "Encoding & Outliers":
                 if st.button(f"Apply Encoding to Target: {target_col}"):
                     try:
                         new_df, mapping = apply_encoding(df, target_col, chosen_enc_t, ordinal_order_t)
-                        st.session_state.df = new_df
+                        st.session_state.processed_df = new_df
+                        st.session_state.df = new_df   # temporary compatibility
                         if target_col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(target_col)
                         save_operation(st.session_state.file_name, f"Encoding: {target_col}", chosen_enc_t)
@@ -1101,7 +1125,8 @@ elif st.session_state.page == "Encoding & Outliers":
                             "onehot"
                         )
         
-                        st.session_state.processed_df=new_df
+                        st.session_state.processed_df = new_df
+                        st.session_state.df = new_df   # temporary compatibility
         
                         if col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(col)
@@ -1133,7 +1158,7 @@ elif st.session_state.page == "Encoding & Outliers":
                         )
         
                         st.session_state.processed_df = new_df
-        
+                        st.session_state.df = new_df   # temporary compatibility
                         if col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(col)
         
@@ -1163,7 +1188,8 @@ elif st.session_state.page == "Encoding & Outliers":
                             "frequency"
                         )
         
-                        st.session_state.processed_df=new_df
+                        st.session_state.processed_df = new_df
+                        st.session_state.df = new_df   # temporary compatibility
                         if col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(col)
         
@@ -1174,42 +1200,34 @@ elif st.session_state.page == "Encoding & Outliers":
             # Ordinal Encoding
             # ─────────────────────────────────────
             if ordinal_candidates:
-        
                 st.subheader("📈 Ordinal Encoding")
-        
                 selected_cols = st.multiselect(
                     "Select columns",
                     ordinal_candidates,
                     key="ordinal_select"
                 )
-        
                 ord_str = st.text_input(
                     "Order (comma-separated)",
                     placeholder="low,medium,high",
                     key="ordinal_order"
                 )
-        
                 if st.button("Apply Ordinal Encoding"):
-        
                     if not ord_str:
                         st.warning("Please enter the ordinal order.")
                     else:
-        
                         ordinal_order = [
                             x.strip()
                             for x in ord_str.split(",")
                         ]
-        
                         for col in selected_cols:
-        
                             new_df, mapping = apply_encoding(
                                 st.session_state.processed_df,
                                 col,
                                 "ordinal",
                                 ordinal_order
                             )
-        
-                            st.session_state.processed_df = new_df
+                        st.session_state.processed_df = new_df
+                        st.session_state.df = new_df   # temporary compatibility
         
                             if col not in st.session_state.encoded_columns:
                                 st.session_state.encoded_columns.append(col)
