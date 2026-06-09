@@ -556,57 +556,57 @@ if st.session_state.page == "Upload & Inspect":
     </div>
     """, unsafe_allow_html=True)
 
-    uploaded = st.file_uploader("Choose a file", type=["csv","xlsx","xls"],
-                                help="Supports CSV, Excel (.xlsx/.xls)")
-   if uploaded:
-    try:
+    uploaded = st.file_uploader(
+        "Choose a file",
+        type=["csv", "xlsx", "xls"],
+        help="Supports CSV, Excel (.xlsx/.xls)"
+    )
 
-        # New file uploaded → reset session data
-        if uploaded.name != st.session_state.get("file_name", ""):
+    if uploaded:
+        try:
 
-            st.session_state.df = None
-            st.session_state.original_df = None
+            # New file uploaded → reset session data
+            if uploaded.name != st.session_state.get("file_name", ""):
 
-            st.session_state.encoded_columns = []
+                st.session_state.df = None
+                st.session_state.original_df = None
+                st.session_state.encoded_columns = []
 
-            if "cleaning_history" in st.session_state:
-                st.session_state.cleaning_history = []
+                if "cleaning_history" in st.session_state:
+                    st.session_state.cleaning_history = []
 
-            if "operations" in st.session_state:
-                st.session_state.operations = []
+                if "operations" in st.session_state:
+                    st.session_state.operations = []
 
-        df = load_file(uploaded, uploaded.name)
+            df = load_file(uploaded, uploaded.name)
 
-        st.session_state.df = df
-        st.session_state.original_df = df.copy()
-        st.session_state.file_name = uploaded.name
+            st.session_state.df = df
+            st.session_state.original_df = df.copy()
+            st.session_state.file_name = uploaded.name
 
-        size_kb = uploaded.size / 1024
-
-        conn = sqlite3.connect(DB_NAME)
-        conn.execute(
-            "INSERT INTO file_metadata VALUES (NULL,?,?,?,?,?)",
-            (
-                uploaded.name,
-                datetime.now().isoformat(),
-                round(size_kb, 2),
-                len(df),
-                len(df.columns)
-            )
-        )
-        conn.commit()
-        conn.close()
-
-        st.success(f"✅ Loaded **{uploaded.name}**")
             size_kb = uploaded.size / 1024
+
             conn = sqlite3.connect(DB_NAME)
-            conn.execute("INSERT INTO file_metadata VALUES (NULL,?,?,?,?,?)",
-                         (uploaded.name, datetime.now().isoformat(), round(size_kb,2), len(df), len(df.columns)))
-            conn.commit(); conn.close()
-            st.success(f"✅ Loaded **{uploaded.name}** — {len(df):,} rows × {len(df.columns)} columns")
+            conn.execute(
+                "INSERT INTO file_metadata VALUES (NULL,?,?,?,?,?)",
+                (
+                    uploaded.name,
+                    datetime.now().isoformat(),
+                    round(size_kb, 2),
+                    len(df),
+                    len(df.columns)
+                )
+            )
+            conn.commit()
+            conn.close()
+
+            st.success(
+                f"✅ Loaded **{uploaded.name}** — "
+                f"{len(df):,} rows × {len(df.columns)} columns"
+            )
+
         except Exception as e:
             st.error(f"❌ Error loading file: {e}")
-
     if st.session_state.df is not None:
         df = st.session_state.df
         summary = get_dataset_summary(df)
