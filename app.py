@@ -1067,174 +1067,172 @@ elif st.session_state.page == "Encoding & Outliers":
             else:
                 st.info("No categorical feature columns found.")
         else:
-            else:
-
-    # Recommendation buckets
-    onehot_cols = []
-    label_cols = []
-    frequency_cols = []
-
-    for col in enc_candidates:
-
-        rec, _ = recommend_encoding(df, col)
-
-        if rec == "onehot":
-            onehot_cols.append(col)
-
-        elif rec == "label":
-            label_cols.append(col)
-
-        elif rec == "frequency":
-            frequency_cols.append(col)
-
-    # Ordinal candidates
-    ordinal_candidates = [
-        c for c in enc_candidates
-        if str(df[c].dtype) in ["object", "category"]
-    ]
-
-    # ─────────────────────────────────────
-    # One-Hot Encoding
-    # ─────────────────────────────────────
-    if onehot_cols:
-
-        st.subheader("🔵 One-Hot Encoding")
-
-        selected_cols = st.multiselect(
-            "Select columns for One-Hot Encoding",
-            onehot_cols,
-            key="onehot_select"
-        )
-
-        if st.button("Apply One-Hot Encoding"):
-
-            for col in selected_cols:
-
-                new_df, mapping = apply_encoding(
-                    st.session_state.df,
-                    col,
-                    "onehot"
+            # Recommendation buckets
+            onehot_cols = []
+            label_cols = []
+            frequency_cols = []
+        
+            for col in enc_candidates:
+        
+                rec, _ = recommend_encoding(df, col)
+        
+                if rec == "onehot":
+                    onehot_cols.append(col)
+        
+                elif rec == "label":
+                    label_cols.append(col)
+        
+                elif rec == "frequency":
+                    frequency_cols.append(col)
+        
+            # Ordinal candidates
+            ordinal_candidates = [
+                c for c in enc_candidates
+                if str(df[c].dtype) in ["object", "category"]
+            ]
+        
+            # ─────────────────────────────────────
+            # One-Hot Encoding
+            # ─────────────────────────────────────
+            if onehot_cols:
+        
+                st.subheader("🔵 One-Hot Encoding")
+        
+                selected_cols = st.multiselect(
+                    "Select columns for One-Hot Encoding",
+                    onehot_cols,
+                    key="onehot_select"
                 )
-
-                st.session_state.df = new_df
-
-                if col not in st.session_state.encoded_columns:
-                    st.session_state.encoded_columns.append(col)
-
-            st.success(f"✅ Encoded {len(selected_cols)} column(s)")
-            st.rerun()
-
-    # ─────────────────────────────────────
-    # Label Encoding
-    # ─────────────────────────────────────
-    if label_cols:
-
-        st.subheader("🏷️ Label Encoding")
-
-        selected_cols = st.multiselect(
-            "Select columns for Label Encoding",
-            label_cols,
-            key="label_select"
-        )
-
-        if st.button("Apply Label Encoding"):
-
-            for col in selected_cols:
-
-                new_df, mapping = apply_encoding(
-                    st.session_state.df,
-                    col,
-                    "label"
+        
+                if st.button("Apply One-Hot Encoding"):
+        
+                    for col in selected_cols:
+        
+                        new_df, mapping = apply_encoding(
+                            st.session_state.df,
+                            col,
+                            "onehot"
+                        )
+        
+                        st.session_state.df = new_df
+        
+                        if col not in st.session_state.encoded_columns:
+                            st.session_state.encoded_columns.append(col)
+        
+                    st.success(f"✅ Encoded {len(selected_cols)} column(s)")
+                    st.rerun()
+        
+            # ─────────────────────────────────────
+            # Label Encoding
+            # ─────────────────────────────────────
+            if label_cols:
+        
+                st.subheader("🏷️ Label Encoding")
+        
+                selected_cols = st.multiselect(
+                    "Select columns for Label Encoding",
+                    label_cols,
+                    key="label_select"
                 )
-
-                st.session_state.df = new_df
-
-                if col not in st.session_state.encoded_columns:
-                    st.session_state.encoded_columns.append(col)
-
-            st.success(f"✅ Encoded {len(selected_cols)} column(s)")
-            st.rerun()
-
-    # ─────────────────────────────────────
-    # Frequency Encoding
-    # ─────────────────────────────────────
-    if frequency_cols:
-
-        st.subheader("📊 Frequency Encoding")
-
-        selected_cols = st.multiselect(
-            "Select columns for Frequency Encoding",
-            frequency_cols,
-            key="freq_select"
-        )
-
-        if st.button("Apply Frequency Encoding"):
-
-            for col in selected_cols:
-
-                new_df, mapping = apply_encoding(
-                    st.session_state.df,
-                    col,
-                    "frequency"
+        
+                if st.button("Apply Label Encoding"):
+        
+                    for col in selected_cols:
+        
+                        new_df, mapping = apply_encoding(
+                            st.session_state.df,
+                            col,
+                            "label"
+                        )
+        
+                        st.session_state.df = new_df
+        
+                        if col not in st.session_state.encoded_columns:
+                            st.session_state.encoded_columns.append(col)
+        
+                    st.success(f"✅ Encoded {len(selected_cols)} column(s)")
+                    st.rerun()
+        
+            # ─────────────────────────────────────
+            # Frequency Encoding
+            # ─────────────────────────────────────
+            if frequency_cols:
+        
+                st.subheader("📊 Frequency Encoding")
+        
+                selected_cols = st.multiselect(
+                    "Select columns for Frequency Encoding",
+                    frequency_cols,
+                    key="freq_select"
                 )
-
-                st.session_state.df = new_df
-
-                if col not in st.session_state.encoded_columns:
-                    st.session_state.encoded_columns.append(col)
-
-            st.success(f"✅ Encoded {len(selected_cols)} column(s)")
-            st.rerun()
-
-    # ─────────────────────────────────────
-    # Ordinal Encoding
-    # ─────────────────────────────────────
-    if ordinal_candidates:
-
-        st.subheader("📈 Ordinal Encoding")
-
-        selected_cols = st.multiselect(
-            "Select columns",
-            ordinal_candidates,
-            key="ordinal_select"
-        )
-
-        ord_str = st.text_input(
-            "Order (comma-separated)",
-            placeholder="low,medium,high",
-            key="ordinal_order"
-        )
-
-        if st.button("Apply Ordinal Encoding"):
-
-            if not ord_str:
-                st.warning("Please enter the ordinal order.")
-            else:
-
-                ordinal_order = [
-                    x.strip()
-                    for x in ord_str.split(",")
-                ]
-
-                for col in selected_cols:
-
-                    new_df, mapping = apply_encoding(
-                        st.session_state.df,
-                        col,
-                        "ordinal",
-                        ordinal_order
-                    )
-
-                    st.session_state.df = new_df
-
-                    if col not in st.session_state.encoded_columns:
-                        st.session_state.encoded_columns.append(col)
-
-                st.success(
-                    f"✅ Encoded {len(selected_cols)} column(s)"
+        
+                if st.button("Apply Frequency Encoding"):
+        
+                    for col in selected_cols:
+        
+                        new_df, mapping = apply_encoding(
+                            st.session_state.df,
+                            col,
+                            "frequency"
+                        )
+        
+                        st.session_state.df = new_df
+        
+                        if col not in st.session_state.encoded_columns:
+                            st.session_state.encoded_columns.append(col)
+        
+                    st.success(f"✅ Encoded {len(selected_cols)} column(s)")
+                    st.rerun()
+        
+            # ─────────────────────────────────────
+            # Ordinal Encoding
+            # ─────────────────────────────────────
+            if ordinal_candidates:
+        
+                st.subheader("📈 Ordinal Encoding")
+        
+                selected_cols = st.multiselect(
+                    "Select columns",
+                    ordinal_candidates,
+                    key="ordinal_select"
                 )
-
-                st.rerun()
+        
+                ord_str = st.text_input(
+                    "Order (comma-separated)",
+                    placeholder="low,medium,high",
+                    key="ordinal_order"
+                )
+        
+                if st.button("Apply Ordinal Encoding"):
+        
+                    if not ord_str:
+                        st.warning("Please enter the ordinal order.")
+                    else:
+        
+                        ordinal_order = [
+                            x.strip()
+                            for x in ord_str.split(",")
+                        ]
+        
+                        for col in selected_cols:
+        
+                            new_df, mapping = apply_encoding(
+                                st.session_state.df,
+                                col,
+                                "ordinal",
+                                ordinal_order
+                            )
+        
+                            st.session_state.df = new_df
+        
+                            if col not in st.session_state.encoded_columns:
+                                st.session_state.encoded_columns.append(col)
+        
+                        st.success(
+                            f"✅ Encoded {len(selected_cols)} column(s)"
+                        )
+        
+                        st.rerun()
     # ── Outliers  ── FIX 3: go.Strip → go.Box + go.Scatter overlay ──────────
     with tab2:
         st.markdown("<div class='section-header'><h3>Outlier Detection & Treatment</h3></div>", unsafe_allow_html=True)
