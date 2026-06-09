@@ -380,14 +380,33 @@ def detect_duplicate_information_columns(df):
 def recommend_encoding(df, col, is_target=False):
     n = df[col].nunique()
     if is_target:
-        if n == 2:    return "label",     "Binary target → Label Encoding (0/1)"
-        elif n <= 15: return "label",     "Multiclass target → Label Encoding"
-        else:         return "frequency", "High-cardinality target → Frequency Encoding"
+        if n == 2:
+            return "label", "Binary target → Label Encoding"
+        elif n <= 15:
+            return "label", "Multiclass target → Label Encoding"
+        else:
+            return "frequency", "High-cardinality target → Frequency Encoding"
     else:
-        if n == 2:    return "label",     "Binary column → Label Encoding"
-        elif n <= 10: return "onehot",    "Low cardinality → One-Hot Encoding"
-        else:         return "frequency", "High cardinality → Frequency Encoding"
-
+        # Detect common ordinal categories
+        ordinal_patterns = [
+            {"low", "medium", "high"},
+            {"poor", "average", "good", "excellent"},
+            {"beginner", "intermediate", "advanced"},
+            {"very low", "low", "medium", "high", "very high"}
+        ]
+        values = {
+            str(v).strip().lower()
+            for v in df[col].dropna().unique()
+        }
+        for pattern in ordinal_patterns:
+            if values.issubset(pattern):
+                return "ordinal", "Ordered categories detected → Ordinal Encoding"
+        if n == 2:
+            return "label", "Binary column → Label Encoding"
+        elif n <= 10:
+            return "onehot", "Low cardinality → One-Hot Encoding"
+        else:
+            return "frequency", "High cardinality → Frequency Encoding"
 def apply_encoding(df, col, enc_type, ordinal_order=None):
     df = df.copy(); mapping = None
     if enc_type == "label":
