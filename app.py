@@ -707,8 +707,7 @@ if st.session_state.page == "Upload & Inspect":
             if _target_col:
                 st.caption(f"🎯 Target column: **{_target_col}** — only existing values allowed.")
 
-            # Live row count display so user can verify before and after
-            st.info(f"📊 Current dataset: **{len(current_df):,} rows**. After adding: {len(current_df)+1:,} rows.")
+            
 
             form_cols = st.columns(min(3, len(current_df.columns)))
             for i, col in enumerate(current_df.columns):
