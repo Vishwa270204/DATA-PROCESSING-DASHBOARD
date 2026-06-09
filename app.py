@@ -501,7 +501,8 @@ defaults = {
     "file_name": "",
     "page": "Upload & Inspect",
     "encoded_columns": [],
-    "encoders": {}
+    "encoders": {},
+     "target_col": "— None —",
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -719,8 +720,9 @@ if st.session_state.page == "Upload & Inspect":
                 st.stop()
             ct_live = identify_column_types(current_df)            
             input_data = {}
-            _target_enc = st.session_state.get("target_enc", "— None —")
-            _target_col = _target_enc if _target_enc != "— None —" else None
+            _target_col = st.session_state.get("target_col", "— None —")
+            if _target_col == "— None —":
+                _target_col = None
             if _target_col:
                 st.caption(f"🎯 Target column: **{_target_col}** — only existing values allowed.")
             form_cols = st.columns(min(3, len(current_df.columns)))
@@ -1011,9 +1013,9 @@ elif st.session_state.page == "Encoding & Outliers":
         st.markdown("<div class='section-header'><h3>Target-First Categorical Encoding</h3></div>", unsafe_allow_html=True)
 
         all_cols = list(df.columns)
-        target_col = st.selectbox("Select **Target / Output** column (optional)",
-                                  ["— None —"] + all_cols, key="target_enc")
-
+        if "target_col" not in st.session_state:
+            st.session_state.target_col = "— None —"
+        target_col = st.selectbox("Select Target Variable",["— None —"] + all_cols,key="target_col")
         if target_col != "— None —":
             rec_enc, rec_exp = recommend_encoding(df, target_col, is_target=True)
             already_encoded  = target_col in st.session_state.encoded_columns
