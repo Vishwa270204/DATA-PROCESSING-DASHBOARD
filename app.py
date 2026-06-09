@@ -591,13 +591,17 @@ if st.session_state.page == "Upload & Inspect":
     
             # Only load when a NEW file is selected
             if uploaded.name != st.session_state.get("file_name", ""):
-    
                 df = load_file(uploaded, uploaded.name)
-    
-                st.session_state.processed_df = df.copy()
-                # Keep temporarily if other parts of your code still use df
+                st.session_state.original_df = df.copy()      # RAW DATA
+                st.session_state.processed_df = df.copy()     # FOR ENCODING / ML
+                # Compatibility with existing code
                 st.session_state.df = st.session_state.processed_df
                 st.session_state.file_name = uploaded.name
+                st.session_state.encoded_columns = []
+                if "cleaning_history" in st.session_state:
+                    st.session_state.cleaning_history = []
+                if "operations" in st.session_state:
+                    st.session_state.operations = []
                 st.rerun()
                 st.session_state.encoded_columns = []
     
