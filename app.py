@@ -1096,7 +1096,7 @@ elif st.session_state.page == "Encoding & Outliers":
                     for col in selected_cols:
         
                         new_df, mapping = apply_encoding(
-                            st.session_state.original_df.copy(),
+                            st.session_state.df,
                             col,
                             "onehot"
                         )
@@ -1127,7 +1127,7 @@ elif st.session_state.page == "Encoding & Outliers":
                     for col in selected_cols:
         
                         new_df, mapping = apply_encoding(
-                            st.session_state.original_df.copy(),
+                            st.session_state.df,
                             col,
                             "label"
                         )
@@ -1158,7 +1158,7 @@ elif st.session_state.page == "Encoding & Outliers":
                     for col in selected_cols:
         
                         new_df, mapping = apply_encoding(
-                            st.session_state.original_df.copy(),
+                            st.session_state.df,
                             col,
                             "frequency"
                         )
@@ -1204,7 +1204,7 @@ elif st.session_state.page == "Encoding & Outliers":
                         for col in selected_cols:
         
                             new_df, mapping = apply_encoding(
-                                st.session_state.original_df.copy(),
+                                st.session_state.df,
                                 col,
                                 "ordinal",
                                 ordinal_order
