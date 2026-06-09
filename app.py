@@ -1103,7 +1103,7 @@ elif st.session_state.page == "Encoding & Outliers":
                             "onehot"
                         )
         
-                        st.session_state.processed_df = new_df
+                        st.session_state.processed_df=new_df
         
                         if col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(col)
@@ -1165,8 +1165,7 @@ elif st.session_state.page == "Encoding & Outliers":
                             "frequency"
                         )
         
-                       st.session_state.processed_df = new_df
-        
+                        st.session_state.processed_df=new_df
                         if col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(col)
         
