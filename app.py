@@ -1,17 +1,3 @@
-"""
-Smart Data Preprocessing & Data Quality Dashboard
-Fixed Version — app_dash.py
-
-FIXES APPLIED:
-  FIX 1 – Row count not updating: always read from st.session_state.df before add,
-           compute updated_df first, assign to session state, THEN rerun.
-  FIX 2 – Encoded columns reappear: track encoded columns in
-           st.session_state.encoded_columns and exclude them from the candidate list.
-  FIX 3 – go.Strip does not exist in plotly: replaced with go.Box + go.Scatter overlay.
-
-Run: streamlit run app_dash.py
-"""
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -23,7 +9,7 @@ import warnings
 from datetime import datetime
 from scipy import stats
 from scipy.stats import boxcox
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder,OrdinalEncoder,OneHotEncoder
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
@@ -1031,39 +1017,80 @@ elif st.session_state.page == "Encoding & Outliers":
             else:
                 st.info("No categorical feature columns found.")
         else:
+            onehot_cols = []
+            label_cols = []
+            frequency_cols = []
+            ordinal_cols = []
+            
             for col in enc_candidates:
-                n_unique = df[col].nunique()
-                rec, exp = recommend_encoding(df, col)
-                with st.expander(f"**{col}** — {n_unique} unique values | Recommended: `{rec}`"):
-                    st.markdown(f"<span style='color:#6b7280;font-size:0.85rem;'>{exp}</span>", unsafe_allow_html=True)
-                    left, right = st.columns([1,1])
-                    with left:
-                        st.markdown("**Value Distribution:**")
-                        st.dataframe(df[col].value_counts().reset_index().head(10), use_container_width=True)
-                    chosen_enc = st.selectbox("Encoding method",
-                                              ["label","onehot","ordinal","frequency"],
-                                              index=["label","onehot","ordinal","frequency"].index(rec),
-                                              key=f"enc_{col}")
-                    ordinal_order = None
-                    if chosen_enc == "ordinal":
-                        ord_str = st.text_input("Ordinal order (comma-separated)", key=f"ord_{col}")
-                        if ord_str: ordinal_order = [x.strip() for x in ord_str.split(",")]
-                    if st.button(f"Apply to {col}", key=f"apply_enc_{col}"):
-                        try:
-                            new_df, mapping = apply_encoding(df, col, chosen_enc, ordinal_order)
-                            st.session_state.df = new_df; df = new_df
-                            if col not in st.session_state.encoded_columns:
-                                st.session_state.encoded_columns.append(col)
-                            save_operation(st.session_state.file_name, f"Encoding: {col}", chosen_enc)
-                            with right:
-                                st.markdown("**Mapping:**")
-                                if mapping is not None:
-                                    st.dataframe(mapping.head(20), use_container_width=True)
-                            st.success(f"✅ Applied {chosen_enc} to '{col}'.")
-                            st.rerun()
-                        except Exception as e: st.error(str(e))
-
-    # ── Outliers  ── FIX 3: go.Strip → go.Box + go.Scatter overlay ──────────
+                rec, _ = recommend_encoding(df, col)
+            
+                if rec == "onehot":
+                    onehot_cols.append(col)
+            
+                elif rec == "label":
+                    label_cols.append(col)
+            
+                elif rec == "frequency":
+                    frequency_cols.append(col)
+            
+                elif rec == "ordinal":
+                    ordinal_cols.append(col)
+            st.subheader("🔵 One-Hot Encoding")
+            if onehot_cols:
+                selected_col = st.selectbox(
+                    "Select column for One-Hot Encoding",
+                    onehot_cols,
+                    key="onehot_select"
+                )
+                if st.button("Apply One-Hot Encoding"):
+                    new_df, mapping = apply_encoding(
+                        df,
+                        selected_col,
+                        "onehot"
+                    )
+                    st.session_state.df = new_df
+                    if selected_col not in st.session_state.encoded_columns:
+                        st.session_state.encoded_columns.append(selected_col)
+                    st.success(f"Encoded {selected_col}")
+                    st.rerun()
+            st.subheader("🟢 Label Encoding")
+            if label_cols:
+                selected_col = st.selectbox(
+                    "Select column for Label Encoding",
+                    label_cols,
+                    key="label_select"
+                )
+                if st.button("Apply Label Encoding"):
+                    new_df, mapping = apply_encoding(
+                        df,
+                        selected_col,
+                        "label"
+                    )
+                    st.session_state.df = new_df
+                    if selected_col not in st.session_state.encoded_columns:
+                        st.session_state.encoded_columns.append(selected_col)
+                    st.success(f"Encoded {selected_col}")
+                    st.rerun()      
+            st.subheader("🟠 Frequency Encoding")
+            if frequency_cols:
+                selected_col = st.selectbox(
+                    "Select column for Frequency Encoding",
+                    frequency_cols,
+                    key="freq_select"
+                )
+                if st.button("Apply Frequency Encoding"):
+                    new_df, mapping = apply_encoding(
+                        df,
+                        selected_col,
+                        "frequency"
+                    )
+                    st.session_state.df = new_df
+                    if selected_col not in st.session_state.encoded_columns:
+                        st.session_state.encoded_columns.append(selected_col)
+                    st.success(f"Encoded {selected_col}")
+                    st.rerun()
+  # ── Outliers  ── FIX 3: go.Strip → go.Box + go.Scatter overlay ──────────
     with tab2:
         st.markdown("<div class='section-header'><h3>Outlier Detection & Treatment</h3></div>", unsafe_allow_html=True)
         num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
