@@ -776,7 +776,7 @@ if st.session_state.page == "Upload & Inspect":
             preview_opt = st.selectbox("Show", ["First 5 rows","First 10 rows","First 20 rows","Entire dataset"], key="preview_sel")
             n_map = {"First 5 rows":5,"First 10 rows":10,"First 20 rows":20}
             show_df = df if preview_opt == "Entire dataset" else df.head(n_map[preview_opt])
-            st.dataframe(show_df, use_container_width=True, height=380)
+            st.dataframe(show_df, width='stretch', height=380)
 
         # ── Schema ──
         with tab2:
@@ -792,7 +792,7 @@ if st.session_state.page == "Upload & Inspect":
                     "Unique Values": int(df[col].nunique()),
                     "Memory (KB)":   round(mem_per_col.get(col, 0) / 1024, 3)
                 })
-            st.dataframe(pd.DataFrame(schema_rows), use_container_width=True, height=420)
+            st.dataframe(pd.DataFrame(schema_rows), width='stretch', height=420)
 
         # ── Column Types ──
         with tab3:
@@ -814,7 +814,7 @@ if st.session_state.page == "Upload & Inspect":
                     "Column": r["column"], "Missing Count": r["missing"],
                     "Missing %": r["pct"], "Type": r["type"]
                 } for r in miss_report])
-                st.dataframe(miss_df, use_container_width=True)
+                st.dataframe(miss_df, width='stretch')
                 try:
                     fig = go.Figure(go.Bar(
                         x=[r["column"] for r in miss_report],
@@ -829,7 +829,7 @@ if st.session_state.page == "Upload & Inspect":
                         yaxis_title="Missing %", xaxis_title="Column",
                         paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc"
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                 except Exception as e:
                     st.error(f"Chart error: {e}")
             else:
@@ -896,7 +896,7 @@ if st.session_state.page == "Upload & Inspect":
                         lambda x: ["background-color:#bbf7d0; font-weight:bold"]*len(x)
                             if x.name == tail_df.index[-1] else [""]*len(x),
                         axis=1
-                    ), use_container_width=True)
+                    ), width='stretch')
                     st.rerun()
                 else:
                     # Has invalid values — store in session state and show review
@@ -922,9 +922,9 @@ if st.session_state.page == "Upload & Inspect":
                 val_df["Value"] = val_df["Value"].astype(str)
                 try:
                     styled = val_df.style.apply(_row_style, axis=1)
-                    st.dataframe(styled, use_container_width=True, hide_index=True)
+                    st.dataframe(styled, width='stretch', hide_index=True)
                 except Exception:
-                    st.dataframe(val_df, use_container_width=True, hide_index=True)
+                    st.dataframe(val_df, width='stretch', hide_index=True)
 
                 st.markdown(f"""
                 <div style='display:flex;gap:16px;margin:12px 0;flex-wrap:wrap;'>
