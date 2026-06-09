@@ -602,31 +602,7 @@ if st.session_state.page == "Upload & Inspect":
                     f"✅ Loaded **{uploaded.name}** — "
                     f"{len(df):,} rows × {len(df.columns)} columns"
                 )
-                st.session_state.df = df
-                st.session_state.original_df = df.copy()
-                st.session_state.file_name = uploaded.name
-    
-                size_kb = uploaded.size / 1024
-    
-                conn = sqlite3.connect(DB_NAME)
-                conn.execute(
-                    "INSERT INTO file_metadata VALUES (NULL,?,?,?,?,?)",
-                    (
-                        uploaded.name,
-                        datetime.now().isoformat(),
-                        round(size_kb, 2),
-                        len(df),
-                        len(df.columns)
-                    )
-                )
-                conn.commit()
-                conn.close()
-    
-                st.success(
-                    f"✅ Loaded **{uploaded.name}** — "
-                    f"{len(df):,} rows × {len(df.columns)} columns"
-                )
-
+                
         except Exception as e:
             st.error(f"❌ Error loading file: {e}")
     if st.session_state.df is not None:
