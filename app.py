@@ -707,7 +707,7 @@ if st.session_state.page == "Upload & Inspect":
             st.markdown("**Manually add a new row to the dataset:**")
 
             # Always read the CURRENT df from session state so count is accurate
-            current_df = st.session_state.df
+            current_df = st.session_state.original_df
             ct_live = identify_column_types(current_df)
             input_data = {}
 
@@ -753,8 +753,9 @@ if st.session_state.page == "Upload & Inspect":
 
                 if n_invalid == 0:
                     # FIX 1: build updated_df from current snapshot, assign, rerun
-                    updated_df = pd.concat([current_df, pd.DataFrame([new_row])], ignore_index=True)
-                    st.session_state.df = updated_df
+                    updated_original = pd.concat([st.session_state.original_df,pd.DataFrame([new_row])],ignore_index=True)
+                    st.session_state.original_df = updated_original
+                    st.session_state.df = updated_original.copy()
                     save_operation(st.session_state.file_name, "Add Row", new_row)
                     st.session_state.pop("_pending_row", None)
                     st.session_state.pop("_pending_val_results", None)
@@ -1095,7 +1096,7 @@ elif st.session_state.page == "Encoding & Outliers":
                     for col in selected_cols:
         
                         new_df, mapping = apply_encoding(
-                            st.session_state.df,
+                            st.session_state.original_df.copy(),
                             col,
                             "onehot"
                         )
@@ -1126,7 +1127,7 @@ elif st.session_state.page == "Encoding & Outliers":
                     for col in selected_cols:
         
                         new_df, mapping = apply_encoding(
-                            st.session_state.df,
+                            st.session_state.original_df.copy(),
                             col,
                             "label"
                         )
@@ -1157,7 +1158,7 @@ elif st.session_state.page == "Encoding & Outliers":
                     for col in selected_cols:
         
                         new_df, mapping = apply_encoding(
-                            st.session_state.df,
+                            st.session_state.original_df.copy(),
                             col,
                             "frequency"
                         )
@@ -1203,7 +1204,7 @@ elif st.session_state.page == "Encoding & Outliers":
                         for col in selected_cols:
         
                             new_df, mapping = apply_encoding(
-                                st.session_state.df,
+                                st.session_state.original_df.copy(),
                                 col,
                                 "ordinal",
                                 ordinal_order
