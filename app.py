@@ -405,19 +405,27 @@ def recommend_encoding(df, col, is_target=False):
 def apply_encoding(df, col, enc_type, ordinal_order=None):
     df = df.copy(); mapping = None
     if enc_type == "label":
-        le = LabelEncoder(); df[col+"_encoded"] = le.fit_transform(df[col].astype(str))
-        mapping = pd.DataFrame({"Original": le.classes_, "Encoded": range(len(le.classes_))})
+        le = LabelEncoder()
+        df[col] = le.fit_transform(df[col].astype(str))
+        st.session_state.encoders[col] = {
+            cls: int(code)
+            for code, cls in enumerate(le.classes_)
+        }
+        mapping = pd.DataFrame({
+            "Original": le.classes_,
+            "Encoded": range(len(le.classes_))
+        })
     elif enc_type == "onehot":
         dummies = pd.get_dummies(df[col], prefix=col); df = pd.concat([df, dummies], axis=1)
         mapping = pd.DataFrame({"Original": dummies.columns, "Encoded": dummies.columns})
     elif enc_type == "ordinal" and ordinal_order:
         om = {v: i for i, v in enumerate(ordinal_order)}
-        df[col+"_ordinal"] = df[col].map(om)
-        mapping = pd.DataFrame({"Original": ordinal_order, "Encoded": range(len(ordinal_order))})
+        df[col] = df[col].map(om)
+        st.session_state.encoders[col] = om
     elif enc_type == "frequency":
         freq = df[col].value_counts(normalize=True)
-        df[col+"_freq"] = df[col].map(freq)
-        mapping = freq.reset_index(); mapping.columns = ["Original","Frequency"]
+        df[col] = df[col].map(freq)
+        st.session_state.encoders[col] = freq.to_dict()
     return df, mapping
 
 @st.cache_data
@@ -730,6 +738,11 @@ if st.session_state.page == "Upload & Inspect":
 
             if st.button("➕ Add Row"):
                 new_row = {col: input_data.get(col, np.nan) for col in current_df.columns}
+                for col in new_row:
+                    if col in st.session_state.encoders:
+                        mapping = st.session_state.encoders[col]
+                        if new_row[col] in mapping:
+                            new_row[col] = mapping[new_row[col]]
                 val_results = []
                 for col, val in new_row.items():
                     status, reason = validate_single_value(col, val, current_df, target_col=_target_col)
