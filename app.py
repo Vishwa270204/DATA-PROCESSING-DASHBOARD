@@ -572,13 +572,14 @@ if st.session_state.page == "Upload & Inspect":
 
     uploaded = st.file_uploader("Choose a file", type=["csv","xlsx","xls"],
                                 help="Supports CSV, Excel (.xlsx/.xls)")
-    if uploaded:
+    if uploaded and st.session_state.df is None:
         try:
             df = load_file(uploaded, uploaded.name)
+    
             st.session_state.df = df
             st.session_state.original_df = df.copy()
             st.session_state.file_name = uploaded.name
-            st.session_state.encoded_columns = []   # reset on new upload
+            st.session_state.encoded_columns = []
             size_kb = uploaded.size / 1024
             conn = sqlite3.connect(DB_NAME)
             conn.execute("INSERT INTO file_metadata VALUES (NULL,?,?,?,?,?)",
