@@ -911,7 +911,7 @@ elif st.session_state.page == "Statistics & EDA":
     num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     cat_cols = df.select_dtypes(include="object").columns.tolist()
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4= st.tabs([
         "📊 Overview","🔢 Numerical Stats","🏷️ Categorical Stats","🔗 Correlation"
     ])
 
