@@ -405,7 +405,7 @@ def recommend_encoding(df, col, is_target=False):
 def apply_encoding(df, col, enc_type, ordinal_order=None):
     df = df.copy(); mapping = None
     if enc_type == "label":
-        le = LabelEncoder()
+        le = Labelr()
         df[col] = le.fit_transform(df[col].astype(str))
         st.session_state.encoders[col] = {
             cls: int(code)
@@ -502,7 +502,8 @@ defaults = {
     "page": "Upload & Inspect",
     "encoded_columns": [],
     "encoders": {},
-     "target_col": "— None —",
+    "target_col": "— None —",
+    "target_encoded": False,        # ADD THIS
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -816,7 +817,7 @@ if st.session_state.page == "Upload & Inspect":
                         st.info("Row discarded.")
                         st.rerun()
         with tab6:
-            st.subheader("🔄 Encoded / Processed Dataset")
+            st.subheader("🔄 Encoded Dataset")
             if st.session_state.get("processed_df") is not None:
                 st.info(
                     "This dataset is used for ML and analysis. "
@@ -1010,11 +1011,17 @@ elif st.session_state.page == "Encoding & Outliers":
         ct = identify_column_types(encoding_df)
         if "target_col" not in st.session_state:
             st.session_state.target_col = "— None —"
-        target_col = st.selectbox("Select Target Variable",["— None —"] + all_cols,key="target_col")
+        saved_target = st.session_state.get("target_col", "— None —")
+        target_options = ["— None —"] + all_cols
+        target_index = target_options.index(saved_target) if saved_target in target_options else 0
+        target_col = st.selectbox("Select Target Variable",target_options,index=target_index,key="target_col_widget")
+        # Persist selection manually so it survives reruns
+        if target_col != st.session_state.get("target_col"):
+            st.session_state.target_col = target_col
+            st.session_state.target_encoded = False  # reset if target changes
         if target_col != "— None —":
             rec_enc, rec_exp =recommend_encoding(st.session_state.original_df, target_col, is_target=True)
-            already_encoded  = target_col in st.session_state.encoded_columns
-
+            already_encoded = st.session_state.get("target_encoded", False)
             st.markdown(f"""
             <div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px;margin:12px 0;'>
                 <b style='color:#2563eb;'>Target:</b> <code>{target_col}</code> &nbsp;|&nbsp;
@@ -1041,6 +1048,7 @@ elif st.session_state.page == "Encoding & Outliers":
                         st.session_state.df = new_df   # temporary compatibility
                         if target_col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(target_col)
+                        st.session_state.target_encoded = True 
                         save_operation(st.session_state.file_name, f"Encoding: {target_col}", chosen_enc_t)
                         st.success(f"✅ Applied {chosen_enc_t} encoding to '{target_col}'.")
                         if mapping is not None:
