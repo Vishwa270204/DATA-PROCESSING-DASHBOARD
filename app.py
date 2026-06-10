@@ -1566,13 +1566,17 @@ elif st.session_state.page == "Encoding & Outliers":
         if "target_col" not in st.session_state:
             st.session_state.target_col = "— None —"
         saved_target = st.session_state.get("target_col", "— None —")
-        target_options = ["— None —"] + all_cols
-        target_index = target_options.index(saved_target) if saved_target in target_options else 0
-        target_col = st.selectbox("Select Target Variable",target_options,index=target_index,key="target_col_widget")
-        # Persist selection manually so it survives reruns
-        if target_col != st.session_state.get("target_col"):
-            st.session_state.target_col = target_col
-            st.session_state.target_encoded = False  # reset if target changes
+        already_encoded = st.session_state.get("target_encoded", False)
+        
+        if already_encoded and saved_target != "— None —":
+            target_col = saved_target
+        else:
+            target_options = ["— None —"] + all_cols
+            target_index = target_options.index(saved_target) if saved_target in target_options else 0
+            target_col = st.selectbox("Select Target Variable", target_options, index=target_index, key="target_col_widget")
+            if target_col != st.session_state.get("target_col"):
+                st.session_state.target_col = target_col
+                st.session_state.target_encoded = False
         if target_col != "— None —":
             already_encoded = st.session_state.get("target_encoded", False)
         
