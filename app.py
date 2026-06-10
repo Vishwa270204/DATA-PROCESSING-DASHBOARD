@@ -43,7 +43,7 @@ def nav_buttons(current_page):
     idx = page_order.index(current_page)
     slug = current_page.replace(" ", "_").replace("&", "and")
     st.markdown("---")
-        c_prev, c_mid, c_next = st.columns([2, 6, 2])
+    c_prev, c_mid, c_next = st.columns([2, 6, 2])
         with c_prev:
             if idx > 0:
                 st.markdown(f"""
