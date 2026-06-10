@@ -42,34 +42,59 @@ def nav_buttons(current_page):
     page_order = ["Upload & Inspect", "Cleaning & Validation", "Encoding & Outliers", "Statistics & Export"]
     idx = page_order.index(current_page)
     slug = current_page.replace(" ", "_").replace("&", "and")
+
+    st.markdown("""
+    <style>
+    [data-testid="stButton"] button {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     st.markdown("---")
-    c_prev, c_mid, c_next = st.columns([2, 6, 2])
+    c_prev, c_mid, c_next = st.columns([3, 4, 3])
+
     with c_prev:
-            if idx > 0:
-                st.markdown(f"""
-                <style>
-                div[data-testid="stButton"] button[kind="secondary"]{{background:transparent;}}
-                #btn_prev_{slug} button{{background:linear-gradient(135deg,#dc2626,#f97316)!important;color:white!important;border:none!important;border-radius:8px!important;font-weight:600!important;width:100%;white-space:nowrap!important;}}
-                </style>
-                <div id="btn_prev_{slug}">
-                """, unsafe_allow_html=True)
-                if st.button(f"Prev: {page_order[idx-1]}", key=f"nav_prev_{slug}"):
-                    st.session_state.page = page_order[idx-1]
-                    st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
+        if idx > 0:
+            prev_label = f"⬅️ Prev: {page_order[idx-1]}"
+            if st.button(prev_label, key=f"nav_prev_{slug}", type="secondary"):
+                st.session_state.page = page_order[idx-1]
+                st.rerun()
+            st.markdown(f"""
+            <style>
+            div[data-testid="column"]:first-child .stButton button {{
+                background: linear-gradient(135deg,#dc2626,#f97316) !important;
+                color: white !important;
+                border: none !important;
+                border-radius: 8px !important;
+                font-weight: 600 !important;
+                white-space: nowrap !important;
+                width: 100% !important;
+            }}
+            </style>
+            """, unsafe_allow_html=True)
+
     with c_next:
-            if idx < len(page_order) - 1:
-                st.markdown(f"""
-                <style>
-                #btn_next_{slug} button{{background:linear-gradient(135deg,#059669,#10b981)!important;color:white!important;border:none!important;border-radius:8px!important;font-weight:600!important;width:100%;}}
-                </style>
-                <div id="btn_next_{slug}">
-                """, unsafe_allow_html=True)
-                if st.button(f"Next: {page_order[idx+1]}", key=f"nav_next_{slug}"):
-                    st.session_state.page = page_order[idx+1]
-                    st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
-    
+        if idx < len(page_order) - 1:
+            next_label = f"Next: {page_order[idx+1]} ➡️"
+            if st.button(next_label, key=f"nav_next_{slug}", type="secondary"):
+                st.session_state.page = page_order[idx+1]
+                st.rerun()
+            st.markdown(f"""
+            <style>
+            div[data-testid="column"]:last-child .stButton button {{
+                background: linear-gradient(135deg,#059669,#10b981) !important;
+                color: white !important;
+                border: none !important;
+                border-radius: 8px !important;
+                font-weight: 600 !important;
+                white-space: nowrap !important;
+                width: 100% !important;
+            }}
+            </style>
+            """, unsafe_allow_html=True)    
 def save_operation(file_name, operation, details):
     try:
         conn = sqlite3.connect(DB_NAME)
