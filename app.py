@@ -53,7 +53,7 @@ def nav_buttons(current_page):
                 </style>
                 <div id="btn_prev_{slug}">
                 """, unsafe_allow_html=True)
-                if st.button(f"⬅️ Prev: {page_order[idx-1]}", key=f"nav_prev_{slug}"):
+                if st.button(f"Prev: {page_order[idx-1]}", key=f"nav_prev_{slug}"):
                     st.session_state.page = page_order[idx-1]
                     st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
@@ -65,7 +65,7 @@ def nav_buttons(current_page):
                 </style>
                 <div id="btn_next_{slug}">
                 """, unsafe_allow_html=True)
-                if st.button(f"Next: {page_order[idx+1]} ➡️", key=f"nav_next_{slug}"):
+                if st.button(f"Next: {page_order[idx+1]}", key=f"nav_next_{slug}"):
                     st.session_state.page = page_order[idx+1]
                     st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
