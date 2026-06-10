@@ -1309,7 +1309,7 @@ elif st.session_state.page == "Recommendations":
             ("Encode categorical columns",              not has_enc),
             ("Check correlation / multicollinearity",   num_df.shape[1] >= 2),
             ("Fix invalid / negative values",           not has_invalid),
-            ("Export cleaned dataset",                  export_done)),
+            ("Export cleaned dataset",                  export_done),
         ]
         done_count  = sum(1 for _, d in checklist if d)
         total_count = len(checklist)
