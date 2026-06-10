@@ -1927,31 +1927,61 @@ elif st.session_state.page == "Statistics & EDA":
         else:
             st.markdown("<div class='section-header'><h3>Correlation with Selected Column</h3></div>", unsafe_allow_html=True)
             corr = num_df.corr()
-            fig_corr = go.Figure()
-            palette = ["#2563eb","#10b981","#f59e0b","#8b5cf6","#ef4444","#06b6d4","#f97316","#84cc16"]
-            for i, col in enumerate(corr.columns):
-                others = corr[col].drop(col)
-                fig_corr.add_trace(go.Bar(
-                    name=col,
-                    x=others.index.tolist(),
-                    y=others.values,
-                    marker_color=palette[i % len(palette)],
-                    text=[f"{v:.2f}" for v in others.values],
-                    textposition="outside",
-                    textfont=dict(size=9)
-                ))
+            cols_list = corr.columns.tolist()
+            x_vals, y_vals, vals, texts = [], [], [], []
+            for i, c1 in enumerate(cols_list):
+                for j, c2 in enumerate(cols_list):
+                    if i != j:
+                        v = corr.loc[c1, c2]
+                        x_vals.append(c2)
+                        y_vals.append(c1)
+                        vals.append(v)
+                        texts.append(f"{c1} vs {c2}<br>r = {v:.3f}")
+
+            fig_corr = go.Figure(go.Scatter(
+                x=x_vals,
+                y=y_vals,
+                mode="markers",
+                marker=dict(
+                    size=[abs(v)*60+8 for v in vals],
+                    color=vals,
+                    colorscale=[
+                        [0.0,  "#dc2626"],
+                        [0.5,  "#f8f9fc"],
+                        [1.0,  "#2563eb"]
+                    ],
+                    cmin=-1, cmax=1,
+                    showscale=True,
+                    colorbar=dict(
+                        title="r",
+                        tickvals=[-1,-0.5,0,0.5,1],
+                        thickness=14,
+                        len=0.8
+                    ),
+                    line=dict(width=1, color="#e2e6f0")
+                ),
+                text=texts,
+                hoverinfo="text"
+            ))
+
+            # add correlation value labels
+            for x, y, v in zip(x_vals, y_vals, vals):
+                fig_corr.add_annotation(
+                    x=x, y=y,
+                    text=f"{v:.2f}",
+                    showarrow=False,
+                    font=dict(size=9, color="#111827" if abs(v) < 0.6 else "white")
+                )
+
             fig_corr.update_layout(
-                title="Pearson Correlation — All vs All",
-                barmode="group",
-                xaxis_title="Column",
-                yaxis=dict(range=[-1,1], title="Correlation"),
+                title="Correlation Bubble Chart — All vs All",
                 template="plotly_white",
-                height=500,
+                height=max(400, len(cols_list)*50+100),
                 paper_bgcolor="#ffffff",
                 plot_bgcolor="#f8f9fc",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                margin=dict(t=80,b=40,l=40,r=40)
+                xaxis=dict(tickangle=-35, title=""),
+                yaxis=dict(title="", autorange="reversed"),
+                margin=dict(t=60,b=80,l=120,r=40)
             )
-            fig_corr.add_hline(y=0, line_dash="dash", line_color="#6b7280", line_width=1)
             st.plotly_chart(fig_corr, use_container_width=True)
     nav_buttons("Statistics & EDA")
