@@ -1205,7 +1205,7 @@ elif st.session_state.page == "Encoding & Outliers":
                 )
                 if ord_col != "— Select —":
                     existing_vals = sorted(encoding_df[ord_col].dropna().unique().tolist())
-                    st.info(f"Existing values in **{ord_col}**: `{existing_vals}`")
+                    st.markdown(f"<b>Existing values in {ord_col}:</b> <code>{existing_vals}</code>", unsafe_allow_html=True)
                     ord_str = st.text_input(
                         "Enter order (comma-separated, low→high)",
                         placeholder="low,medium,high",
