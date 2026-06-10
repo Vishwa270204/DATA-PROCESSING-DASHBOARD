@@ -2114,7 +2114,7 @@ elif st.session_state.page == "Export":
     </div>
     """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["💾 Download","👁️ Preview","📜 History"])
+    tab1, tab2, tab3 = st.tabs(["💾 Download","👁️ Preview"])
 
     with tab1:
         st.markdown("**📄 Processed / Encoded Dataset**")
@@ -2143,13 +2143,5 @@ elif st.session_state.page == "Export":
             st.markdown("**Encoded / Processed Dataset (first 20 rows)**")
             st.dataframe(st.session_state.processed_df.head(20), use_container_width=True, height=320)
 
-    with tab3:
-        hist = get_processing_history(st.session_state.file_name)
-        if hist.empty:
-            st.info("No operations recorded yet.")
-        else:
-            st.dataframe(hist[["timestamp","operation","details"]].rename(columns={
-                "timestamp":"Timestamp","operation":"Operation","details":"Details"
-            }), use_container_width=True, height=400)
-
+    
     nav_buttons("Export")
