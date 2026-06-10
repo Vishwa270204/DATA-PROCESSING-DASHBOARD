@@ -49,11 +49,11 @@ def nav_buttons(current_page):
                 st.markdown(f"""
                 <style>
                 div[data-testid="stButton"] button[kind="secondary"]{{background:transparent;}}
-                #btn_prev_{slug} button{{background:linear-gradient(135deg,#6366f1,#8b5cf6)!important;color:white!important;border:none!important;border-radius:8px!important;font-weight:600!important;width:100%;}}
+                #btn_prev_{slug} button{{background:linear-gradient(135deg,#dc2626,#f97316)!important;color:white!important;border:none!important;border-radius:8px!important;font-weight:600!important;width:100%;white-space:nowrap!important;}}
                 </style>
                 <div id="btn_prev_{slug}">
                 """, unsafe_allow_html=True)
-                if st.button(f"⬅️ Previous: {page_order[idx-1]}", key=f"nav_prev_{slug}"):
+                if st.button(f"⬅️ Prev: {page_order[idx-1]}", key=f"nav_prev_{slug}"):
                     st.session_state.page = page_order[idx-1]
                     st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
