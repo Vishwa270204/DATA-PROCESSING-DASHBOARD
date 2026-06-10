@@ -1925,70 +1925,26 @@ elif st.session_state.page == "Statistics & EDA":
         if num_df.shape[1] < 2:
             st.info("Need at least 2 numerical columns for correlation.")
         else:
-            st.markdown("<div class='section-header'><h3>Correlation Heatmap</h3></div>", unsafe_allow_html=True)
+            st.markdown("<div class='section-header'><h3>Correlation with Selected Column</h3></div>", unsafe_allow_html=True)
             corr = num_df.corr()
-            fig_corr = go.Figure(go.Heatmap(
-                z=corr.values,
-                x=corr.columns.tolist(),
-                y=corr.columns.tolist(),
-                colorscale="RdBu",
-                zmid=0,
-                text=corr.round(2).values,
-                texttemplate="%{text}",
-                textfont={"size":10},
-                showscale=True
+            base_col = st.selectbox("Select base column", num_df.columns.tolist(), key="corr_base_col")
+            corr_vals = corr[base_col].drop(base_col).sort_values()
+            colors = ["#dc2626" if v < 0 else "#2563eb" for v in corr_vals]
+            fig_corr = go.Figure(go.Bar(
+                x=corr_vals.values,
+                y=corr_vals.index.tolist(),
+                orientation="h",
+                marker_color=colors,
+                text=[f"{v:.3f}" for v in corr_vals.values],
+                textposition="outside"
             ))
             fig_corr.update_layout(
-                title="Pearson Correlation Matrix",
+                title=f"Pearson Correlation: {base_col} vs all",
+                xaxis=dict(range=[-1,1], title="Correlation Coefficient"),
                 template="plotly_white",
-                height=max(400, len(corr.columns)*45),
-                paper_bgcolor="#ffffff"
+                height=max(300, len(corr_vals)*40+100),
+                paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc",
+                margin=dict(l=20,r=80,t=60,b=40)
             )
             st.plotly_chart(fig_corr, use_container_width=True)
-
-            st.markdown("<div class='section-header'><h3>Top Correlated Pairs</h3></div>", unsafe_allow_html=True)
-            pairs = []
-            for i in range(len(corr.columns)):
-                for j in range(i+1, len(corr.columns)):
-                    pairs.append({
-                        "Column A": corr.columns[i],
-                        "Column B": corr.columns[j],
-                        "Correlation": round(corr.iloc[i,j], 4),
-                        "Strength": "Strong" if abs(corr.iloc[i,j]) > 0.7 else "Moderate" if abs(corr.iloc[i,j]) > 0.4 else "Weak"
-                    })
-            pairs_df = pd.DataFrame(pairs).sort_values("Correlation", key=abs, ascending=False)
-            st.dataframe(pairs_df.head(15), use_container_width=True, height=320)
-
-    with tab5:
-        if not num_cols:
-            st.info("No numerical columns.")
-        else:
-            st.markdown("<div class='section-header'><h3>Distribution Plots</h3></div>", unsafe_allow_html=True)
-            n_r = (len(num_cols)+1)//2
-            fig_d = make_subplots(rows=n_r, cols=2, subplot_titles=num_cols,
-                horizontal_spacing=0.08, vertical_spacing=0.14)
-            for idx, col in enumerate(num_cols):
-                r, c = divmod(idx, 2)
-                data = df[col].dropna()
-                fig_d.add_trace(go.Histogram(x=data, nbinsx=30,
-                    marker_color="rgba(37,99,235,0.5)", showlegend=False), row=r+1, col=c+1)
-                try:
-                    kde = stats.gaussian_kde(data)
-                    x_r = np.linspace(data.min(), data.max(), 200)
-                    kde_y = kde(x_r)*len(data)*(data.max()-data.min())/30
-                    fig_d.add_trace(go.Scatter(x=x_r, y=kde_y, mode="lines",
-                        line=dict(color="#f59e0b", width=2), showlegend=False), row=r+1, col=c+1)
-                except: pass
-                fig_d.add_vline(x=float(data.mean()), line_dash="dash",
-                    line_color="#dc2626", line_width=1.5, row=r+1, col=c+1)
-                fig_d.add_vline(x=float(data.median()), line_dash="dot",
-                    line_color="#16a34a", line_width=1.5, row=r+1, col=c+1)
-            fig_d.update_layout(
-                title="Histogram + KDE (Red dash=Mean, Green dot=Median)",
-                template="plotly_white",
-                height=max(400, n_r*320),
-                paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc"
-            )
-            st.plotly_chart(fig_d, use_container_width=True)
-
     nav_buttons("Statistics & EDA")
