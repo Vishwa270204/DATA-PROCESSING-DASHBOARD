@@ -534,7 +534,8 @@ defaults = {
     "encoders": {},
     "target_col": "— None —",
     "target_encoded": False,
-    "transformed_columns": [],   # ADD THIS
+    "transformed_columns": [],  
+    "export_done": False,
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -1308,7 +1309,7 @@ elif st.session_state.page == "Recommendations":
             ("Encode categorical columns",              not has_enc),
             ("Check correlation / multicollinearity",   num_df.shape[1] >= 2),
             ("Fix invalid / negative values",           not has_invalid),
-            ("Export cleaned dataset",                  False),
+            ("Export cleaned dataset",                  export_done)),
         ]
         done_count  = sum(1 for _, d in checklist if d)
         total_count = len(checklist)
@@ -2210,18 +2211,20 @@ elif st.session_state.page == "Export":
         c1e, c2e = st.columns(2)
         with c1e:
             if st.session_state.get("processed_df") is not None:
-                st.download_button("⬇️ Download Encoded CSV",
+                if st.download_button("⬇️ Download Encoded CSV",
                     data=export_csv(st.session_state.processed_df),
                     file_name=f"encoded_{st.session_state.file_name.rsplit('.',1)[0]}.csv",
-                    mime="text/csv", key="export_encoded_csv")
+                    mime="text/csv", key="export_encoded_csv"):
+                    st.session_state.export_done = True
+                    st.rerun()
         with c2e:
-            if st.session_state.get("processed_df") is not None:
-                try:
-                    st.download_button("⬇️ Download Encoded Excel",
+            if st.download_button("⬇️ Download Encoded Excel",
                         data=export_excel(st.session_state.processed_df),
                         file_name=f"encoded_{st.session_state.file_name.rsplit('.',1)[0]}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="export_encoded_xlsx")
+                        key="export_encoded_xlsx"):
+                        st.session_state.export_done = True
+                        st.rerun()
                 except Exception as e:
                     st.error(f"Excel export error: {e}")
 
