@@ -1921,7 +1921,11 @@ elif st.session_state.page == "Encoding & Outliers":
             st.info("No numerical columns.")
         else:
             st.dataframe(skew_df,use_container_width=True)
-            num_cols_sk = df.select_dtypes(include=[np.number]).columns.tolist()
+           transformed_suffixes = ("_log", "_sqrt", "_boxcox")
+            num_cols_sk = [
+                c for c in df.select_dtypes(include=[np.number]).columns.tolist()
+                if not c.endswith(transformed_suffixes)
+            ]
             n_r = (len(num_cols_sk)+1)//2
             try:
                 fig_sk = make_subplots(rows=n_r, cols=2,
@@ -1954,7 +1958,25 @@ elif st.session_state.page == "Encoding & Outliers":
                 st.error(f"Skewness chart error: {e}")
 
             st.markdown("**Apply Transformation:**")
-            skew_col = st.selectbox("Column", num_cols_sk, key="skew_col")
+            
+            # Exclude already-transformed columns and approximately normal columns
+            transformed_suffixes = ("_log", "_sqrt", "_boxcox")
+            skew_dict_current = dict(zip(skew_df["Column"], skew_df["Skewness"]))
+            
+            skew_candidates = [
+                c for c in num_cols_sk
+                if not c.endswith(transformed_suffixes)
+                and abs(skew_dict_current.get(c, 0)) > 0.5
+            ]
+            
+            if not skew_candidates:
+                st.markdown("<span class='badge badge-success'>✅ No skewed columns remaining — all distributions are approximately normal</span>", unsafe_allow_html=True)
+            else:
+                skew_col = st.selectbox(
+                    f"Column ({len(skew_candidates)} skewed remaining)",
+                    skew_candidates,
+                    key="skew_col"
+                )
             transform = st.radio("Transformation", ["Log","Sqrt","Box-Cox"], horizontal=True)
             if st.button("Apply Transform"):
                 try:
