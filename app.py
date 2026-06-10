@@ -567,7 +567,7 @@ for k, v in defaults.items():
 
 # ── Sidebar ───────────────────────────────────
 with st.sidebar:
-    ("""
+    st.markdown("""
     <div style='text-align:center;padding:20px 0 24px;'>
         <div style='font-family:"Inter",sans-serif;font-size:1.3rem;font-weight:700;color:#2563eb;'>📊 DataPrep Pro</div>
         <div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>Smart Preprocessing Dashboard</div>
