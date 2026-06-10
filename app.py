@@ -858,7 +858,7 @@ if st.session_state.page == "Upload & Inspect":
                 )
             else:
                 st.warning("No processed dataset available.")
-    nav_buttons("Upload & Inspect")   # ← add this
+                nav_buttons("Upload & Inspect")   
 # ═══════════════════════════════════════════════
 # PAGE 2 — CLEANING & VALIDATION
 # ═══════════════════════════════════════════════
@@ -1047,7 +1047,7 @@ elif st.session_state.page == "Cleaning & Validation":
                     st.download_button("⬇️ Export Invalid Rows",
                                        data=invalid_df.to_csv(index=False).encode("utf-8"),
                                        file_name="invalid_rows.csv", mime="text/csv")
-    nav_buttons("Cleaning & Validation")
+                nav_buttons("Cleaning & Validation")
 # ═══════════════════════════════════════════════
 # PAGE 3 — ENCODING & OUTLIERS
 # ═══════════════════════════════════════════════
