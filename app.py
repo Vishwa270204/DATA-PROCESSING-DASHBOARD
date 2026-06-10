@@ -202,7 +202,6 @@ def cap_outliers(df, column):
     df[column] = df[column].clip(lower=lo, upper=hi)
     return df, {"capped": int(n)}
 
-@st.cache_data
 def calculate_skewness(df):
     rows = []
     for col in df.select_dtypes(include=[np.number]).columns:
@@ -215,7 +214,6 @@ def calculate_skewness(df):
         rows.append({"Column": col, "Skewness": round(sk, 4), "Classification": cls})
     return pd.DataFrame(rows)
 
-@st.cache_data
 def descriptive_statistics(df):
     rows = []
     for col in df.select_dtypes(include=[np.number]).columns:
@@ -1119,7 +1117,13 @@ elif st.session_state.page == "Recommendations":
     outlier_data = detect_outliers_iqr(df)
     miss_report  = missing_value_report(df)
     miss_dict    = {r["column"]: r for r in miss_report}
+    already_transformed = set(st.session_state.get("transformed_columns", []))
+    transformed_suffixes = ("_log", "_sqrt", "_boxcox")
     skew_df      = calculate_skewness(df)
+    skew_df      = skew_df[
+        ~skew_df["Column"].isin(already_transformed) &
+        ~skew_df["Column"].str.endswith(transformed_suffixes)
+    ]
     skew_dict    = dict(zip(skew_df["Column"], skew_df["Skewness"]))
     dup_count    = df.duplicated().sum()
     inv_vals     = detect_invalid_values(df)
