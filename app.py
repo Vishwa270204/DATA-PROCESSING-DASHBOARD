@@ -908,11 +908,16 @@ elif st.session_state.page == "Cleaning & Validation":
                 col_min = float(df[range_col].min())
                 col_max = float(df[range_col].max())
                 st.caption(f"Actual data range: `{col_min}` → `{col_max}`")
-                rc1, rc2 = st.columns(2)
-                with rc1:
-                    user_min = st.number_input("Minimum allowed value", value=col_min, key="range_min")
-                with rc2:
-                    user_max = st.number_input("Maximum allowed value", value=col_max, key="range_max")
+                # reset defaults only when column changes
+            if st.session_state.get("_range_col_prev") != range_col:
+                st.session_state["range_min"] = col_min
+                st.session_state["range_max"] = col_max
+                st.session_state["_range_col_prev"] = range_col
+            rc1, rc2 = st.columns(2)
+            with rc1:
+                user_min = st.number_input("Minimum allowed value", key="range_min")
+            with rc2:
+                user_max = st.number_input("Maximum allowed value", key="range_max")
                 if user_min >= user_max:
                     st.error("❌ Min must be less than Max.")
                 else:
