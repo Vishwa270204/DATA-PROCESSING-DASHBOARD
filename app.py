@@ -160,7 +160,7 @@ def fill_missing_values(df, column, strategy, custom_value=None):
     after = df[column].isnull().sum()
     return df, {"before": before, "after": after, "filled": before - after}
 
-@st.cache_data
+
 def detect_outliers_iqr(df):
     result = {}
     for col in df.select_dtypes(include=[np.number]).columns:
@@ -172,7 +172,7 @@ def detect_outliers_iqr(df):
                        "mean": df[col].mean(), "std": df[col].std(), "rows": out.index.tolist()}
     return result
 
-@st.cache_data
+
 def detect_outliers_zscore(df, threshold=3):
     result = {}
     for col in df.select_dtypes(include=[np.number]).columns:
@@ -460,7 +460,7 @@ def apply_encoding(df, col, enc_type, ordinal_order=None):
         st.session_state.encoders[col] = freq.to_dict()
     return df, mapping
 
-@st.cache_data
+
 def calculate_data_quality_score(df):
     miss_pct = df.isnull().sum().sum() / df.size * 100
     dup_pct  = df.duplicated().sum() / len(df) * 100
