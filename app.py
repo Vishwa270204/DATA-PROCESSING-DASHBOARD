@@ -43,21 +43,12 @@ def nav_buttons(current_page):
     idx = page_order.index(current_page)
     slug = current_page.replace(" ", "_").replace("&", "and")
     st.markdown("---")
-    c_prev, c_save, c_next = st.columns([1, 2, 1])
+    c_prev, c_next = st.columns([1, 1])
     with c_prev:
         if idx > 0:
             if st.button(f"⬅️ Previous: {page_order[idx-1]}", key=f"nav_prev_{slug}"):
                 st.session_state.page = page_order[idx-1]
                 st.rerun()
-    with c_save:
-        if st.session_state.df is not None:
-            st.download_button(
-                "💾 Save Current Dataset",
-                data=export_csv(st.session_state.df),
-                file_name=f"saved_{st.session_state.file_name.rsplit('.',1)[0]}.csv",
-                mime="text/csv",
-                key=f"nav_save_{slug}"
-            )
     with c_next:
         if idx < len(page_order) - 1:
             if st.button(f"Next: {page_order[idx+1]} ➡️", key=f"nav_next_{slug}"):
