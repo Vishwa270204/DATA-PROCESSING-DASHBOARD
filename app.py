@@ -1537,7 +1537,7 @@ elif st.session_state.page == "Encoding & Outliers":
 
     df = st.session_state.df
     ct = identify_column_types(df)
-    tab1, tab2, tab3, tab4 = st.tabs(["🔡 Encoding","📦 Outliers","〰️ Skewness","📊 Distributions"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🔡 Encoding","📦 Outliers","〰️ Skewness"])
 
     # ── Encoding  ── FIX 2: exclude already-encoded columns ──────────────────
     with tab1:
@@ -1954,37 +1954,7 @@ elif st.session_state.page == "Encoding & Outliers":
                     st.success(f"✅ {transform} transform applied."); st.rerun()
                 except Exception as e: st.error(str(e))
 
-    with tab4:
-        st.markdown("<div class='section-header'><h3>Distribution Analysis</h3></div>", unsafe_allow_html=True)
-        num_cols_d = df.select_dtypes(include=[np.number]).columns.tolist()
-        if not num_cols_d:
-            st.info("No numerical columns.")
-        else:
-            n_r_d = (len(num_cols_d)+1)//2
-            try:
-                fig_d = make_subplots(rows=n_r_d, cols=2, subplot_titles=num_cols_d,
-                    horizontal_spacing=0.08, vertical_spacing=0.14)
-                for idx, col in enumerate(num_cols_d):
-                    r, c = divmod(idx, 2)
-                    data = df[col].dropna()
-                    fig_d.add_trace(go.Histogram(x=data, nbinsx=30,
-                        marker_color="rgba(37,99,235,0.5)", showlegend=False), row=r+1, col=c+1)
-                    try:
-                        kde = stats.gaussian_kde(data)
-                        x_r = np.linspace(data.min(), data.max(), 200)
-                        kde_y = kde(x_r)*len(data)*(data.max()-data.min())/30
-                        fig_d.add_trace(go.Scatter(x=x_r, y=kde_y, mode="lines",
-                            line=dict(color="#f59e0b",width=2), showlegend=False), row=r+1, col=c+1)
-                    except: pass
-                    fig_d.add_vline(x=float(data.mean()), line_dash="dash", line_color="#dc2626", line_width=1.5, row=r+1, col=c+1)
-                    fig_d.add_vline(x=float(data.median()), line_dash="dot", line_color="#16a34a", line_width=1.5, row=r+1, col=c+1)
-                fig_d.update_layout(title="Histogram + KDE (Red dash=Mean, Green dot=Median)",
-                    template="plotly_white", height=max(400,n_r_d*320),
-                    paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
-                st.plotly_chart(fig_d, use_container_width=True)
-            except Exception as e:
-                st.error(f"Distribution chart error: {e}")
-    nav_buttons("Encoding & Outliers")
+        nav_buttons("Encoding & Outliers")
 
 # ═══════════════════════════════════════════════
 # PAGE — VISUALIZATIONS 
