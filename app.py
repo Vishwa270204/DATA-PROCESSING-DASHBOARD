@@ -1125,10 +1125,20 @@ elif st.session_state.page == "Recommendations":
     neg_vals     = detect_negative_values(df)
     encoded_set  = set(st.session_state.get("encoded_columns", []))
     target_col_r = st.session_state.get("target_col", "— None —")
-    enc_cols     = [
+    
+    def _is_ohe_dummy(col, encoded_set):
+        """Return True if col looks like a one-hot dummy of an already-encoded column."""
+        for enc_col in encoded_set:
+            if col.startswith(enc_col + "_"):
+                return True
+        return False
+    
+    enc_cols = [
         c for c in ct["categorical"] + ct["boolean"]
         if c not in encoded_set
-        and c != target_col_r]
+        and c != target_col_r
+        and not _is_ohe_dummy(c, encoded_set)
+    ]
     cols_with_out = {c: v for c, v in outlier_data.items() if v["count"] > 0}
     skewed       = [(c, s) for c, s in skew_dict.items() if abs(s) > 0.5]
     num_df       = df.select_dtypes(include=[np.number])
@@ -1599,11 +1609,18 @@ elif st.session_state.page == "Encoding & Outliers":
 
         # FIX 2: exclude columns that have already been encoded
         encoded_set = set(st.session_state.encoded_columns)
+        def _is_ohe_dummy(col, encoded_set):
+            for enc_col in encoded_set:
+                if col.startswith(enc_col + "_"):
+                    return True
+            return False
+        
         enc_candidates = [
             c for c in ct["categorical"] + ct["boolean"]
             if c != target_col
             and c not in encoded_set
             and not c.endswith("_encoded")
+            and not _is_ohe_dummy(c, encoded_set)
         ]
         ordinal_candidates = [
             c for c in enc_candidates
