@@ -2217,16 +2217,23 @@ elif st.session_state.page == "Export":
                     mime="text/csv", key="export_encoded_csv"):
                     st.session_state.export_done = True
                     st.rerun()
-        with c2e:
-            if st.download_button("⬇️ Download Encoded Excel",
-                        data=export_excel(st.session_state.processed_df),
+       with c2e:
+            if st.session_state.get("processed_df") is not None:
+                try:
+                    excel_data = export_excel(st.session_state.processed_df)
+                    clicked_xlsx = st.download_button(
+                        "⬇️ Download Encoded Excel",
+                        data=excel_data,
                         file_name=f"encoded_{st.session_state.file_name.rsplit('.',1)[0]}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="export_encoded_xlsx"):
-                        st.session_state.export_done = True
-                        st.rerun()
-            except Exception as e:
-                st.error(f"Excel export error: {e}")
+                        key="export_encoded_xlsx"
+                    )
+                except Exception as e:
+                    st.error(f"Excel export error: {e}")
+                    clicked_xlsx = False
+                if clicked_xlsx:
+                    st.session_state.export_done = True
+                    st.rerun()
 
     with tab2:
         st.markdown("**Original / Cleaned Dataset (first 20 rows)**")
