@@ -39,7 +39,7 @@ def init_database():
 
 init_database()
 def nav_buttons(current_page):
-    page_order = ["Upload & Inspect", "Cleaning & Validation", "Encoding & Outliers", "Statistics & Export"]
+    page_order = ["Upload & Inspect", "Statistics & Export", "Recommendations", "Cleaning & Validation", "Encoding & Outliers"]
     idx = page_order.index(current_page)
     slug = current_page.replace(" ", "_").replace("&", "and")
 
@@ -574,7 +574,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    pages = ["📁 Upload & Inspect","🧹 Cleaning & Validation","🔠 Encoding & Outliers","📈 Statistics & Export"]
+    pages = ["📁 Upload & Inspect","📈 Statistics & Export","💡 Recommendations","🧹 Cleaning & Validation","🔠 Encoding & Outliers"]
     page_map = {p: p.split(" ", 1)[1] for p in pages}
     page_keys = list(page_map.values())
     selected = st.radio("Navigation", pages, label_visibility="collapsed",
@@ -890,7 +890,109 @@ if st.session_state.page == "Upload & Inspect":
                 )
             else:
                 st.warning("No processed dataset available.")
-    nav_buttons("Upload & Inspect")   
+    nav_buttons("Upload & Inspect")  
+# ═══════════════════════════════════════════════
+# PAGE — RECOMMENDATIONS
+# ═══════════════════════════════════════════════
+elif st.session_state.page == "Recommendations":
+    st.markdown("""
+    <div class='main-header'>
+        <h1>💡 Recommendations</h1>
+        <p>Smart suggestions for every column based on data analysis</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.session_state.df is None:
+        st.warning("⚠️ Please upload a dataset first.")
+        st.stop()
+
+    df = st.session_state.df
+    ct = identify_column_types(df)
+    outlier_data = detect_outliers_iqr(df)
+    miss_report  = missing_value_report(df)
+    miss_dict    = {r["column"]: r for r in miss_report}
+    skew_df      = calculate_skewness(df)
+    skew_dict    = dict(zip(skew_df["Column"], skew_df["Skewness"]))
+    dup_count    = df.duplicated().sum()
+
+    # ── Duplicates ──
+    st.markdown("<div class='section-header'><h3>🗑️ Duplicate Rows</h3></div>", unsafe_allow_html=True)
+    if dup_count > 0:
+        st.markdown(f"<span class='badge badge-danger'>❌ {dup_count} duplicate rows found</span>", unsafe_allow_html=True)
+        st.markdown("**Recommendation:** Remove duplicates before any processing.")
+    else:
+        st.markdown("<span class='badge badge-success'>✅ No duplicates</span>", unsafe_allow_html=True)
+
+    # ── Per-column recommendations ──
+    st.markdown("<div class='section-header'><h3>📋 Column-wise Recommendations</h3></div>", unsafe_allow_html=True)
+
+    rows = []
+    for col in df.columns:
+        rec = {"Column": col, "Type": "", "Missing": "—", "Outliers": "—", "Encoding": "—", "Skewness": "—", "Action": ""}
+
+        # type
+        if col in ct["numerical"]:   rec["Type"] = "🔢 Numerical"
+        elif col in ct["categorical"]: rec["Type"] = "🏷️ Categorical"
+        elif col in ct["boolean"]:   rec["Type"] = "✅ Boolean"
+        elif col in ct["datetime"]:  rec["Type"] = "📅 Datetime"
+        elif col in ct["id"]:        rec["Type"] = "🔑 ID"
+
+        # missing
+        if col in miss_dict:
+            m = miss_dict[col]
+            if m["pct"] > 30:
+                rec["Missing"] = f"⚠️ {m['pct']}% → Drop column"
+            elif col in ct["numerical"]:
+                rec["Missing"] = f"🔧 {m['pct']}% → Use Median"
+            else:
+                rec["Missing"] = f"🔧 {m['pct']}% → Use Mode"
+
+        # outliers
+        if col in outlier_data:
+            o = outlier_data[col]
+            if o["count"] > 0:
+                if o["pct"] > 10:
+                    rec["Outliers"] = f"⚠️ {o['pct']}% → Cap (Winsorise)"
+                else:
+                    rec["Outliers"] = f"🔧 {o['pct']}% → Remove"
+
+        # encoding
+        if col in ct["categorical"] or col in ct["boolean"]:
+            enc, exp = recommend_encoding(df, col)
+            rec["Encoding"] = f"{enc} — {exp}"
+
+        # skewness
+        if col in skew_dict:
+            sk = skew_dict[col]
+            if abs(sk) > 1:
+                rec["Skewness"] = f"⚠️ {sk:.2f} → Log/Box-Cox"
+            elif abs(sk) > 0.5:
+                rec["Skewness"] = f"🔧 {sk:.2f} → Sqrt"
+            else:
+                rec["Skewness"] = f"✅ {sk:.2f} Normal"
+
+        rows.append(rec)
+
+    rec_df = pd.DataFrame(rows)
+    st.dataframe(rec_df, use_container_width=True, height=500)
+
+    # ── Summary counts ──
+    st.markdown("<div class='section-header'><h3>📊 Summary</h3></div>", unsafe_allow_html=True)
+    s1, s2, s3, s4 = st.columns(4)
+    with s1:
+        n = sum(1 for r in rows if r["Missing"] != "—")
+        st.markdown(f"""<div class='metric-card'><span class='val' style='color:#d97706;'>{n}</span><span class='label'>Cols with Missing</span></div>""", unsafe_allow_html=True)
+    with s2:
+        n = sum(1 for r in rows if r["Outliers"] != "—")
+        st.markdown(f"""<div class='metric-card'><span class='val' style='color:#dc2626;'>{n}</span><span class='label'>Cols with Outliers</span></div>""", unsafe_allow_html=True)
+    with s3:
+        n = sum(1 for r in rows if r["Encoding"] != "—")
+        st.markdown(f"""<div class='metric-card'><span class='val' style='color:#2563eb;'>{n}</span><span class='label'>Cols to Encode</span></div>""", unsafe_allow_html=True)
+    with s4:
+        n = sum(1 for r in rows if "⚠️" in r["Skewness"])
+        st.markdown(f"""<div class='metric-card'><span class='val' style='color:#7c3aed;'>{n}</span><span class='label'>Skewed Cols</span></div>""", unsafe_allow_html=True)
+
+    nav_buttons("Recommendations")
 # ═══════════════════════════════════════════════
 # PAGE 2 — CLEANING & VALIDATION
 # ═══════════════════════════════════════════════
