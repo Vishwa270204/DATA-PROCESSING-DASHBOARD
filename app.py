@@ -1921,7 +1921,7 @@ elif st.session_state.page == "Encoding & Outliers":
             st.info("No numerical columns.")
         else:
             st.dataframe(skew_df,use_container_width=True)
-           transformed_suffixes = ("_log", "_sqrt", "_boxcox")
+            transformed_suffixes = ("_log", "_sqrt", "_boxcox")
             num_cols_sk = [
                 c for c in df.select_dtypes(include=[np.number]).columns.tolist()
                 if not c.endswith(transformed_suffixes)
