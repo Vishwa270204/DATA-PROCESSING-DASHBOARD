@@ -1574,19 +1574,29 @@ elif st.session_state.page == "Encoding & Outliers":
             st.session_state.target_col = target_col
             st.session_state.target_encoded = False  # reset if target changes
         if target_col != "— None —":
-            rec_enc, rec_exp =recommend_encoding(st.session_state.original_df, target_col, is_target=True)
             already_encoded = st.session_state.get("target_encoded", False)
-            st.markdown(f"""
-            <div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px;margin:12px 0;'>
-                <b style='color:#2563eb;'>Target:</b> <code>{target_col}</code> &nbsp;|&nbsp;
-                <b style='color:#2563eb;'>Recommended:</b> <code>{rec_enc}</code><br>
-                <span style='color:#374151;font-size:0.9rem;'>{rec_exp}</span>
-            </div>
-            """, unsafe_allow_html=True)
-
+        
             if already_encoded:
-                st.markdown(f"<span class='badge badge-success'>✅ '{target_col}' has already been encoded this session.</span>", unsafe_allow_html=True)
+                st.markdown(f"""
+                <div style='display:flex;align-items:center;gap:10px;padding:12px 16px;
+                     background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;margin:12px 0;'>
+                    <span style='font-size:1.1rem;'>🎯</span>
+                    <span style='font-size:0.9rem;color:#374151;'>
+                        Target variable: <code style='background:#dcfce7;padding:2px 6px;border-radius:4px;
+                        color:#16a34a;font-weight:700;'>{target_col}</code>
+                        &nbsp;— locked for training. Encoding applied.
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
             else:
+                rec_enc, rec_exp = recommend_encoding(st.session_state.original_df, target_col, is_target=True)
+                st.markdown(f"""
+                <div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px;margin:12px 0;'>
+                    <b style='color:#2563eb;'>Target:</b> <code>{target_col}</code> &nbsp;|&nbsp;
+                    <b style='color:#2563eb;'>Recommended:</b> <code>{rec_enc}</code><br>
+                    <span style='color:#374151;font-size:0.9rem;'>{rec_exp}</span>
+                </div>
+                """, unsafe_allow_html=True)
                 chosen_enc_t = st.selectbox("Encoding method for target",
                                              ["label","onehot","ordinal","frequency"],
                                              index=["label","onehot","ordinal","frequency"].index(rec_enc),
@@ -1599,17 +1609,17 @@ elif st.session_state.page == "Encoding & Outliers":
                     try:
                         new_df, mapping = apply_encoding(df, target_col, chosen_enc_t, ordinal_order_t)
                         st.session_state.processed_df = new_df
-                        st.session_state.df = new_df   # temporary compatibility
+                        st.session_state.df = new_df
                         if target_col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(target_col)
-                        st.session_state.target_encoded = True 
+                        st.session_state.target_encoded = True
                         save_operation(st.session_state.file_name, f"Encoding: {target_col}", chosen_enc_t)
                         st.success(f"✅ Applied {chosen_enc_t} encoding to '{target_col}'.")
                         if mapping is not None:
                             st.dataframe(mapping.head(20), use_container_width=True)
                         st.rerun()
-                    except Exception as e: st.error(str(e))
-
+                    except Exception as e:
+                        st.error(str(e))
         st.markdown("---")
         st.markdown("**Feature Column Encoding**")
 
