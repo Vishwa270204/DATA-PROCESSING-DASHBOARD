@@ -914,83 +914,147 @@ elif st.session_state.page == "Recommendations":
     skew_df      = calculate_skewness(df)
     skew_dict    = dict(zip(skew_df["Column"], skew_df["Skewness"]))
     dup_count    = df.duplicated().sum()
+    inv_vals     = detect_invalid_values(df)
+    neg_vals     = detect_negative_values(df)
 
-    # ── Duplicates ──
-    st.markdown("<div class='section-header'><h3>🗑️ Duplicate Rows</h3></div>", unsafe_allow_html=True)
+    def section(num, title, icon):
+        st.markdown(f"""
+        <div style='display:flex;align-items:center;gap:10px;padding:10px 16px;
+             background:#f8f9fc;border-left:4px solid #2563eb;border-radius:0 8px 8px 0;margin:24px 0 12px;'>
+            <span style='background:#2563eb;color:white;border-radius:6px;
+                  padding:2px 8px;font-size:0.8rem;font-weight:700;'>{num}</span>
+            <span style='font-size:1rem;font-weight:600;color:#111827;'>{icon} {title}</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    def card(content, status="warn"):
+        colors = {"ok":"#f0fdf4;border-color:#86efac", "warn":"#fffbeb;border-color:#fde68a", "bad":"#fef2f2;border-color:#fecaca"}
+        c = colors.get(status, colors["warn"])
+        bg, border = c.split(";border-color:")
+        st.markdown(f"""
+        <div style='background:{bg};border:1px solid {border};border-radius:10px;
+             padding:16px 20px;margin-bottom:10px;font-size:0.9rem;color:#111827;line-height:1.8;'>
+            {content}
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── 1. Duplicates ──
+    section(1, "Duplicate Rows", "🗑️")
     if dup_count > 0:
-        st.markdown(f"<span class='badge badge-danger'>❌ {dup_count} duplicate rows found</span>", unsafe_allow_html=True)
-        st.markdown("**Recommendation:** Remove duplicates before any processing.")
+        pct = round(dup_count/len(df)*100, 2)
+        card(f"""
+        <b>⚠️ {dup_count} duplicate rows detected ({pct}%)</b><br>
+        Duplicates skew statistics and inflate model performance.<br>
+        <b>Fix:</b> Go to 🧹 <i>Cleaning → Duplicate Removal</i>
+        """, "warn")
     else:
-        st.markdown("<span class='badge badge-success'>✅ No duplicates</span>", unsafe_allow_html=True)
+        card("<b>✅ No duplicate rows</b><br>All rows are unique.", "ok")
 
-    # ── Per-column recommendations ──
-    st.markdown("<div class='section-header'><h3>📋 Column-wise Recommendations</h3></div>", unsafe_allow_html=True)
-
-    rows = []
-    for col in df.columns:
-        rec = {"Column": col, "Type": "", "Missing": "—", "Outliers": "—", "Encoding": "—", "Skewness": "—", "Action": ""}
-
-        # type
-        if col in ct["numerical"]:   rec["Type"] = "🔢 Numerical"
-        elif col in ct["categorical"]: rec["Type"] = "🏷️ Categorical"
-        elif col in ct["boolean"]:   rec["Type"] = "✅ Boolean"
-        elif col in ct["datetime"]:  rec["Type"] = "📅 Datetime"
-        elif col in ct["id"]:        rec["Type"] = "🔑 ID"
-
-        # missing
-        if col in miss_dict:
-            m = miss_dict[col]
+    # ── 2. Missing Values ──
+    section(2, "Missing Values", "❓")
+    if not miss_dict:
+        card("<b>✅ No missing values</b><br>All columns are complete. ✅", "ok")
+    else:
+        for col, m in miss_dict.items():
             if m["pct"] > 30:
-                rec["Missing"] = f"⚠️ {m['pct']}% → Drop column"
+                action = f"Consider <b>dropping this column</b> (>{m['pct']}% missing)"
+                status = "bad"
             elif col in ct["numerical"]:
-                rec["Missing"] = f"🔧 {m['pct']}% → Use Median"
+                action = f"Fill with <b>Median</b> (numerical, robust to outliers)"
+                status = "warn"
             else:
-                rec["Missing"] = f"🔧 {m['pct']}% → Use Mode"
+                action = f"Fill with <b>Mode</b> (categorical most frequent value)"
+                status = "warn"
+            card(f"<b>⚠️ '{col}'</b> — {m['missing']} missing values ({m['pct']}%)<br><b>Fix:</b> {action}", status)
 
-        # outliers
-        if col in outlier_data:
-            o = outlier_data[col]
-            if o["count"] > 0:
-                if o["pct"] > 10:
-                    rec["Outliers"] = f"⚠️ {o['pct']}% → Cap (Winsorise)"
-                else:
-                    rec["Outliers"] = f"🔧 {o['pct']}% → Remove"
-
-        # encoding
-        if col in ct["categorical"] or col in ct["boolean"]:
-            enc, exp = recommend_encoding(df, col)
-            rec["Encoding"] = f"{enc} — {exp}"
-
-        # skewness
-        if col in skew_dict:
-            sk = skew_dict[col]
+    # ── 3. Skewness ──
+    section(3, "Skewness & Normality", "〰️")
+    skewed = [(c, s) for c, s in skew_dict.items() if abs(s) > 0.5]
+    if not skewed:
+        card("<b>✅ No significant skewness</b><br>All numerical columns are approximately normal.", "ok")
+    else:
+        for col, sk in skewed:
+            direction = "right (+)" if sk > 0 else "left (−)"
             if abs(sk) > 1:
-                rec["Skewness"] = f"⚠️ {sk:.2f} → Log/Box-Cox"
-            elif abs(sk) > 0.5:
-                rec["Skewness"] = f"🔧 {sk:.2f} → Sqrt"
+                label = "highly skewed"; status = "bad"
+                fix = f"1. Log: <code>df['{col}_log'] = np.log1p(df['{col}'])</code><br>2. Yeo-Johnson: <code>PowerTransformer(method='yeo-johnson')</code><br>3. Re-check: <code>df['{col}_log'].skew()</code> — aim for |skew| &lt; 0.5"
             else:
-                rec["Skewness"] = f"✅ {sk:.2f} Normal"
+                label = "moderately skewed"; status = "warn"
+                fix = f"1. Sqrt: <code>df['{col}_sqrt'] = np.sqrt(df['{col}'])</code><br>2. Re-check skewness after transform"
+            card(f"<b>⚠️ '{col}' is {label}</b> (skewness = {sk:.4f})<br>Skewed {direction}. Affects regression and mean-based statistics.<br><b>Fix:</b><br>{fix}", status)
 
-        rows.append(rec)
+    # ── 4. Outliers ──
+    section(4, "Outliers", "📦")
+    cols_with_out = {c: v for c, v in outlier_data.items() if v["count"] > 0}
+    if not cols_with_out:
+        card("<b>✅ No outliers detected</b><br>All numerical columns are within IQR bounds.", "ok")
+    else:
+        for col, o in cols_with_out.items():
+            if o["pct"] > 10:
+                fix = "Cap (Winsorise) — preserves data size"; status = "bad"
+            else:
+                fix = "Remove outlier rows — small impact on dataset size"; status = "warn"
+            card(f"<b>⚠️ '{col}'</b> — {o['count']} outliers ({o['pct']}%)<br>Range: [{round(o['lower'],2)}, {round(o['upper'],2)}]<br><b>Fix:</b> {fix}", status)
 
-    rec_df = pd.DataFrame(rows)
-    st.dataframe(rec_df, use_container_width=True, height=500)
+    # ── 5. Encoding ──
+    section(5, "Categorical Encoding", "🔠")
+    enc_cols = [c for c in ct["categorical"] + ct["boolean"]]
+    if not enc_cols:
+        card("<b>✅ No categorical columns</b><br>All columns are already numerical.", "ok")
+    else:
+        for col in enc_cols:
+            enc, exp = recommend_encoding(df, col)
+            n = df[col].nunique()
+            card(f"<b>'{col}'</b> — {n} unique values<br><b>Recommended:</b> <code>{enc}</code> — {exp}", "warn")
 
-    # ── Summary counts ──
-    st.markdown("<div class='section-header'><h3>📊 Summary</h3></div>", unsafe_allow_html=True)
-    s1, s2, s3, s4 = st.columns(4)
-    with s1:
-        n = sum(1 for r in rows if r["Missing"] != "—")
-        st.markdown(f"""<div class='metric-card'><span class='val' style='color:#d97706;'>{n}</span><span class='label'>Cols with Missing</span></div>""", unsafe_allow_html=True)
-    with s2:
-        n = sum(1 for r in rows if r["Outliers"] != "—")
-        st.markdown(f"""<div class='metric-card'><span class='val' style='color:#dc2626;'>{n}</span><span class='label'>Cols with Outliers</span></div>""", unsafe_allow_html=True)
-    with s3:
-        n = sum(1 for r in rows if r["Encoding"] != "—")
-        st.markdown(f"""<div class='metric-card'><span class='val' style='color:#2563eb;'>{n}</span><span class='label'>Cols to Encode</span></div>""", unsafe_allow_html=True)
-    with s4:
-        n = sum(1 for r in rows if "⚠️" in r["Skewness"])
-        st.markdown(f"""<div class='metric-card'><span class='val' style='color:#7c3aed;'>{n}</span><span class='label'>Skewed Cols</span></div>""", unsafe_allow_html=True)
+    # ── 6. Invalid Values ──
+    section(6, "Invalid & Negative Values", "✔️")
+    if not inv_vals and not neg_vals:
+        card("<b>✅ No invalid or negative values detected</b>", "ok")
+    else:
+        for col, info in inv_vals.items():
+            card(f"<b>⚠️ '{col}'</b> — {info['issue']} ({info['count']} rows)<br><b>Fix:</b> Use Custom Range Validation in 🧹 Cleaning", "bad")
+        for col, info in neg_vals.items():
+            card(f"<b>⚠️ '{col}'</b> — {info['count']} negative values<br><b>Reason:</b> {info['reason']}<br><b>Fix:</b> Remove or cap these rows", "warn")
+
+    # ── 7. EDA Checklist ──
+    section(7, "Complete EDA Checklist", "✅")
+    has_missing   = len(miss_dict) > 0
+    has_dupes     = dup_count > 0
+    has_outliers  = len(cols_with_out) > 0
+    has_skew      = len(skewed) > 0
+    has_enc       = len(enc_cols) > 0
+    num_df        = df.select_dtypes(include=[np.number])
+    has_corr      = num_df.shape[1] >= 2
+    has_invalid   = len(inv_vals) > 0 or len(neg_vals) > 0
+
+    checklist = [
+        ("Check shape & dtypes",                    True),
+        ("Handle missing values",                   not has_missing),
+        ("Remove duplicate rows",                   not has_dupes),
+        ("Detect & treat outliers (IQR / Z-score)", not has_outliers),
+        ("Check skewness → transform if needed",    not has_skew),
+        ("Encode categorical columns",              not has_enc),
+        ("Check correlation / multicollinearity",   has_corr),
+        ("Fix invalid / negative values",           not has_invalid),
+        ("Export cleaned dataset (.csv)",           False),
+    ]
+
+    for task, done in checklist:
+        icon  = "✅" if done else "☐"
+        badge_color = "#16a34a" if done else "#d97706"
+        badge_text  = "Done"   if done else "Pending"
+        st.markdown(f"""
+        <div style='display:flex;justify-content:space-between;align-items:center;
+             padding:10px 16px;border-bottom:1px solid #e2e6f0;font-size:0.9rem;color:#111827;'>
+            <span>{icon} {task}</span>
+            <span style='background:{"#f0fdf4" if done else "#fffbeb"};
+                  color:{badge_color};border:1px solid {"#86efac" if done else "#fde68a"};
+                  border-radius:20px;padding:2px 12px;font-size:0.75rem;font-weight:600;'>
+                {badge_text}
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
 
     nav_buttons("Recommendations")
 # ═══════════════════════════════════════════════
