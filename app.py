@@ -1095,12 +1095,7 @@ elif st.session_state.page == "Encoding & Outliers":
                     label_cols.append(col)
                 elif rec == "frequency":
                     frequency_cols.append(col)
-            # Ordinal candidates
-            ordinal_candidates = [
-                c for c in enc_candidates
-                if str(df[c].dtype) in ["object", "category"]
-            ]
-        
+            
             # ─────────────────────────────────────
             # One-Hot Encoding
             # ─────────────────────────────────────
