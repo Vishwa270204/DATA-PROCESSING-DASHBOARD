@@ -2006,7 +2006,7 @@ elif st.session_state.page == "Visualizations":
     num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     cat_cols = df.select_dtypes(include="object").columns.tolist()
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab2, tab3, tab4 = st.tabs([
         "📈 Custom Plot","🔵 Scatter","📦 Box & Violin",
         "📊 Category Breakdown"
     ])
