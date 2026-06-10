@@ -2132,33 +2132,15 @@ elif st.session_state.page == "Export":
     tab1, tab2, tab3 = st.tabs(["💾 Download","👁️ Preview","📜 History"])
 
     with tab1:
+        st.markdown("**📄 Processed / Encoded Dataset**")
         c1e, c2e = st.columns(2)
         with c1e:
-            st.markdown("**📄 CSV**")
-            st.download_button("⬇️ Download CSV",
-                data=export_csv(df),
-                file_name=f"processed_{st.session_state.file_name.rsplit('.',1)[0]}.csv",
-                mime="text/csv", key="export_csv_btn")
-        with c2e:
-            st.markdown("**📊 Excel**")
-            try:
-                st.download_button("⬇️ Download Excel",
-                    data=export_excel(df),
-                    file_name=f"processed_{st.session_state.file_name.rsplit('.',1)[0]}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="export_xlsx_btn")
-            except Exception as e:
-                st.error(f"Excel export error: {e}")
-        st.markdown("---")
-        st.markdown("**📄 Processed / Encoded Dataset**")
-        c3e, c4e = st.columns(2)
-        with c3e:
             if st.session_state.get("processed_df") is not None:
                 st.download_button("⬇️ Download Encoded CSV",
                     data=export_csv(st.session_state.processed_df),
                     file_name=f"encoded_{st.session_state.file_name.rsplit('.',1)[0]}.csv",
                     mime="text/csv", key="export_encoded_csv")
-        with c4e:
+        with c2e:
             if st.session_state.get("processed_df") is not None:
                 try:
                     st.download_button("⬇️ Download Encoded Excel",
