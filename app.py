@@ -1046,7 +1046,7 @@ elif st.session_state.page == "Cleaning & Validation":
                     st.download_button("⬇️ Export Invalid Rows",
                                        data=invalid_df.to_csv(index=False).encode("utf-8"),
                                        file_name="invalid_rows.csv", mime="text/csv")
-
+  nav_buttons("Cleaning & Validation")
 # ═══════════════════════════════════════════════
 # PAGE 3 — ENCODING & OUTLIERS
 # ═══════════════════════════════════════════════
@@ -1511,7 +1511,7 @@ elif st.session_state.page == "Encoding & Outliers":
                 st.plotly_chart(fig_d, use_container_width=True)
             except Exception as e:
                 st.error(f"Distribution chart error: {e}")
-
+nav_buttons("Encoding & Outliers")
 # ═══════════════════════════════════════════════
 # PAGE 4 — STATISTICS & EXPORT
 # ═══════════════════════════════════════════════
@@ -1697,3 +1697,4 @@ elif st.session_state.page == "Statistics & Export":
         st.markdown("&nbsp;")
         with st.expander("Preview export (first 20 rows)"):
             st.dataframe(df.head(20), use_container_width=True)
+ nav_buttons("Statistics & Export")
