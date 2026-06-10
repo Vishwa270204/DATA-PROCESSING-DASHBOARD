@@ -1077,16 +1077,16 @@ elif st.session_state.page == "Encoding & Outliers":
         if done_count > 0 and done_count < total_feature_cats:
             st.markdown(f"<span class='badge badge-info'>ℹ️ {done_count} of {total_feature_cats} feature columns already encoded — hidden below</span>", unsafe_allow_html=True)
 
+         # Recommendation buckets
+        onehot_cols = []
+        label_cols = []
+        frequency_cols = []
         if not enc_candidates:
             if encoded_set:
                 st.success("✅ All categorical feature columns have been encoded.")
             else:
                 st.info("No categorical feature columns found.")
         else:
-            # Recommendation buckets
-            onehot_cols = []
-            label_cols = []
-            frequency_cols = []
             for col in enc_candidates:
                 rec, _ = recommend_encoding(st.session_state.original_df, col)
                 if rec == "onehot":
