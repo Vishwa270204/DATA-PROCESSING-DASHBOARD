@@ -405,7 +405,7 @@ def recommend_encoding(df, col, is_target=False):
 def apply_encoding(df, col, enc_type, ordinal_order=None):
     df = df.copy(); mapping = None
     if enc_type == "label":
-        le = Labelr()
+        le = Label()
         df[col] = le.fit_transform(df[col].astype(str))
         st.session_state.encoders[col] = {
             cls: int(code)
