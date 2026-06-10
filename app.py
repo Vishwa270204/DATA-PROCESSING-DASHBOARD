@@ -1537,7 +1537,7 @@ elif st.session_state.page == "Encoding & Outliers":
 
     df = st.session_state.df
     ct = identify_column_types(df)
-    tab1, tab2, tab3, tab4 = st.tabs(["🔡 Encoding","📦 Outliers","〰️ Skewness"])
+    tab1, tab2, tab3 = st.tabs(["🔡 Encoding","📦 Outliers","〰️ Skewness"])
 
     # ── Encoding  ── FIX 2: exclude already-encoded columns ──────────────────
     with tab1:
