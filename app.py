@@ -873,7 +873,7 @@ if st.session_state.page == "Upload & Inspect":
                         st.info("Row discarded.")
                         st.rerun()
         with tab6:
-            st.subheader("🔄 Encoded Dataset")
+            st.markdown("🔄 Encoded Dataset")
             if st.session_state.get("processed_df") is not None:
                 st.info(
                     "This dataset is used for ML and analysis. "
@@ -1637,7 +1637,7 @@ elif st.session_state.page == "Encoding & Outliers":
             # Ordinal Encoding
             # ─────────────────────────────────────
             if True:
-                st.subheader("📈 Ordinal Encoding")
+                st.markdown("📈 Ordinal Encoding")
                 ord_col = st.selectbox(
                     "Select column for Ordinal Encoding",
                     ["— Select —"] + enc_candidates,
@@ -1682,7 +1682,7 @@ elif st.session_state.page == "Encoding & Outliers":
             # One-Hot Encoding
             # ─────────────────────────────────────
             if onehot_cols:
-                st.subheader("🔵 One-Hot Encoding")
+                st.markdown("🔵 One-Hot Encoding")
                 selected_cols = st.multiselect(
                     "Select columns for One-Hot Encoding",
                     onehot_cols,
@@ -1705,7 +1705,7 @@ elif st.session_state.page == "Encoding & Outliers":
             # Label Encoding
             # ─────────────────────────────────────
             if label_cols:
-                st.subheader("🏷️ Label Encoding")
+                st.markdown("🏷️ Label Encoding")
                 selected_cols = st.multiselect(
                     "Select columns for Label Encoding",
                     label_cols,
@@ -1728,7 +1728,7 @@ elif st.session_state.page == "Encoding & Outliers":
             # Frequency Encoding
             # ─────────────────────────────────────
             if frequency_cols:
-                st.subheader("📊 Frequency Encoding")
+                st.markdown("📊 Frequency Encoding")
                 selected_cols = st.multiselect(
                     "Select columns for Frequency Encoding",
                     frequency_cols,
