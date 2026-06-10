@@ -70,7 +70,7 @@ def nav_buttons(current_page):
                     st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
     
-    def save_operation(file_name, operation, details):
+def save_operation(file_name, operation, details):
     try:
         conn = sqlite3.connect(DB_NAME)
         conn.execute("INSERT INTO processing_history (file_name,operation,details,timestamp) VALUES (?,?,?,?)",
