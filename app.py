@@ -2114,7 +2114,7 @@ elif st.session_state.page == "Export":
     </div>
     """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["💾 Download","👁️ Preview"])
+    tab1, tab2 = st.tabs(["💾 Download","👁️ Preview"])
 
     with tab1:
         st.markdown("**📄 Processed / Encoded Dataset**")
