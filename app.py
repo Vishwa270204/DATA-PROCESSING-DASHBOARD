@@ -41,11 +41,12 @@ init_database()
 def nav_buttons(current_page):
     page_order = ["Upload & Inspect", "Cleaning & Validation", "Encoding & Outliers", "Statistics & Export"]
     idx = page_order.index(current_page)
+    slug = current_page.replace(" ", "_").replace("&", "and")
     st.markdown("---")
     c_prev, c_save, c_next = st.columns([1, 2, 1])
     with c_prev:
         if idx > 0:
-            if st.button(f"⬅️ Previous: {page_order[idx-1]}", key="nav_prev"):
+            if st.button(f"⬅️ Previous: {page_order[idx-1]}", key=f"nav_prev_{slug}"):
                 st.session_state.page = page_order[idx-1]
                 st.rerun()
     with c_save:
@@ -55,11 +56,11 @@ def nav_buttons(current_page):
                 data=export_csv(st.session_state.df),
                 file_name=f"saved_{st.session_state.file_name.rsplit('.',1)[0]}.csv",
                 mime="text/csv",
-                key="nav_save"
+                key=f"nav_save_{slug}"
             )
     with c_next:
         if idx < len(page_order) - 1:
-            if st.button(f"Next: {page_order[idx+1]} ➡️", key="nav_next"):
+            if st.button(f"Next: {page_order[idx+1]} ➡️", key=f"nav_next_{slug}"):
                 st.session_state.page = page_order[idx+1]
                 st.rerun()
 def save_operation(file_name, operation, details):
