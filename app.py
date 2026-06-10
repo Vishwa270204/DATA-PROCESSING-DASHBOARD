@@ -933,33 +933,33 @@ elif st.session_state.page == "Cleaning & Validation":
                 col_max = float(df[range_col].max())
                 st.caption(f"Actual data range: `{col_min}` → `{col_max}`")
                 # reset defaults only when column changes
-            if st.session_state.get("_range_col_prev") != range_col:
-                st.session_state["range_min"] = col_min
-                st.session_state["range_max"] = col_max
-                st.session_state["_range_col_prev"] = range_col
-            rc1, rc2 = st.columns(2)
-            with rc1:
-                user_min = st.number_input("Minimum allowed value", key="range_min")
-            with rc2:
-                user_max = st.number_input("Maximum allowed value", key="range_max")
-                if user_min >= user_max:
-                    st.error("❌ Min must be less than Max.")
-                else:
-                    out_of_range = df[(df[range_col] < user_min) | (df[range_col] > user_max)]
-                    if len(out_of_range) > 0:
-                        st.markdown(f"<span class='badge badge-danger'>❌ {len(out_of_range)} rows out of range [{user_min}, {user_max}]</span>", unsafe_allow_html=True)
-                        with st.expander(f"Show {len(out_of_range)} invalid rows"):
-                            st.dataframe(out_of_range, use_container_width=True)
-                        if st.button("🗑️ Remove out-of-range rows", key="remove_range"):
-                            before = len(df)
-                            st.session_state.df = df[
-                                (df[range_col] >= user_min) & (df[range_col] <= user_max)
-                            ].reset_index(drop=True)
-                            save_operation(st.session_state.file_name, f"Range Filter: {range_col}", f"Removed {before - len(st.session_state.df)} rows outside [{user_min},{user_max}]")
-                            st.success(f"✅ Removed {before - len(st.session_state.df)} rows.")
-                            st.rerun()
-                    else:
-                        st.markdown(f"<span class='badge badge-success'>✅ All values within [{user_min}, {user_max}]</span>", unsafe_allow_html=True)
+                if st.session_state.get("_range_col_prev") != range_col:
+                    st.session_state["range_min"] = col_min
+                    st.session_state["range_max"] = col_max
+                    st.session_state["_range_col_prev"] = range_col
+                    rc1, rc2 = st.columns(2)
+                    with rc1:
+                        user_min = st.number_input("Minimum allowed value", key="range_min")
+                    with rc2:
+                        user_max = st.number_input("Maximum allowed value", key="range_max")
+                        if user_min >= user_max:
+                            st.error("❌ Min must be less than Max.")
+                        else:
+                            out_of_range = df[(df[range_col] < user_min) | (df[range_col] > user_max)]
+                            if len(out_of_range) > 0:
+                                st.markdown(f"<span class='badge badge-danger'>❌ {len(out_of_range)} rows out of range [{user_min}, {user_max}]</span>", unsafe_allow_html=True)
+                                with st.expander(f"Show {len(out_of_range)} invalid rows"):
+                                    st.dataframe(out_of_range, use_container_width=True)
+                                if st.button("🗑️ Remove out-of-range rows", key="remove_range"):
+                                    before = len(df)
+                                    st.session_state.df = df[
+                                        (df[range_col] >= user_min) & (df[range_col] <= user_max)
+                                    ].reset_index(drop=True)
+                                    save_operation(st.session_state.file_name, f"Range Filter: {range_col}", f"Removed {before - len(st.session_state.df)} rows outside [{user_min},{user_max}]")
+                                    st.success(f"✅ Removed {before - len(st.session_state.df)} rows.")
+                                    st.rerun()
+                            else:
+                                st.markdown(f"<span class='badge badge-success'>✅ All values within [{user_min}, {user_max}]</span>", unsafe_allow_html=True)
     
         st.markdown("---")
         v1, v2 = st.columns(2)
