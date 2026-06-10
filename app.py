@@ -912,7 +912,7 @@ elif st.session_state.page == "Statistics & EDA":
     cat_cols = df.select_dtypes(include="object").columns.tolist()
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📊 Overview","🔢 Numerical Stats","🏷️ Categorical Stats","🔗 Correlation","📐 Distributions"
+        "📊 Overview","🔢 Numerical Stats","🏷️ Categorical Stats","🔗 Correlation"
     ])
 
     with tab1:
