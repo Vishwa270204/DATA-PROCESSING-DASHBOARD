@@ -82,7 +82,7 @@ def nav_buttons(current_page):
             if st.button(next_label, key=f"nav_next_{slug}", type="secondary"):
                 st.session_state.page = page_order[idx+1]
                 st.rerun()
-            (f"""
+            st.markdown(f"""
             <style>
             div[data-testid="column"]:last-child .stButton button {{
                 background: linear-gradient(135deg,#059669,#10b981) !important;
