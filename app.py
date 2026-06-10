@@ -419,28 +419,19 @@ def detect_duplicate_information_columns(df):
     return unique
 
 def recommend_encoding(df, col, is_target=False):
-
     n = df[col].nunique()
-
     if is_target:
-
         if n == 2:
             return "label", "Binary target"
-
         elif n <= 15:
             return "label", "Multiclass target"
-
         else:
             return "frequency", "High-cardinality target"
-
     else:
-
         if n == 2:
             return "label", "Binary column"
-
         elif n <= 10:
             return "onehot", "Low-cardinality column"
-
         else:
             return "frequency", "High-cardinality column"
 def apply_encoding(df, col, enc_type, ordinal_order=None):
@@ -1132,7 +1123,12 @@ elif st.session_state.page == "Recommendations":
     dup_count    = df.duplicated().sum()
     inv_vals     = detect_invalid_values(df)
     neg_vals     = detect_negative_values(df)
-    enc_cols     = [c for c in ct["categorical"] + ct["boolean"]]
+    encoded_set  = set(st.session_state.get("encoded_columns", []))
+    target_col_r = st.session_state.get("target_col", "— None —")
+    enc_cols     = [
+        c for c in ct["categorical"] + ct["boolean"]
+        if c not in encoded_set
+        and c != target_col_r]
     cols_with_out = {c: v for c, v in outlier_data.items() if v["count"] > 0}
     skewed       = [(c, s) for c, s in skew_dict.items() if abs(s) > 0.5]
     num_df       = df.select_dtypes(include=[np.number])
@@ -1244,15 +1240,35 @@ elif st.session_state.page == "Recommendations":
                     f"{direction}. Affects regression and mean-based models.", fix, status)
 
     with rt5:
-        if not has_enc:
-            rec_row("✅", "No categorical columns", "All columns are numerical.", "No action needed.", "ok")
-        else:
-            for col in enc_cols:
-                enc, exp = recommend_encoding(df, col)
-                n = df[col].nunique()
-                rec_row("🔠", f"'{col}' — {n} unique values",
-                    f"Column type: {'Boolean' if col in ct['boolean'] else 'Categorical'}",
-                    f"Use {enc.upper()} encoding — {exp} → Go to 🔠 Encoding tab", "warn")
+            all_cat = [c for c in ct["categorical"] + ct["boolean"]]
+            target_col_r = st.session_state.get("target_col", "— None —")
+            target_encoded = st.session_state.get("target_encoded", False)
+    
+            # Show target status
+            if target_col_r != "— None —":
+                if target_encoded:
+                    rec_row("✅", f"Target '{target_col_r}' encoded",
+                        "Target variable has been encoded this session.",
+                        "No action needed.", "ok")
+                else:
+                    rec_row("🎯", f"Target '{target_col_r}' — not yet encoded",
+                        "Target variable should be encoded before training.",
+                        "Go to 🔠 Encoding & Outliers → Encoding tab → Select Target", "warn")
+    
+            if not enc_cols:
+                if not all_cat:
+                    rec_row("✅", "No categorical columns", "All columns are numerical.", "No action needed.", "ok")
+                else:
+                    rec_row("✅", "All categorical feature columns encoded",
+                        f"{len(all_cat)} column(s) fully processed.",
+                        "No action needed.", "ok")
+            else:
+                for col in enc_cols:
+                    enc, exp = recommend_encoding(df, col)
+                    n = df[col].nunique()
+                    rec_row("🔠", f"'{col}' — {n} unique values",
+                        f"Column type: {'Boolean' if col in ct['boolean'] else 'Categorical'}",
+                        f"Use {enc.upper()} encoding — {exp} → Go to 🔠 Encoding tab", "warn")
 
     with rt6:
         if not has_invalid:
