@@ -43,17 +43,32 @@ def nav_buttons(current_page):
     idx = page_order.index(current_page)
     slug = current_page.replace(" ", "_").replace("&", "and")
     st.markdown("---")
-    c_prev, c_next = st.columns([1, 1])
-    with c_prev:
-        if idx > 0:
-            if st.button(f"⬅️ Previous: {page_order[idx-1]}", key=f"nav_prev_{slug}"):
-                st.session_state.page = page_order[idx-1]
-                st.rerun()
-    with c_next:
-        if idx < len(page_order) - 1:
-            if st.button(f"Next: {page_order[idx+1]} ➡️", key=f"nav_next_{slug}"):
-                st.session_state.page = page_order[idx+1]
-                st.rerun()
+        c_prev, c_mid, c_next = st.columns([2, 6, 2])
+        with c_prev:
+            if idx > 0:
+                st.markdown(f"""
+                <style>
+                div[data-testid="stButton"] button[kind="secondary"]{{background:transparent;}}
+                #btn_prev_{slug} button{{background:linear-gradient(135deg,#6366f1,#8b5cf6)!important;color:white!important;border:none!important;border-radius:8px!important;font-weight:600!important;width:100%;}}
+                </style>
+                <div id="btn_prev_{slug}">
+                """, unsafe_allow_html=True)
+                if st.button(f"⬅️ Previous: {page_order[idx-1]}", key=f"nav_prev_{slug}"):
+                    st.session_state.page = page_order[idx-1]
+                    st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+        with c_next:
+            if idx < len(page_order) - 1:
+                st.markdown(f"""
+                <style>
+                #btn_next_{slug} button{{background:linear-gradient(135deg,#059669,#10b981)!important;color:white!important;border:none!important;border-radius:8px!important;font-weight:600!important;width:100%;}}
+                </style>
+                <div id="btn_next_{slug}">
+                """, unsafe_allow_html=True)
+                if st.button(f"Next: {page_order[idx+1]} ➡️", key=f"nav_next_{slug}"):
+                    st.session_state.page = page_order[idx+1]
+                    st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
 def save_operation(file_name, operation, details):
     try:
         conn = sqlite3.connect(DB_NAME)
