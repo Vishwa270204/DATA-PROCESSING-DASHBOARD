@@ -574,7 +574,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    pages = ["📁 Upload & Inspect","📈 Statistics & EDA","💡 Recommendations","🧹 Cleaning & Validation","🔠 Encoding & Outliers","📊 Visualizations & Insights","📦 Export"]
+    pages = ["📁 Upload & Inspect","📈 Statistics & EDA","💡 Recommendations","🧹 Cleaning & Validation","🔠 Encoding & Outliers","📊 Visualizations","📦 Export"]
     page_map = {p: p.split(" ", 1)[1] for p in pages}
     page_keys = list(page_map.values())
     selected = st.radio("Navigation", pages, label_visibility="collapsed",
@@ -1987,13 +1987,13 @@ elif st.session_state.page == "Encoding & Outliers":
     nav_buttons("Encoding & Outliers")
 
 # ═══════════════════════════════════════════════
-# PAGE — VISUALIZATIONS & INSIGHTS
+# PAGE — VISUALIZATIONS 
 # ═══════════════════════════════════════════════
-elif st.session_state.page == "Visualizations & Insights":
+elif st.session_state.page == "Visualizations":
     st.markdown("""
     <div class='main-header'>
-        <h1>📊 Visualizations & Insights</h1>
-        <p>Interactive charts and data insights</p>
+        <h1>📊 Visualizations</h1>
+        <p>Interactive charts</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -2008,7 +2008,7 @@ elif st.session_state.page == "Visualizations & Insights":
 
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📈 Custom Plot","🔵 Scatter","📦 Box & Violin",
-        "📊 Category Breakdown","🔥 Duplicate Info","💡 Auto Insights"
+        "📊 Category Breakdown"
     ])
 
     with tab1:
@@ -2131,81 +2131,6 @@ elif st.session_state.page == "Visualizations & Insights":
                 st.plotly_chart(fig_cb, use_container_width=True)
             except Exception as e:
                 st.error(f"Chart error: {e}")
-
-    with tab5:
-        st.markdown("<div class='section-header'><h3>Duplicate Row Analysis</h3></div>", unsafe_allow_html=True)
-        dup_df = df[df.duplicated(keep=False)]
-        if dup_df.empty:
-            st.markdown("<span class='badge badge-success'>✅ No duplicate rows found</span>", unsafe_allow_html=True)
-        else:
-            d1, d2, d3 = st.columns(3)
-            with d1: st.markdown(f"""<div class='metric-card'><span class='val' style='color:#dc2626;'>{df.duplicated().sum()}</span><span class='label'>Duplicate Rows</span></div>""", unsafe_allow_html=True)
-            with d2: st.markdown(f"""<div class='metric-card'><span class='val'>{round(df.duplicated().sum()/len(df)*100,2)}%</span><span class='label'>Of Dataset</span></div>""", unsafe_allow_html=True)
-            with d3: st.markdown(f"""<div class='metric-card'><span class='val' style='color:#16a34a;'>{len(df)-df.duplicated().sum():,}</span><span class='label'>Unique Rows</span></div>""", unsafe_allow_html=True)
-            st.markdown("&nbsp;")
-            dup_contrib = []
-            for col in df.columns:
-                n = df.duplicated(subset=[col]).sum()
-                if n > 0:
-                    dup_contrib.append({"Column": col, "Duplicate Count": n, "% of Rows": round(n/len(df)*100,2)})
-            if dup_contrib:
-                st.dataframe(pd.DataFrame(dup_contrib).sort_values("Duplicate Count", ascending=False),
-                    use_container_width=True, height=280)
-            with st.expander("View duplicate rows"):
-                st.dataframe(dup_df, use_container_width=True, height=320)
-
-    with tab6:
-        st.markdown("<div class='section-header'><h3>Auto-generated Insights</h3></div>", unsafe_allow_html=True)
-        insights = []
-        insights.append(("📐 Dataset Size", f"Dataset has {len(df):,} rows and {len(df.columns)} columns.", "info"))
-        miss_pct = df.isnull().sum().sum()/df.size*100
-        if miss_pct == 0:
-            insights.append(("✅ No Missing Values", "Dataset is complete — no missing values detected.", "ok"))
-        elif miss_pct < 5:
-            insights.append(("⚠️ Low Missing Data", f"{miss_pct:.2f}% missing — small imputation recommended.", "warn"))
-        else:
-            insights.append(("❌ High Missing Data", f"{miss_pct:.2f}% missing — review and impute carefully.", "bad"))
-        dup_pct = df.duplicated().sum()/len(df)*100
-        if dup_pct > 0:
-            insights.append(("⚠️ Duplicates Found", f"{df.duplicated().sum()} duplicate rows ({dup_pct:.2f}%) — remove before modelling.", "warn"))
-        else:
-            insights.append(("✅ No Duplicates", "All rows are unique.", "ok"))
-        for col in cat_cols:
-            if df[col].nunique() > 50:
-                insights.append(("⚠️ High Cardinality", f"'{col}' has {df[col].nunique()} unique values — consider frequency or target encoding.", "warn"))
-        if len(num_cols) >= 2:
-            corr = df[num_cols].corr()
-            for i in range(len(corr.columns)):
-                for j in range(i+1, len(corr.columns)):
-                    v = corr.iloc[i,j]
-                    if abs(v) > 0.9:
-                        insights.append(("🔗 High Correlation", f"'{corr.columns[i]}' & '{corr.columns[j]}' highly correlated (r={v:.2f}) — consider dropping one.", "bad"))
-                    elif abs(v) > 0.7:
-                        insights.append(("🔗 Moderate Correlation", f"'{corr.columns[i]}' & '{corr.columns[j]}' (r={v:.2f}) — multicollinearity risk.", "warn"))
-        for col in num_cols:
-            sk = df[col].skew()
-            if abs(sk) > 1:
-                insights.append(("〰️ Skewed Column", f"'{col}' is highly skewed ({sk:.2f}) — apply log/box-cox transform.", "warn"))
-        for col in df.columns:
-            if df[col].nunique() == 1:
-                insights.append(("🚫 Constant Column", f"'{col}' has only 1 unique value — no information, drop it.", "bad"))
-        for col in cat_cols:
-            if df[col].nunique() == 2:
-                vc = df[col].value_counts(normalize=True)
-                if vc.iloc[0] > 0.85:
-                    insights.append(("⚖️ Class Imbalance", f"'{col}' is imbalanced — {vc.index[0]}: {vc.iloc[0]*100:.1f}% vs {vc.index[1]}: {vc.iloc[1]*100:.1f}%.", "warn"))
-        for title, msg, status in insights:
-            color  = {"ok":"#16a34a","warn":"#d97706","bad":"#dc2626","info":"#2563eb"}.get(status,"#374151")
-            bg     = {"ok":"#f0fdf4","warn":"#fffbeb","bad":"#fef2f2","info":"#eff6ff"}.get(status,"#f8f9fc")
-            border = {"ok":"#bbf7d0","warn":"#fde68a","bad":"#fecaca","info":"#bfdbfe"}.get(status,"#e2e6f0")
-            st.markdown(f"""
-            <div style='background:{bg};border:1px solid {border};border-left:4px solid {color};
-                 border-radius:10px;padding:14px 18px;margin-bottom:10px;'>
-                <div style='font-weight:600;font-size:0.9rem;color:{color};margin-bottom:4px;'>{title}</div>
-                <div style='font-size:0.85rem;color:#374151;'>{msg}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
     nav_buttons("Visualizations & Insights")
 
 # ═══════════════════════════════════════════════
