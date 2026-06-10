@@ -535,7 +535,8 @@ defaults = {
     "encoded_columns": [],
     "encoders": {},
     "target_col": "— None —",
-    "target_encoded": False,        # ADD THIS
+    "target_encoded": False,
+    "transformed_columns": [],   # ADD THIS
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -1922,9 +1923,11 @@ elif st.session_state.page == "Encoding & Outliers":
         else:
             st.dataframe(skew_df,use_container_width=True)
             transformed_suffixes = ("_log", "_sqrt", "_boxcox")
+            already_transformed = set(st.session_state.get("transformed_columns", []))
             num_cols_sk = [
                 c for c in df.select_dtypes(include=[np.number]).columns.tolist()
                 if not c.endswith(transformed_suffixes)
+                and c not in already_transformed
             ]
             n_r = (len(num_cols_sk)+1)//2
             try:
@@ -1966,6 +1969,7 @@ elif st.session_state.page == "Encoding & Outliers":
             skew_candidates = [
                 c for c in num_cols_sk
                 if not c.endswith(transformed_suffixes)
+                and c not in already_transformed
                 and abs(skew_dict_current.get(c, 0)) > 0.5
             ]
             
@@ -1990,10 +1994,12 @@ elif st.session_state.page == "Encoding & Outliers":
                         s = df[skew_col].dropna(); shift = abs(s.min())+1 if s.min()<=0 else 0
                         t, _ = boxcox(s+shift)
                         st.session_state.df.loc[s.index, skew_col+"_boxcox"] = t
+                    # Track which original columns have been transformed
+                    if skew_col not in st.session_state.transformed_columns:
+                        st.session_state.transformed_columns.append(skew_col)
                     save_operation(st.session_state.file_name, f"{transform} Transform: {skew_col}", "applied")
                     st.success(f"✅ {transform} transform applied."); st.rerun()
                 except Exception as e: st.error(str(e))
-
         nav_buttons("Encoding & Outliers")
 
 # ═══════════════════════════════════════════════
