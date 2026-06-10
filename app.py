@@ -1099,40 +1099,43 @@ elif st.session_state.page == "Encoding & Outliers":
             # ─────────────────────────────────────
             # Ordinal Encoding
             # ─────────────────────────────────────
-            if True:  # always show ordinal section
+            if True:
                 st.subheader("📈 Ordinal Encoding")
-                selected_cols = st.multiselect(
-                "Select columns (pick any categorical column)",
-                enc_candidates,  # show ALL remaining candidates
-                key="ordinal_select")
-                ord_str = st.text_input(
-                    "Order (comma-separated)",
-                    placeholder="low,medium,high",
-                    key="ordinal_order"
+                ord_col = st.selectbox(
+                    "Select column for Ordinal Encoding",
+                    ["— Select —"] + enc_candidates,
+                    key="ordinal_select"
                 )
-                if st.button("Apply Ordinal Encoding"):
-                    if not ord_str:
-                        st.warning("Please enter the ordinal order.")
-                    else:
-                        ordinal_order = [
-                            x.strip()
-                            for x in ord_str.split(",")
-                        ]
-                        for col in selected_cols:
-                            new_df, mapping = apply_encoding(
-                                st.session_state.processed_df,
-                                col,
-                                "ordinal",
-                                ordinal_order
-                            )
-                        st.session_state.processed_df = new_df
-                        st.session_state.df = new_df   # temporary compatibility
-                        if col not in st.session_state.encoded_columns:
-                            st.session_state.encoded_columns.append(col)
-                        st.success(
-                            f"✅ Encoded {len(selected_cols)} column(s)"
-                        )
-                        st.rerun()
+                if ord_col != "— Select —":
+                    existing_vals = sorted(encoding_df[ord_col].dropna().unique().tolist())
+                    st.info(f"Existing values in **{ord_col}**: `{existing_vals}`")
+                    ord_str = st.text_input(
+                        "Enter order (comma-separated, low→high)",
+                        placeholder="low,medium,high",
+                        key="ordinal_order"
+                    )
+                    if st.button("Apply Ordinal Encoding"):
+                        if not ord_str:
+                            st.warning("Please enter the ordinal order.")
+                        else:
+                            ordinal_order = [x.strip() for x in ord_str.split(",")]
+                            invalid_vals = [v for v in ordinal_order if v not in existing_vals]
+                            missing_vals = [v for v in existing_vals if v not in ordinal_order]
+                            if invalid_vals:
+                                st.error(f"❌ These values don't exist in column: `{invalid_vals}`")
+                            elif missing_vals:
+                                st.warning(f"⚠️ These column values are not in your order: `{missing_vals}`. They will become NaN.")
+                            else:
+                                new_df, mapping = apply_encoding(
+                                    st.session_state.processed_df,
+                                    ord_col, "ordinal", ordinal_order
+                                )
+                                st.session_state.processed_df = new_df
+                                st.session_state.df = new_df
+                                if ord_col not in st.session_state.encoded_columns:
+                                    st.session_state.encoded_columns.append(ord_col)
+                                st.success(f"✅ Ordinal encoding applied to '{ord_col}'")
+                                st.rerun()
             # ─────────────────────────────────────
             # One-Hot Encoding
             # ─────────────────────────────────────
