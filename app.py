@@ -23,21 +23,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Database ──────────────────────────────────
-DB_NAME = "dashboard.db"
-
-def init_database():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("""CREATE TABLE IF NOT EXISTS file_metadata
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, file_name TEXT,
-                  upload_date TEXT, file_size_kb REAL, row_count INTEGER, column_count INTEGER)""")
-    c.execute("""CREATE TABLE IF NOT EXISTS processing_history
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, file_name TEXT,
-                  operation TEXT, details TEXT, timestamp TEXT)""")
-    conn.commit(); conn.close()
-
-init_database()
 def nav_buttons(current_page):
     page_order = ["Upload & Inspect", "Statistics & EDA", "Recommendations", "Cleaning & Validation", "Encoding & Outliers", "Visualizations & Insights", "Export"]
     idx = page_order.index(current_page)
