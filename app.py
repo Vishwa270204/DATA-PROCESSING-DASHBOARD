@@ -892,7 +892,238 @@ if st.session_state.page == "Upload & Inspect":
                 st.warning("No processed dataset available.")
     nav_buttons("Upload & Inspect")  
 # ═══════════════════════════════════════════════
-# PAGE — RECOMMENDATIONS
+# PAGE 2 — STATISTICS & EDA
+# ═══════════════════════════════════════════════
+elif st.session_state.page == "Statistics & EDA":
+    st.markdown("""
+    <div class='main-header'>
+        <h1>📈 Statistics & EDA</h1>
+        <p>Exploratory Data Analysis — understand your dataset before cleaning</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.session_state.df is None:
+        st.warning("⚠️ Please upload a dataset first.")
+        st.stop()
+
+    df = st.session_state.df
+    ct = identify_column_types(df)
+    num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    cat_cols = df.select_dtypes(include="object").columns.tolist()
+
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📊 Overview","🔢 Numerical Stats","🏷️ Categorical Stats","🔗 Correlation","📐 Distributions"
+    ])
+
+    with tab1:
+        summary = get_dataset_summary(df)
+        st.markdown("<div class='section-header'><h3>Dataset Overview</h3></div>", unsafe_allow_html=True)
+        c1,c2,c3,c4,c5 = st.columns(5)
+        for w, label, val in zip(
+            [c1,c2,c3,c4,c5],
+            ["Rows","Columns","Missing %","Duplicates","Memory MB"],
+            [f"{summary['rows']:,}", str(summary['columns']),
+             f"{summary['missing_pct']}%", str(summary['duplicate_rows']),
+             f"{summary['memory_mb']}"]
+        ):
+            with w:
+                st.markdown(f"""<div class='metric-card'><span class='val'>{val}</span>
+                <span class='label'>{label}</span></div>""", unsafe_allow_html=True)
+
+        st.markdown("&nbsp;")
+        st.markdown("<div class='section-header'><h3>Column Type Breakdown</h3></div>", unsafe_allow_html=True)
+        type_data = {
+            "Numerical": len(ct["numerical"]),
+            "Categorical": len(ct["categorical"]),
+            "Boolean": len(ct["boolean"]),
+            "Datetime": len(ct["datetime"]),
+            "ID": len(ct["id"])
+        }
+        tc1, tc2 = st.columns([1,2])
+        with tc1:
+            for typ, count in type_data.items():
+                if count > 0:
+                    st.markdown(f"""
+                    <div style='display:flex;justify-content:space-between;padding:8px 12px;
+                         background:#f8f9fc;border-radius:8px;margin-bottom:6px;border:1px solid #e2e6f0;'>
+                        <span style='font-size:0.88rem;color:#374151;'>{typ}</span>
+                        <span style='font-family:"JetBrains Mono",monospace;font-weight:700;
+                              color:#2563eb;'>{count}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+        with tc2:
+            fig_type = go.Figure(go.Pie(
+                labels=list(type_data.keys()),
+                values=list(type_data.values()),
+                hole=0.5,
+                marker_colors=["#2563eb","#f59e0b","#10b981","#8b5cf6","#6b7280"]
+            ))
+            fig_type.update_layout(
+                template="plotly_white", height=280,
+                margin=dict(t=20,b=20,l=20,r=20),
+                paper_bgcolor="#ffffff",
+                showlegend=True
+            )
+            st.plotly_chart(fig_type, use_container_width=True)
+
+        st.markdown("<div class='section-header'><h3>Missing Value Heatmap</h3></div>", unsafe_allow_html=True)
+        miss_matrix = df.isnull().astype(int)
+        if miss_matrix.sum().sum() > 0:
+            fig_miss = go.Figure(go.Heatmap(
+                z=miss_matrix.T.values,
+                x=list(range(len(df))),
+                y=df.columns.tolist(),
+                colorscale=[[0,"#f0fdf4"],[1,"#dc2626"]],
+                showscale=False
+            ))
+            fig_miss.update_layout(
+                title="Red = Missing Value",
+                template="plotly_white", height=max(200, len(df.columns)*22),
+                paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc",
+                margin=dict(t=40,b=20,l=20,r=20)
+            )
+            st.plotly_chart(fig_miss, use_container_width=True)
+        else:
+            st.markdown("<span class='badge badge-success'>✅ No missing values — heatmap not needed</span>", unsafe_allow_html=True)
+
+    with tab2:
+        if not num_cols:
+            st.info("No numerical columns found.")
+        else:
+            st.markdown("<div class='section-header'><h3>Extended Numerical Statistics</h3></div>", unsafe_allow_html=True)
+            stats_df = descriptive_statistics(df)
+            st.dataframe(stats_df, use_container_width=True, height=350)
+
+            st.markdown("<div class='section-header'><h3>Skewness Summary</h3></div>", unsafe_allow_html=True)
+            skew_df = calculate_skewness(df)
+            def color_skew(val):
+                if isinstance(val, str):
+                    if "Highly" in val: return "color:#dc2626;font-weight:600"
+                    if "Moderately" in val: return "color:#d97706;font-weight:600"
+                    if "Normal" in val: return "color:#16a34a;font-weight:600"
+                return ""
+            st.dataframe(skew_df, use_container_width=True, height=300)
+
+            st.markdown("<div class='section-header'><h3>Box Plots</h3></div>", unsafe_allow_html=True)
+            n_cols_plot = len(num_cols)
+            fig_box = make_subplots(rows=1, cols=n_cols_plot, subplot_titles=num_cols,
+                horizontal_spacing=max(0.02, min(0.1, 0.8/max(n_cols_plot,1))))
+            for i, col in enumerate(num_cols, start=1):
+                fig_box.add_trace(go.Box(
+                    y=df[col].dropna(), name=col,
+                    marker_color="rgba(37,99,235,0.6)",
+                    line_color="#2563eb",
+                    boxpoints="outliers",
+                    marker=dict(color="rgba(220,38,38,0.8)", size=5),
+                    showlegend=False
+                ), row=1, col=i)
+            fig_box.update_layout(
+                title="Box Plots — Red dots = Outliers",
+                template="plotly_white", height=420,
+                paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc"
+            )
+            st.plotly_chart(fig_box, use_container_width=True)
+
+    with tab3:
+        if not cat_cols:
+            st.info("No categorical columns found.")
+        else:
+            st.markdown("<div class='section-header'><h3>Categorical Column Summary</h3></div>", unsafe_allow_html=True)
+            cat_summary = []
+            for col in cat_cols:
+                top_val = df[col].value_counts().index[0] if df[col].nunique() > 0 else "—"
+                top_pct = round(df[col].value_counts().iloc[0]/len(df)*100, 1) if df[col].nunique() > 0 else 0
+                cat_summary.append({
+                    "Column": col,
+                    "Unique Values": df[col].nunique(),
+                    "Most Frequent": str(top_val),
+                    "Frequency %": top_pct,
+                    "Missing %": round(df[col].isnull().sum()/len(df)*100, 2)
+                })
+            st.dataframe(pd.DataFrame(cat_summary), use_container_width=True, height=300)
+
+            st.markdown("<div class='section-header'><h3>Value Counts</h3></div>", unsafe_allow_html=True)
+            sel_cat = st.selectbox("Select column", cat_cols, key="eda_cat_col")
+            vc = df[sel_cat].value_counts().head(20)
+            fig_vc = go.Figure(go.Bar(
+                x=vc.index.astype(str), y=vc.values,
+                marker_color="#2563eb",
+                text=vc.values, textposition="outside"
+            ))
+            fig_vc.update_layout(
+                title=f"Value Counts: {sel_cat}",
+                template="plotly_white", height=350,
+                paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc"
+            )
+            st.plotly_chart(fig_vc, use_container_width=True)
+
+    with tab4:
+        num_df = df.select_dtypes(include=[np.number])
+        if num_df.shape[1] < 2:
+            st.info("Need at least 2 numerical columns for correlation.")
+        else:
+            st.markdown("<div class='section-header'><h3>Correlation with Selected Column</h3></div>", unsafe_allow_html=True)
+            corr = num_df.corr()
+            cols_list = corr.columns.tolist()
+            x_vals, y_vals, vals, texts = [], [], [], []
+            for i, c1 in enumerate(cols_list):
+                for j, c2 in enumerate(cols_list):
+                    if i != j:
+                        v = corr.loc[c1, c2]
+                        x_vals.append(c2)
+                        y_vals.append(c1)
+                        vals.append(v)
+                        texts.append(f"{c1} vs {c2}<br>r = {v:.3f}")
+
+            fig_corr = go.Figure(go.Scatter(
+                x=x_vals,
+                y=y_vals,
+                mode="markers",
+                marker=dict(
+                    size=[abs(v)*60+8 for v in vals],
+                    color=vals,
+                    colorscale=[
+                        [0.0,  "#dc2626"],
+                        [0.5,  "#f8f9fc"],
+                        [1.0,  "#2563eb"]
+                    ],
+                    cmin=-1, cmax=1,
+                    showscale=True,
+                    colorbar=dict(
+                        title="r",
+                        tickvals=[-1,-0.5,0,0.5,1],
+                        thickness=14,
+                        len=0.8
+                    ),
+                    line=dict(width=1, color="#e2e6f0")
+                ),
+                text=texts,
+                hoverinfo="text"
+            ))
+
+            # add correlation value labels
+            for x, y, v in zip(x_vals, y_vals, vals):
+                fig_corr.add_annotation(
+                    x=x, y=y,
+                    text=f"{v:.2f}",
+                    showarrow=False,
+                    font=dict(size=9, color="#111827" if abs(v) < 0.6 else "white")
+                )
+
+            fig_corr.update_layout(
+                title="Correlation Bubble Chart — All vs All",
+                template="plotly_white",
+                height=max(400, len(cols_list)*50+100),
+                paper_bgcolor="#ffffff",
+                plot_bgcolor="#f8f9fc",
+                xaxis=dict(tickangle=-35, title=""),
+                yaxis=dict(title="", autorange="reversed"),
+                margin=dict(t=60,b=80,l=120,r=40)
+            )
+            st.plotly_chart(fig_corr, use_container_width=True)
+    nav_buttons("Statistics & EDA")
+# ═══════════════════════════════════════════════
+# PAGE 3 — RECOMMENDATIONS
 # ═══════════════════════════════════════════════
 elif st.session_state.page == "Recommendations":
     st.markdown("""
@@ -1101,7 +1332,7 @@ elif st.session_state.page == "Recommendations":
 
     nav_buttons("Recommendations")
 # ═══════════════════════════════════════════════
-# PAGE 2 — CLEANING & VALIDATION
+# PAGE 4 — CLEANING & VALIDATION
 # ═══════════════════════════════════════════════
 elif st.session_state.page == "Cleaning & Validation":
     st.markdown("""
@@ -1290,7 +1521,7 @@ elif st.session_state.page == "Cleaning & Validation":
                                        file_name="invalid_rows.csv", mime="text/csv")
     nav_buttons("Cleaning & Validation")
 # ═══════════════════════════════════════════════
-# PAGE 3 — ENCODING & OUTLIERS
+# PAGE 5 — ENCODING & OUTLIERS
 # ═══════════════════════════════════════════════
 elif st.session_state.page == "Encoding & Outliers":
     st.markdown("""
@@ -1754,14 +1985,15 @@ elif st.session_state.page == "Encoding & Outliers":
             except Exception as e:
                 st.error(f"Distribution chart error: {e}")
     nav_buttons("Encoding & Outliers")
+
 # ═══════════════════════════════════════════════
-# PAGE 4 — STATISTICS & EXPORT
+# PAGE — VISUALIZATIONS & INSIGHTS
 # ═══════════════════════════════════════════════
-elif st.session_state.page == "Statistics & EDA":
+elif st.session_state.page == "Visualizations & Insights":
     st.markdown("""
     <div class='main-header'>
-        <h1>📈 Statistics & EDA</h1>
-        <p>Exploratory Data Analysis — understand your dataset before cleaning</p>
+        <h1>📊 Visualizations & Insights</h1>
+        <p>Interactive charts and data insights</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1774,214 +2006,288 @@ elif st.session_state.page == "Statistics & EDA":
     num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     cat_cols = df.select_dtypes(include="object").columns.tolist()
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📊 Overview","🔢 Numerical Stats","🏷️ Categorical Stats","🔗 Correlation","📐 Distributions"
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "📈 Custom Plot","🔵 Scatter","📦 Box & Violin",
+        "📊 Category Breakdown","🔥 Duplicate Info","💡 Auto Insights"
     ])
 
     with tab1:
-        summary = get_dataset_summary(df)
-        st.markdown("<div class='section-header'><h3>Dataset Overview</h3></div>", unsafe_allow_html=True)
-        c1,c2,c3,c4,c5 = st.columns(5)
-        for w, label, val in zip(
-            [c1,c2,c3,c4,c5],
-            ["Rows","Columns","Missing %","Duplicates","Memory MB"],
-            [f"{summary['rows']:,}", str(summary['columns']),
-             f"{summary['missing_pct']}%", str(summary['duplicate_rows']),
-             f"{summary['memory_mb']}"]
-        ):
-            with w:
-                st.markdown(f"""<div class='metric-card'><span class='val'>{val}</span>
-                <span class='label'>{label}</span></div>""", unsafe_allow_html=True)
-
-        st.markdown("&nbsp;")
-        st.markdown("<div class='section-header'><h3>Column Type Breakdown</h3></div>", unsafe_allow_html=True)
-        type_data = {
-            "Numerical": len(ct["numerical"]),
-            "Categorical": len(ct["categorical"]),
-            "Boolean": len(ct["boolean"]),
-            "Datetime": len(ct["datetime"]),
-            "ID": len(ct["id"])
-        }
-        tc1, tc2 = st.columns([1,2])
-        with tc1:
-            for typ, count in type_data.items():
-                if count > 0:
-                    st.markdown(f"""
-                    <div style='display:flex;justify-content:space-between;padding:8px 12px;
-                         background:#f8f9fc;border-radius:8px;margin-bottom:6px;border:1px solid #e2e6f0;'>
-                        <span style='font-size:0.88rem;color:#374151;'>{typ}</span>
-                        <span style='font-family:"JetBrains Mono",monospace;font-weight:700;
-                              color:#2563eb;'>{count}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-        with tc2:
-            fig_type = go.Figure(go.Pie(
-                labels=list(type_data.keys()),
-                values=list(type_data.values()),
-                hole=0.5,
-                marker_colors=["#2563eb","#f59e0b","#10b981","#8b5cf6","#6b7280"]
-            ))
-            fig_type.update_layout(
-                template="plotly_white", height=280,
-                margin=dict(t=20,b=20,l=20,r=20),
-                paper_bgcolor="#ffffff",
-                showlegend=True
-            )
-            st.plotly_chart(fig_type, use_container_width=True)
-
-        st.markdown("<div class='section-header'><h3>Missing Value Heatmap</h3></div>", unsafe_allow_html=True)
-        miss_matrix = df.isnull().astype(int)
-        if miss_matrix.sum().sum() > 0:
-            fig_miss = go.Figure(go.Heatmap(
-                z=miss_matrix.T.values,
-                x=list(range(len(df))),
-                y=df.columns.tolist(),
-                colorscale=[[0,"#f0fdf4"],[1,"#dc2626"]],
-                showscale=False
-            ))
-            fig_miss.update_layout(
-                title="Red = Missing Value",
-                template="plotly_white", height=max(200, len(df.columns)*22),
-                paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc",
-                margin=dict(t=40,b=20,l=20,r=20)
-            )
-            st.plotly_chart(fig_miss, use_container_width=True)
-        else:
-            st.markdown("<span class='badge badge-success'>✅ No missing values — heatmap not needed</span>", unsafe_allow_html=True)
+        st.markdown("<div class='section-header'><h3>Custom Chart Builder</h3></div>", unsafe_allow_html=True)
+        cp1, cp2, cp3 = st.columns(3)
+        with cp1:
+            chart_type = st.selectbox("Chart Type", ["Line","Bar","Histogram","Area"], key="custom_chart_type")
+        with cp2:
+            x_col = st.selectbox("X Axis", df.columns.tolist(), key="custom_x")
+        with cp3:
+            y_col = st.selectbox("Y Axis", ["— None —"] + num_cols, key="custom_y")
+        color_col = st.selectbox("Color by (optional)", ["— None —"] + cat_cols, key="custom_color")
+        color_val = None if color_col == "— None —" else color_col
+        y_val = None if y_col == "— None —" else y_col
+        try:
+            if chart_type == "Line":
+                fig = px.line(df, x=x_col, y=y_val, color=color_val, template="plotly_white", height=420)
+            elif chart_type == "Bar":
+                fig = px.bar(df, x=x_col, y=y_val, color=color_val, template="plotly_white", height=420, barmode="group")
+            elif chart_type == "Histogram":
+                fig = px.histogram(df, x=x_col, color=color_val, template="plotly_white", height=420, nbins=30)
+            elif chart_type == "Area":
+                fig = px.area(df, x=x_col, y=y_val, color=color_val, template="plotly_white", height=420)
+            fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.error(f"Chart error: {e}")
 
     with tab2:
-        if not num_cols:
-            st.info("No numerical columns found.")
+        st.markdown("<div class='section-header'><h3>Scatter Plot</h3></div>", unsafe_allow_html=True)
+        if len(num_cols) < 2:
+            st.info("Need at least 2 numerical columns.")
         else:
-            st.markdown("<div class='section-header'><h3>Extended Numerical Statistics</h3></div>", unsafe_allow_html=True)
-            stats_df = descriptive_statistics(df)
-            st.dataframe(stats_df, use_container_width=True, height=350)
-
-            st.markdown("<div class='section-header'><h3>Skewness Summary</h3></div>", unsafe_allow_html=True)
-            skew_df = calculate_skewness(df)
-            def color_skew(val):
-                if isinstance(val, str):
-                    if "Highly" in val: return "color:#dc2626;font-weight:600"
-                    if "Moderately" in val: return "color:#d97706;font-weight:600"
-                    if "Normal" in val: return "color:#16a34a;font-weight:600"
-                return ""
-            st.dataframe(skew_df, use_container_width=True, height=300)
-
-            st.markdown("<div class='section-header'><h3>Box Plots</h3></div>", unsafe_allow_html=True)
-            n_cols_plot = len(num_cols)
-            fig_box = make_subplots(rows=1, cols=n_cols_plot, subplot_titles=num_cols,
-                horizontal_spacing=max(0.02, min(0.1, 0.8/max(n_cols_plot,1))))
-            for i, col in enumerate(num_cols, start=1):
-                fig_box.add_trace(go.Box(
-                    y=df[col].dropna(), name=col,
-                    marker_color="rgba(37,99,235,0.6)",
-                    line_color="#2563eb",
-                    boxpoints="outliers",
-                    marker=dict(color="rgba(220,38,38,0.8)", size=5),
-                    showlegend=False
-                ), row=1, col=i)
-            fig_box.update_layout(
-                title="Box Plots — Red dots = Outliers",
-                template="plotly_white", height=420,
-                paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc"
-            )
-            st.plotly_chart(fig_box, use_container_width=True)
+            sc1, sc2, sc3 = st.columns(3)
+            with sc1: sx = st.selectbox("X Axis", num_cols, key="scatter_x")
+            with sc2: sy = st.selectbox("Y Axis", num_cols[::-1], key="scatter_y")
+            with sc3: sc = st.selectbox("Color by", ["— None —"] + cat_cols + num_cols, key="scatter_color")
+            sc_size = st.selectbox("Size by (optional)", ["— None —"] + num_cols, key="scatter_size")
+            sc_color = None if sc == "— None —" else sc
+            sc_size_val = None if sc_size == "— None —" else sc_size
+            try:
+                fig_sc = px.scatter(df, x=sx, y=sy, color=sc_color, size=sc_size_val,
+                    template="plotly_white", height=450,
+                    trendline="ols" if sc_color is None else None, opacity=0.7)
+                fig_sc.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
+                st.plotly_chart(fig_sc, use_container_width=True)
+                r = df[[sx,sy]].dropna().corr().iloc[0,1]
+                direction = "positive" if r > 0 else "negative"
+                strength  = "strong" if abs(r) > 0.7 else "moderate" if abs(r) > 0.4 else "weak"
+                st.markdown(f"""
+                <div style='background:#f8f9fc;border:1px solid #e2e6f0;border-radius:8px;
+                     padding:12px 16px;font-size:0.88rem;color:#374151;'>
+                    <b>Pearson r = {r:.4f}</b> — {strength} {direction} correlation
+                </div>
+                """, unsafe_allow_html=True)
+            except Exception as e:
+                st.error(f"Scatter error: {e}")
 
     with tab3:
-        if not cat_cols:
-            st.info("No categorical columns found.")
+        st.markdown("<div class='section-header'><h3>Box & Violin Plots</h3></div>", unsafe_allow_html=True)
+        if not num_cols:
+            st.info("No numerical columns.")
         else:
-            st.markdown("<div class='section-header'><h3>Categorical Column Summary</h3></div>", unsafe_allow_html=True)
-            cat_summary = []
-            for col in cat_cols:
-                top_val = df[col].value_counts().index[0] if df[col].nunique() > 0 else "—"
-                top_pct = round(df[col].value_counts().iloc[0]/len(df)*100, 1) if df[col].nunique() > 0 else 0
-                cat_summary.append({
-                    "Column": col,
-                    "Unique Values": df[col].nunique(),
-                    "Most Frequent": str(top_val),
-                    "Frequency %": top_pct,
-                    "Missing %": round(df[col].isnull().sum()/len(df)*100, 2)
-                })
-            st.dataframe(pd.DataFrame(cat_summary), use_container_width=True, height=300)
-
-            st.markdown("<div class='section-header'><h3>Value Counts</h3></div>", unsafe_allow_html=True)
-            sel_cat = st.selectbox("Select column", cat_cols, key="eda_cat_col")
-            vc = df[sel_cat].value_counts().head(20)
-            fig_vc = go.Figure(go.Bar(
-                x=vc.index.astype(str), y=vc.values,
-                marker_color="#2563eb",
-                text=vc.values, textposition="outside"
-            ))
-            fig_vc.update_layout(
-                title=f"Value Counts: {sel_cat}",
-                template="plotly_white", height=350,
-                paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc"
-            )
-            st.plotly_chart(fig_vc, use_container_width=True)
+            bv1, bv2, bv3 = st.columns(3)
+            with bv1: bv_col   = st.selectbox("Numerical column", num_cols, key="bv_col")
+            with bv2: bv_group = st.selectbox("Group by (optional)", ["— None —"] + cat_cols, key="bv_group")
+            with bv3: bv_type  = st.radio("Plot type", ["Box","Violin","Both"], key="bv_type", horizontal=True)
+            bv_group_val = None if bv_group == "— None —" else bv_group
+            try:
+                if bv_type == "Box":
+                    fig_bv = px.box(df, y=bv_col, x=bv_group_val, color=bv_group_val,
+                        template="plotly_white", height=420, points="outliers")
+                elif bv_type == "Violin":
+                    fig_bv = px.violin(df, y=bv_col, x=bv_group_val, color=bv_group_val,
+                        template="plotly_white", height=420, box=True, points="outliers")
+                else:
+                    fig_bv = make_subplots(rows=1, cols=2,
+                        subplot_titles=[f"Box — {bv_col}", f"Violin — {bv_col}"])
+                    for val in (df[bv_group_val].unique() if bv_group_val else [None]):
+                        subset = df[df[bv_group_val]==val][bv_col].dropna() if bv_group_val else df[bv_col].dropna()
+                        name   = str(val) if val is not None else bv_col
+                        fig_bv.add_trace(go.Box(y=subset, name=name, boxpoints="outliers"), row=1, col=1)
+                        fig_bv.add_trace(go.Violin(y=subset, name=name, box_visible=True), row=1, col=2)
+                    fig_bv.update_layout(template="plotly_white", height=420, showlegend=False)
+                fig_bv.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
+                st.plotly_chart(fig_bv, use_container_width=True)
+            except Exception as e:
+                st.error(f"Plot error: {e}")
 
     with tab4:
-        num_df = df.select_dtypes(include=[np.number])
-        if num_df.shape[1] < 2:
-            st.info("Need at least 2 numerical columns for correlation.")
+        st.markdown("<div class='section-header'><h3>Category Breakdown</h3></div>", unsafe_allow_html=True)
+        if not cat_cols:
+            st.info("No categorical columns.")
         else:
-            st.markdown("<div class='section-header'><h3>Correlation with Selected Column</h3></div>", unsafe_allow_html=True)
-            corr = num_df.corr()
-            cols_list = corr.columns.tolist()
-            x_vals, y_vals, vals, texts = [], [], [], []
-            for i, c1 in enumerate(cols_list):
-                for j, c2 in enumerate(cols_list):
-                    if i != j:
-                        v = corr.loc[c1, c2]
-                        x_vals.append(c2)
-                        y_vals.append(c1)
-                        vals.append(v)
-                        texts.append(f"{c1} vs {c2}<br>r = {v:.3f}")
+            cb1, cb2, cb3 = st.columns(3)
+            with cb1: cat_sel  = st.selectbox("Categorical column", cat_cols, key="cat_break_col")
+            with cb2: num_sel  = st.selectbox("Numerical column", ["— Count —"] + num_cols, key="cat_break_num")
+            with cb3: cat_type = st.radio("Chart", ["Bar","Pie","Donut"], key="cat_break_type", horizontal=True)
+            try:
+                if num_sel == "— Count —":
+                    data = df[cat_sel].value_counts().reset_index()
+                    data.columns = [cat_sel, "Count"]
+                else:
+                    data = df.groupby(cat_sel)[num_sel].mean().reset_index()
+                    data.columns = [cat_sel, num_sel]
+                if cat_type == "Bar":
+                    fig_cb = px.bar(data, x=cat_sel, y=data.columns[1],
+                        template="plotly_white", height=400,
+                        color=data.columns[1],
+                        color_continuous_scale=["#bfdbfe","#2563eb"],
+                        text=data.columns[1])
+                    fig_cb.update_traces(texttemplate="%{text:.2f}", textposition="outside")
+                elif cat_type == "Pie":
+                    fig_cb = px.pie(data, names=cat_sel, values=data.columns[1],
+                        template="plotly_white", height=400)
+                else:
+                    fig_cb = px.pie(data, names=cat_sel, values=data.columns[1],
+                        hole=0.45, template="plotly_white", height=400)
+                fig_cb.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
+                st.plotly_chart(fig_cb, use_container_width=True)
+            except Exception as e:
+                st.error(f"Chart error: {e}")
 
-            fig_corr = go.Figure(go.Scatter(
-                x=x_vals,
-                y=y_vals,
-                mode="markers",
-                marker=dict(
-                    size=[abs(v)*60+8 for v in vals],
-                    color=vals,
-                    colorscale=[
-                        [0.0,  "#dc2626"],
-                        [0.5,  "#f8f9fc"],
-                        [1.0,  "#2563eb"]
-                    ],
-                    cmin=-1, cmax=1,
-                    showscale=True,
-                    colorbar=dict(
-                        title="r",
-                        tickvals=[-1,-0.5,0,0.5,1],
-                        thickness=14,
-                        len=0.8
-                    ),
-                    line=dict(width=1, color="#e2e6f0")
-                ),
-                text=texts,
-                hoverinfo="text"
-            ))
+    with tab5:
+        st.markdown("<div class='section-header'><h3>Duplicate Row Analysis</h3></div>", unsafe_allow_html=True)
+        dup_df = df[df.duplicated(keep=False)]
+        if dup_df.empty:
+            st.markdown("<span class='badge badge-success'>✅ No duplicate rows found</span>", unsafe_allow_html=True)
+        else:
+            d1, d2, d3 = st.columns(3)
+            with d1: st.markdown(f"""<div class='metric-card'><span class='val' style='color:#dc2626;'>{df.duplicated().sum()}</span><span class='label'>Duplicate Rows</span></div>""", unsafe_allow_html=True)
+            with d2: st.markdown(f"""<div class='metric-card'><span class='val'>{round(df.duplicated().sum()/len(df)*100,2)}%</span><span class='label'>Of Dataset</span></div>""", unsafe_allow_html=True)
+            with d3: st.markdown(f"""<div class='metric-card'><span class='val' style='color:#16a34a;'>{len(df)-df.duplicated().sum():,}</span><span class='label'>Unique Rows</span></div>""", unsafe_allow_html=True)
+            st.markdown("&nbsp;")
+            dup_contrib = []
+            for col in df.columns:
+                n = df.duplicated(subset=[col]).sum()
+                if n > 0:
+                    dup_contrib.append({"Column": col, "Duplicate Count": n, "% of Rows": round(n/len(df)*100,2)})
+            if dup_contrib:
+                st.dataframe(pd.DataFrame(dup_contrib).sort_values("Duplicate Count", ascending=False),
+                    use_container_width=True, height=280)
+            with st.expander("View duplicate rows"):
+                st.dataframe(dup_df, use_container_width=True, height=320)
 
-            # add correlation value labels
-            for x, y, v in zip(x_vals, y_vals, vals):
-                fig_corr.add_annotation(
-                    x=x, y=y,
-                    text=f"{v:.2f}",
-                    showarrow=False,
-                    font=dict(size=9, color="#111827" if abs(v) < 0.6 else "white")
-                )
+    with tab6:
+        st.markdown("<div class='section-header'><h3>Auto-generated Insights</h3></div>", unsafe_allow_html=True)
+        insights = []
+        insights.append(("📐 Dataset Size", f"Dataset has {len(df):,} rows and {len(df.columns)} columns.", "info"))
+        miss_pct = df.isnull().sum().sum()/df.size*100
+        if miss_pct == 0:
+            insights.append(("✅ No Missing Values", "Dataset is complete — no missing values detected.", "ok"))
+        elif miss_pct < 5:
+            insights.append(("⚠️ Low Missing Data", f"{miss_pct:.2f}% missing — small imputation recommended.", "warn"))
+        else:
+            insights.append(("❌ High Missing Data", f"{miss_pct:.2f}% missing — review and impute carefully.", "bad"))
+        dup_pct = df.duplicated().sum()/len(df)*100
+        if dup_pct > 0:
+            insights.append(("⚠️ Duplicates Found", f"{df.duplicated().sum()} duplicate rows ({dup_pct:.2f}%) — remove before modelling.", "warn"))
+        else:
+            insights.append(("✅ No Duplicates", "All rows are unique.", "ok"))
+        for col in cat_cols:
+            if df[col].nunique() > 50:
+                insights.append(("⚠️ High Cardinality", f"'{col}' has {df[col].nunique()} unique values — consider frequency or target encoding.", "warn"))
+        if len(num_cols) >= 2:
+            corr = df[num_cols].corr()
+            for i in range(len(corr.columns)):
+                for j in range(i+1, len(corr.columns)):
+                    v = corr.iloc[i,j]
+                    if abs(v) > 0.9:
+                        insights.append(("🔗 High Correlation", f"'{corr.columns[i]}' & '{corr.columns[j]}' highly correlated (r={v:.2f}) — consider dropping one.", "bad"))
+                    elif abs(v) > 0.7:
+                        insights.append(("🔗 Moderate Correlation", f"'{corr.columns[i]}' & '{corr.columns[j]}' (r={v:.2f}) — multicollinearity risk.", "warn"))
+        for col in num_cols:
+            sk = df[col].skew()
+            if abs(sk) > 1:
+                insights.append(("〰️ Skewed Column", f"'{col}' is highly skewed ({sk:.2f}) — apply log/box-cox transform.", "warn"))
+        for col in df.columns:
+            if df[col].nunique() == 1:
+                insights.append(("🚫 Constant Column", f"'{col}' has only 1 unique value — no information, drop it.", "bad"))
+        for col in cat_cols:
+            if df[col].nunique() == 2:
+                vc = df[col].value_counts(normalize=True)
+                if vc.iloc[0] > 0.85:
+                    insights.append(("⚖️ Class Imbalance", f"'{col}' is imbalanced — {vc.index[0]}: {vc.iloc[0]*100:.1f}% vs {vc.index[1]}: {vc.iloc[1]*100:.1f}%.", "warn"))
+        for title, msg, status in insights:
+            color  = {"ok":"#16a34a","warn":"#d97706","bad":"#dc2626","info":"#2563eb"}.get(status,"#374151")
+            bg     = {"ok":"#f0fdf4","warn":"#fffbeb","bad":"#fef2f2","info":"#eff6ff"}.get(status,"#f8f9fc")
+            border = {"ok":"#bbf7d0","warn":"#fde68a","bad":"#fecaca","info":"#bfdbfe"}.get(status,"#e2e6f0")
+            st.markdown(f"""
+            <div style='background:{bg};border:1px solid {border};border-left:4px solid {color};
+                 border-radius:10px;padding:14px 18px;margin-bottom:10px;'>
+                <div style='font-weight:600;font-size:0.9rem;color:{color};margin-bottom:4px;'>{title}</div>
+                <div style='font-size:0.85rem;color:#374151;'>{msg}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-            fig_corr.update_layout(
-                title="Correlation Bubble Chart — All vs All",
-                template="plotly_white",
-                height=max(400, len(cols_list)*50+100),
-                paper_bgcolor="#ffffff",
-                plot_bgcolor="#f8f9fc",
-                xaxis=dict(tickangle=-35, title=""),
-                yaxis=dict(title="", autorange="reversed"),
-                margin=dict(t=60,b=80,l=120,r=40)
-            )
-            st.plotly_chart(fig_corr, use_container_width=True)
-    nav_buttons("Statistics & EDA")
+    nav_buttons("Visualizations & Insights")
+
+# ═══════════════════════════════════════════════
+# PAGE — EXPORT
+# ═══════════════════════════════════════════════
+elif st.session_state.page == "Export":
+    st.markdown("""
+    <div class='main-header'>
+        <h1>📦 Export</h1>
+        <p>Download your cleaned and processed dataset</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.session_state.df is None:
+        st.warning("⚠️ Please upload a dataset first.")
+        st.stop()
+
+    df = st.session_state.df
+    st.markdown(f"""
+    <div style='padding:20px;background:#eff6ff;border:1px solid #bfdbfe;
+         border-radius:12px;margin-bottom:24px;'>
+        <div style='font-size:0.8rem;color:#6b7280;margin-bottom:6px;'>READY TO EXPORT</div>
+        <div style='font-family:"JetBrains Mono",monospace;font-size:1.4rem;
+             color:#2563eb;font-weight:700;'>{len(df):,} rows × {len(df.columns)} columns</div>
+        <div style='font-size:0.85rem;color:#6b7280;margin-top:4px;'>File: {st.session_state.file_name}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["💾 Download","👁️ Preview","📜 History"])
+
+    with tab1:
+        c1e, c2e = st.columns(2)
+        with c1e:
+            st.markdown("**📄 CSV**")
+            st.download_button("⬇️ Download CSV",
+                data=export_csv(df),
+                file_name=f"processed_{st.session_state.file_name.rsplit('.',1)[0]}.csv",
+                mime="text/csv", key="export_csv_btn")
+        with c2e:
+            st.markdown("**📊 Excel**")
+            try:
+                st.download_button("⬇️ Download Excel",
+                    data=export_excel(df),
+                    file_name=f"processed_{st.session_state.file_name.rsplit('.',1)[0]}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="export_xlsx_btn")
+            except Exception as e:
+                st.error(f"Excel export error: {e}")
+        st.markdown("---")
+        st.markdown("**📄 Processed / Encoded Dataset**")
+        c3e, c4e = st.columns(2)
+        with c3e:
+            if st.session_state.get("processed_df") is not None:
+                st.download_button("⬇️ Download Encoded CSV",
+                    data=export_csv(st.session_state.processed_df),
+                    file_name=f"encoded_{st.session_state.file_name.rsplit('.',1)[0]}.csv",
+                    mime="text/csv", key="export_encoded_csv")
+        with c4e:
+            if st.session_state.get("processed_df") is not None:
+                try:
+                    st.download_button("⬇️ Download Encoded Excel",
+                        data=export_excel(st.session_state.processed_df),
+                        file_name=f"encoded_{st.session_state.file_name.rsplit('.',1)[0]}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="export_encoded_xlsx")
+                except Exception as e:
+                    st.error(f"Excel export error: {e}")
+
+    with tab2:
+        st.markdown("**Original / Cleaned Dataset (first 20 rows)**")
+        st.dataframe(df.head(20), use_container_width=True, height=320)
+        if st.session_state.get("processed_df") is not None:
+            st.markdown("**Encoded / Processed Dataset (first 20 rows)**")
+            st.dataframe(st.session_state.processed_df.head(20), use_container_width=True, height=320)
+
+    with tab3:
+        hist = get_processing_history(st.session_state.file_name)
+        if hist.empty:
+            st.info("No operations recorded yet.")
+        else:
+            st.dataframe(hist[["timestamp","operation","details"]].rename(columns={
+                "timestamp":"Timestamp","operation":"Operation","details":"Details"
+            }), use_container_width=True, height=400)
+
+    nav_buttons("Export")
