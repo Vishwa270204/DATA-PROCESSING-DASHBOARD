@@ -38,7 +38,30 @@ def init_database():
     conn.commit(); conn.close()
 
 init_database()
-
+def nav_buttons(current_page):
+    page_order = ["Upload & Inspect", "Cleaning & Validation", "Encoding & Outliers", "Statistics & Export"]
+    idx = page_order.index(current_page)
+    st.markdown("---")
+    c_prev, c_save, c_next = st.columns([1, 2, 1])
+    with c_prev:
+        if idx > 0:
+            if st.button(f"⬅️ Previous: {page_order[idx-1]}", key="nav_prev"):
+                st.session_state.page = page_order[idx-1]
+                st.rerun()
+    with c_save:
+        if st.session_state.df is not None:
+            st.download_button(
+                "💾 Save Current Dataset",
+                data=export_csv(st.session_state.df),
+                file_name=f"saved_{st.session_state.file_name.rsplit('.',1)[0]}.csv",
+                mime="text/csv",
+                key="nav_save"
+            )
+    with c_next:
+        if idx < len(page_order) - 1:
+            if st.button(f"Next: {page_order[idx+1]} ➡️", key="nav_next"):
+                st.session_state.page = page_order[idx+1]
+                st.rerun()
 def save_operation(file_name, operation, details):
     try:
         conn = sqlite3.connect(DB_NAME)
@@ -834,6 +857,7 @@ if st.session_state.page == "Upload & Inspect":
                 )
             else:
                 st.warning("No processed dataset available.")
+    nav_buttons("Upload & Inspect")   # ← add this
 # ═══════════════════════════════════════════════
 # PAGE 2 — CLEANING & VALIDATION
 # ═══════════════════════════════════════════════
