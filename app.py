@@ -44,7 +44,7 @@ def nav_buttons(current_page):
     slug = current_page.replace(" ", "_").replace("&", "and")
     st.markdown("---")
     c_prev, c_mid, c_next = st.columns([2, 6, 2])
-        with c_prev:
+    with c_prev:
             if idx > 0:
                 st.markdown(f"""
                 <style>
@@ -57,7 +57,7 @@ def nav_buttons(current_page):
                     st.session_state.page = page_order[idx-1]
                     st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
-        with c_next:
+    with c_next:
             if idx < len(page_order) - 1:
                 st.markdown(f"""
                 <style>
@@ -69,7 +69,8 @@ def nav_buttons(current_page):
                     st.session_state.page = page_order[idx+1]
                     st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
-def save_operation(file_name, operation, details):
+    
+    def save_operation(file_name, operation, details):
     try:
         conn = sqlite3.connect(DB_NAME)
         conn.execute("INSERT INTO processing_history (file_name,operation,details,timestamp) VALUES (?,?,?,?)",
