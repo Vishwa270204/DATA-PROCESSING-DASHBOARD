@@ -1368,7 +1368,15 @@ elif st.session_state.page == "Encoding & Outliers":
                 st.error(f"Density plot error: {e}")
 
             st.markdown("<div class='section-header'><h3>Treat Outliers</h3></div>", unsafe_allow_html=True)
-            selected_col = st.selectbox("Select column to treat", num_cols, key="out_treat_col")
+            cols_with_outliers = [c for c in num_cols if outlier_data.get(c, {}).get("count", 0) > 0]
+            if not cols_with_outliers:
+                st.markdown("<span class='badge badge-success'>✅ No outliers found in any column</span>", unsafe_allow_html=True)
+                selected_col = None
+            else:
+                selected_col = st.selectbox(
+                    f"Select column to treat ({len(cols_with_outliers)} columns with outliers)",
+                    cols_with_outliers,
+                    key="out_treat_col")
             if selected_col:
                 ca, cb, cc = st.columns(3)
                 method_key = "iqr" if use_iqr else "zscore"
