@@ -574,7 +574,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    pages = ["📁 Upload & Inspect","📈 Statistics & EDA","🤖 Recommendations","🧹 Cleaning & Validation","🔠 Encoding & Outliers","📊 Visualizations & Insights","📦 Export"]
+    pages = ["📁 Upload & Inspect","📈 Statistics & EDA","💡 Recommendations","🧹 Cleaning & Validation","🔠 Encoding & Outliers","📊 Visualizations & Insights","📦 Export"]
     page_map = {p: p.split(" ", 1)[1] for p in pages}
     page_keys = list(page_map.values())
     selected = st.radio("Navigation", pages, label_visibility="collapsed",
