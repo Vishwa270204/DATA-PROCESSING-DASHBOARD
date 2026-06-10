@@ -2226,7 +2226,7 @@ elif st.session_state.page == "Export":
                         st.session_state.export_done = True
                         st.rerun()
                     except Exception as e:
-                    st.error(f"Excel export error: {e}")
+                        st.error(f"Excel export error: {e}")
 
     with tab2:
         st.markdown("**Original / Cleaned Dataset (first 20 rows)**")
