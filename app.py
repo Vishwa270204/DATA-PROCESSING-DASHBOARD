@@ -1047,10 +1047,6 @@ elif st.session_state.page == "Cleaning & Validation":
                     st.download_button("⬇️ Export Invalid Rows",
                                        data=invalid_df.to_csv(index=False).encode("utf-8"),
                                        file_name="invalid_rows.csv", mime="text/csv")
-   
-        elif st.session_state.page == "Cleaning & Validation":
-            pass  # dummy to close the block
-if st.session_state.page == "Cleaning & Validation":
     nav_buttons("Cleaning & Validation")
 # ═══════════════════════════════════════════════
 # PAGE 3 — ENCODING & OUTLIERS
