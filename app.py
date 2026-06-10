@@ -1697,4 +1697,4 @@ elif st.session_state.page == "Statistics & Export":
         st.markdown("&nbsp;")
         with st.expander("Preview export (first 20 rows)"):
             st.dataframe(df.head(20), use_container_width=True)
- nav_buttons("Statistics & Export")
+nav_buttons("Statistics & Export")
