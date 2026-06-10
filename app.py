@@ -82,7 +82,7 @@ def nav_buttons(current_page):
             if st.button(next_label, key=f"nav_next_{slug}", type="secondary"):
                 st.session_state.page = page_order[idx+1]
                 st.rerun()
-            st.markdown(f"""
+            (f"""
             <style>
             div[data-testid="column"]:last-child .stButton button {{
                 background: linear-gradient(135deg,#059669,#10b981) !important;
@@ -505,7 +505,7 @@ def export_excel(df):
     return out.getvalue()
 
 # ── CSS ───────────────────────────────────────
-st.markdown("""
+("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
 :root {
@@ -567,7 +567,7 @@ for k, v in defaults.items():
 
 # ── Sidebar ───────────────────────────────────
 with st.sidebar:
-    st.markdown("""
+    ("""
     <div style='text-align:center;padding:20px 0 24px;'>
         <div style='font-family:"Inter",sans-serif;font-size:1.3rem;font-weight:700;color:#2563eb;'>📊 DataPrep Pro</div>
         <div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>Smart Preprocessing Dashboard</div>
@@ -873,7 +873,7 @@ if st.session_state.page == "Upload & Inspect":
                         st.info("Row discarded.")
                         st.rerun()
         with tab6:
-            st.markdown("🔄 Encoded Dataset")
+            st.subheader("🔄 Encoded Dataset")
             if st.session_state.get("processed_df") is not None:
                 st.info(
                     "This dataset is used for ML and analysis. "
@@ -1637,7 +1637,7 @@ elif st.session_state.page == "Encoding & Outliers":
             # Ordinal Encoding
             # ─────────────────────────────────────
             if True:
-                st.markdown("📈 Ordinal Encoding")
+                st.subheader("📈 Ordinal Encoding")
                 ord_col = st.selectbox(
                     "Select column for Ordinal Encoding",
                     ["— Select —"] + enc_candidates,
@@ -1682,7 +1682,7 @@ elif st.session_state.page == "Encoding & Outliers":
             # One-Hot Encoding
             # ─────────────────────────────────────
             if onehot_cols:
-                st.markdown("🔵 One-Hot Encoding")
+                st.subheader("🔵 One-Hot Encoding")
                 selected_cols = st.multiselect(
                     "Select columns for One-Hot Encoding",
                     onehot_cols,
@@ -1705,7 +1705,7 @@ elif st.session_state.page == "Encoding & Outliers":
             # Label Encoding
             # ─────────────────────────────────────
             if label_cols:
-                st.markdown("🏷️ Label Encoding")
+                st.subheader("🏷️ Label Encoding")
                 selected_cols = st.multiselect(
                     "Select columns for Label Encoding",
                     label_cols,
@@ -1728,7 +1728,7 @@ elif st.session_state.page == "Encoding & Outliers":
             # Frequency Encoding
             # ─────────────────────────────────────
             if frequency_cols:
-                st.markdown("📊 Frequency Encoding")
+                st.subheader("📊 Frequency Encoding")
                 selected_cols = st.multiselect(
                     "Select columns for Frequency Encoding",
                     frequency_cols,
