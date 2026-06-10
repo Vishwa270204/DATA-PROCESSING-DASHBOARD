@@ -1984,22 +1984,46 @@ elif st.session_state.page == "Encoding & Outliers":
             transform = st.radio("Transformation", ["Log","Sqrt","Box-Cox"], horizontal=True)
             if st.button("Apply Transform"):
                 try:
+                    df_t = st.session_state.df.copy()
+                    
                     if transform == "Log":
-                        shift = abs(df[skew_col].min())+1 if df[skew_col].min()<=0 else 0
-                        st.session_state.df[skew_col+"_log"] = np.log(df[skew_col]+shift)
+                        shift = abs(df_t[skew_col].min())+1 if df_t[skew_col].min()<=0 else 0
+                        df_t[skew_col] = np.log(df_t[skew_col]+shift)
                     elif transform == "Sqrt":
-                        shift = abs(df[skew_col].min()) if df[skew_col].min()<0 else 0
-                        st.session_state.df[skew_col+"_sqrt"] = np.sqrt(df[skew_col]+shift)
+                        shift = abs(df_t[skew_col].min()) if df_t[skew_col].min()<0 else 0
+                        df_t[skew_col] = np.sqrt(df_t[skew_col]+shift)
                     elif transform == "Box-Cox":
-                        s = df[skew_col].dropna(); shift = abs(s.min())+1 if s.min()<=0 else 0
+                        s = df_t[skew_col].dropna()
+                        shift = abs(s.min())+1 if s.min()<=0 else 0
                         t, _ = boxcox(s+shift)
-                        st.session_state.df.loc[s.index, skew_col+"_boxcox"] = t
-                    # Track which original columns have been transformed
+                        df_t.loc[s.index, skew_col] = t
+
+                    # Check if transform actually reduced skewness
+                    new_skew = abs(df_t[skew_col].skew())
+                    old_skew = abs(df[skew_col].skew())
+
+                    st.session_state.df = df_t
+
+                    # Track transformed columns
                     if skew_col not in st.session_state.transformed_columns:
                         st.session_state.transformed_columns.append(skew_col)
-                    save_operation(st.session_state.file_name, f"{transform} Transform: {skew_col}", "applied")
-                    st.success(f"✅ {transform} transform applied."); st.rerun()
-                except Exception as e: st.error(str(e))
+
+                    save_operation(
+                        st.session_state.file_name,
+                        f"{transform} Transform: {skew_col}",
+                        f"skew {round(old_skew,4)} → {round(new_skew,4)}"
+                    )
+
+                    if new_skew <= 0.5:
+                        st.success(f"✅ '{skew_col}' is now approximately normal (skew={round(new_skew,4)})")
+                    elif new_skew < old_skew:
+                        st.warning(f"⚠️ Skewness reduced but still present: {round(old_skew,4)} → {round(new_skew,4)}. Try a different transform.")
+                    else:
+                        st.error(f"❌ Transform did not help: skew={round(new_skew,4)}. Try Box-Cox instead.")
+
+                    st.rerun()
+                except Exception as e:
+                    st.error(str(e))
         nav_buttons("Encoding & Outliers")
 
 # ═══════════════════════════════════════════════
