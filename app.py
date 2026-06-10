@@ -1118,9 +1118,14 @@ elif st.session_state.page == "Encoding & Outliers":
                         if not ord_str:
                             st.warning("Please enter the ordinal order.")
                         else:
+                            # normalize both sides — strip + lowercase for comparison
                             ordinal_order = [x.strip() for x in ord_str.split(",")]
-                            invalid_vals = [v for v in ordinal_order if v not in existing_vals]
-                            missing_vals = [v for v in existing_vals if v not in ordinal_order]
+                            existing_stripped = [str(v).strip() for v in existing_vals]
+                            invalid_vals = [v for v in ordinal_order if v.strip() not in existing_stripped]
+                            missing_vals = [v for v in existing_stripped if v not in [x.strip() for x in ordinal_order]]
+                            # remap ordinal_order to match exact original values
+                            val_map = {str(v).strip(): v for v in existing_vals}
+                            ordinal_order = [val_map.get(x.strip(), x.strip()) for x in ord_str.split(",")]                            
                             if invalid_vals:
                                 st.error(f"❌ These values don't exist in column: `{invalid_vals}`")
                             elif missing_vals:
