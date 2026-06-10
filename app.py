@@ -1097,6 +1097,43 @@ elif st.session_state.page == "Encoding & Outliers":
                     frequency_cols.append(col)
             
             # ─────────────────────────────────────
+            # Ordinal Encoding
+            # ─────────────────────────────────────
+            if True:  # always show ordinal section
+                st.subheader("📈 Ordinal Encoding")
+                selected_cols = st.multiselect(
+                "Select columns (pick any categorical column)",
+                enc_candidates,  # show ALL remaining candidates
+                key="ordinal_select")
+                ord_str = st.text_input(
+                    "Order (comma-separated)",
+                    placeholder="low,medium,high",
+                    key="ordinal_order"
+                )
+                if st.button("Apply Ordinal Encoding"):
+                    if not ord_str:
+                        st.warning("Please enter the ordinal order.")
+                    else:
+                        ordinal_order = [
+                            x.strip()
+                            for x in ord_str.split(",")
+                        ]
+                        for col in selected_cols:
+                            new_df, mapping = apply_encoding(
+                                st.session_state.processed_df,
+                                col,
+                                "ordinal",
+                                ordinal_order
+                            )
+                        st.session_state.processed_df = new_df
+                        st.session_state.df = new_df   # temporary compatibility
+                        if col not in st.session_state.encoded_columns:
+                            st.session_state.encoded_columns.append(col)
+                        st.success(
+                            f"✅ Encoded {len(selected_cols)} column(s)"
+                        )
+                        st.rerun()
+            # ─────────────────────────────────────
             # One-Hot Encoding
             # ─────────────────────────────────────
             if onehot_cols:
@@ -1165,43 +1202,6 @@ elif st.session_state.page == "Encoding & Outliers":
                             st.session_state.encoded_columns.append(col)
                     st.success(f"✅ Encoded {len(selected_cols)} column(s)")
                     st.rerun()
-            # ─────────────────────────────────────
-            # Ordinal Encoding
-            # ─────────────────────────────────────
-            if True:  # always show ordinal section
-                st.subheader("📈 Ordinal Encoding")
-                selected_cols = st.multiselect(
-                "Select columns (pick any categorical column)",
-                enc_candidates,  # show ALL remaining candidates
-                key="ordinal_select")
-                ord_str = st.text_input(
-                    "Order (comma-separated)",
-                    placeholder="low,medium,high",
-                    key="ordinal_order"
-                )
-                if st.button("Apply Ordinal Encoding"):
-                    if not ord_str:
-                        st.warning("Please enter the ordinal order.")
-                    else:
-                        ordinal_order = [
-                            x.strip()
-                            for x in ord_str.split(",")
-                        ]
-                        for col in selected_cols:
-                            new_df, mapping = apply_encoding(
-                                st.session_state.processed_df,
-                                col,
-                                "ordinal",
-                                ordinal_order
-                            )
-                        st.session_state.processed_df = new_df
-                        st.session_state.df = new_df   # temporary compatibility
-                        if col not in st.session_state.encoded_columns:
-                            st.session_state.encoded_columns.append(col)
-                        st.success(
-                            f"✅ Encoded {len(selected_cols)} column(s)"
-                        )
-                        st.rerun()
     # ── Outliers  ── FIX 3: go.Strip → go.Box + go.Scatter overlay ──────────
     with tab2:
         st.markdown("<div class='section-header'><h3>Outlier Detection & Treatment</h3></div>", unsafe_allow_html=True)
