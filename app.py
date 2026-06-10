@@ -1168,13 +1168,12 @@ elif st.session_state.page == "Encoding & Outliers":
             # ─────────────────────────────────────
             # Ordinal Encoding
             # ─────────────────────────────────────
-            if ordinal_candidates:
+            if True:  # always show ordinal section
                 st.subheader("📈 Ordinal Encoding")
                 selected_cols = st.multiselect(
-                    "Select columns",
-                    ordinal_candidates,
-                    key="ordinal_select"
-                )
+                "Select columns (pick any categorical column)",
+                enc_candidates,  # show ALL remaining candidates
+                key="ordinal_select")
                 ord_str = st.text_input(
                     "Order (comma-separated)",
                     placeholder="low,medium,high",
