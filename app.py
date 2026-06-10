@@ -1927,24 +1927,31 @@ elif st.session_state.page == "Statistics & EDA":
         else:
             st.markdown("<div class='section-header'><h3>Correlation with Selected Column</h3></div>", unsafe_allow_html=True)
             corr = num_df.corr()
-            base_col = st.selectbox("Select base column", num_df.columns.tolist(), key="corr_base_col")
-            corr_vals = corr[base_col].drop(base_col).sort_values()
-            colors = ["#dc2626" if v < 0 else "#2563eb" for v in corr_vals]
-            fig_corr = go.Figure(go.Bar(
-                x=corr_vals.values,
-                y=corr_vals.index.tolist(),
-                orientation="h",
-                marker_color=colors,
-                text=[f"{v:.3f}" for v in corr_vals.values],
-                textposition="outside"
-            ))
+            fig_corr = go.Figure()
+            palette = ["#2563eb","#10b981","#f59e0b","#8b5cf6","#ef4444","#06b6d4","#f97316","#84cc16"]
+            for i, col in enumerate(corr.columns):
+                others = corr[col].drop(col)
+                fig_corr.add_trace(go.Bar(
+                    name=col,
+                    x=others.index.tolist(),
+                    y=others.values,
+                    marker_color=palette[i % len(palette)],
+                    text=[f"{v:.2f}" for v in others.values],
+                    textposition="outside",
+                    textfont=dict(size=9)
+                ))
             fig_corr.update_layout(
-                title=f"Pearson Correlation: {base_col} vs all",
-                xaxis=dict(range=[-1,1], title="Correlation Coefficient"),
+                title="Pearson Correlation — All vs All",
+                barmode="group",
+                xaxis_title="Column",
+                yaxis=dict(range=[-1,1], title="Correlation"),
                 template="plotly_white",
-                height=max(300, len(corr_vals)*40+100),
-                paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc",
-                margin=dict(l=20,r=80,t=60,b=40)
+                height=500,
+                paper_bgcolor="#ffffff",
+                plot_bgcolor="#f8f9fc",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                margin=dict(t=80,b=40,l=40,r=40)
             )
+            fig_corr.add_hline(y=0, line_dash="dash", line_color="#6b7280", line_width=1)
             st.plotly_chart(fig_corr, use_container_width=True)
     nav_buttons("Statistics & EDA")
