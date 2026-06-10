@@ -7,3 +7,4 @@ scipy
 openpyxl
 xlrd
 joblib
+statsmodels
