@@ -535,7 +535,7 @@ defaults = {
     "target_col": "— None —",
     "target_encoded": False,
     "transformed_columns": [],  
-    "export_done": False,
+    "export_done": False
 }
 for k, v in defaults.items():
     if k not in st.session_state:
