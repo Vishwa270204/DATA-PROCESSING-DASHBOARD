@@ -859,84 +859,84 @@ elif st.session_state.page == "Statistics & EDA":
             st.markdown("<span class='badge badge-success'>✅ No missing values — heatmap not needed</span>", unsafe_allow_html=True)
 
     with tab2:
-    st.markdown("<div class='section-header'><h3>Outlier Detection & Treatment</h3></div>", unsafe_allow_html=True)
-    num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    if not num_cols:
-        st.info("No numerical columns found.")
-    else:
-        method_choice = st.radio("Detection Method", ["IQR (Interquartile Range)","Z-Score"], horizontal=True)
-        use_iqr = "IQR" in method_choice
-
-        if use_iqr:
-            outlier_data = detect_outliers_iqr(df)   # ← always reassign here
-            stats_rows = [{"Column":c,"Q1":round(i["Q1"],3),"Q3":round(i["Q3"],3),
-                            "IQR":round(i["IQR"],3),"Lower":round(i["lower"],3),
-                            "Upper":round(i["upper"],3),"Outliers":i["count"],"Outlier %":i["pct"]}
-                           for c,i in outlier_data.items()]
+        st.markdown("<div class='section-header'><h3>Outlier Detection & Treatment</h3></div>", unsafe_allow_html=True)
+        num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        if not num_cols:
+            st.info("No numerical columns found.")
         else:
-            outlier_data = detect_outliers_zscore(df)  # ← always reassign here
-            stats_rows = [{"Column":c,"Mean":round(i["mean"],3),"Std":round(i["std"],3),
-                            "Threshold":f"|Z|>{i['threshold']}","Outliers":i["count"],"Outlier %":i["pct"]}
-                           for c,i in outlier_data.items()]
-
-        if stats_rows:
-            st.dataframe(pd.DataFrame(stats_rows), use_container_width=True)
-        else:
-            st.markdown("<span class='badge badge-success'>✅ No outliers detected</span>", unsafe_allow_html=True)
-
-        # Box plot
-        st.markdown("<div class='section-header'><h3>Box Plot — Outliers Highlighted</h3></div>", unsafe_allow_html=True)
-        st.caption("Blue boxes = normal distribution. Red dots = outlier values beyond whiskers.")
-        try:
-            n_cols_plot = len(num_cols)
-            h_space = max(0.02, min(0.1, 0.8/max(n_cols_plot,1)))
-            fig_box = make_subplots(
-                rows=1, cols=n_cols_plot,
-                subplot_titles=num_cols,
-                horizontal_spacing=h_space
-            )
-            legend_added = False
-            for i, col in enumerate(num_cols, start=1):
-                info = outlier_data.get(col, {})          # ← now always in scope
-                outlier_idx = set(info.get("rows", []))
-                series = df[col].dropna()
-                out_series = series.loc[series.index.intersection(list(outlier_idx))]
-
-                fig_box.add_trace(go.Box(
-                    y=series,
-                    name=col,
-                    marker_color="rgba(37,99,235,0.55)",
-                    line_color="#2563eb",
-                    fillcolor="rgba(37,99,235,0.15)",
-                    boxpoints=False,
-                    showlegend=not legend_added,
-                    legendgroup="normal",
-                ), row=1, col=i)
-
-                if len(out_series) > 0:
-                    fig_box.add_trace(go.Scatter(
-                        y=out_series.values,
-                        x=[col] * len(out_series),
-                        mode="markers",
-                        marker=dict(color="rgba(220,38,38,0.85)", size=9, symbol="circle"),
-                        name="Outlier" if not legend_added else "",
-                        legendgroup="outlier",
+            method_choice = st.radio("Detection Method", ["IQR (Interquartile Range)","Z-Score"], horizontal=True)
+            use_iqr = "IQR" in method_choice
+    
+            if use_iqr:
+                outlier_data = detect_outliers_iqr(df)   # ← always reassign here
+                stats_rows = [{"Column":c,"Q1":round(i["Q1"],3),"Q3":round(i["Q3"],3),
+                                "IQR":round(i["IQR"],3),"Lower":round(i["lower"],3),
+                                "Upper":round(i["upper"],3),"Outliers":i["count"],"Outlier %":i["pct"]}
+                               for c,i in outlier_data.items()]
+            else:
+                outlier_data = detect_outliers_zscore(df)  # ← always reassign here
+                stats_rows = [{"Column":c,"Mean":round(i["mean"],3),"Std":round(i["std"],3),
+                                "Threshold":f"|Z|>{i['threshold']}","Outliers":i["count"],"Outlier %":i["pct"]}
+                               for c,i in outlier_data.items()]
+    
+            if stats_rows:
+                st.dataframe(pd.DataFrame(stats_rows), use_container_width=True)
+            else:
+                st.markdown("<span class='badge badge-success'>✅ No outliers detected</span>", unsafe_allow_html=True)
+    
+            # Box plot
+            st.markdown("<div class='section-header'><h3>Box Plot — Outliers Highlighted</h3></div>", unsafe_allow_html=True)
+            st.caption("Blue boxes = normal distribution. Red dots = outlier values beyond whiskers.")
+            try:
+                n_cols_plot = len(num_cols)
+                h_space = max(0.02, min(0.1, 0.8/max(n_cols_plot,1)))
+                fig_box = make_subplots(
+                    rows=1, cols=n_cols_plot,
+                    subplot_titles=num_cols,
+                    horizontal_spacing=h_space
+                )
+                legend_added = False
+                for i, col in enumerate(num_cols, start=1):
+                    info = outlier_data.get(col, {})          # ← now always in scope
+                    outlier_idx = set(info.get("rows", []))
+                    series = df[col].dropna()
+                    out_series = series.loc[series.index.intersection(list(outlier_idx))]
+    
+                    fig_box.add_trace(go.Box(
+                        y=series,
+                        name=col,
+                        marker_color="rgba(37,99,235,0.55)",
+                        line_color="#2563eb",
+                        fillcolor="rgba(37,99,235,0.15)",
+                        boxpoints=False,
                         showlegend=not legend_added,
+                        legendgroup="normal",
                     ), row=1, col=i)
-
-                legend_added = True
-
-            fig_box.update_layout(
-                title="Box Plots — Outliers (Red ●) vs Normal Range",
-                template="plotly_white",
-                height=max(420, 380),
-                paper_bgcolor="#ffffff",
-                plot_bgcolor="#f8f9fc",
-                showlegend=True,
-            )
-            st.plotly_chart(fig_box, use_container_width=True)
-        except Exception as e:
-            st.error(f"Box plot error: {e}")
+    
+                    if len(out_series) > 0:
+                        fig_box.add_trace(go.Scatter(
+                            y=out_series.values,
+                            x=[col] * len(out_series),
+                            mode="markers",
+                            marker=dict(color="rgba(220,38,38,0.85)", size=9, symbol="circle"),
+                            name="Outlier" if not legend_added else "",
+                            legendgroup="outlier",
+                            showlegend=not legend_added,
+                        ), row=1, col=i)
+    
+                    legend_added = True
+    
+                fig_box.update_layout(
+                    title="Box Plots — Outliers (Red ●) vs Normal Range",
+                    template="plotly_white",
+                    height=max(420, 380),
+                    paper_bgcolor="#ffffff",
+                    plot_bgcolor="#f8f9fc",
+                    showlegend=True,
+                )
+                st.plotly_chart(fig_box, use_container_width=True)
+            except Exception as e:
+                st.error(f"Box plot error: {e}")
     with tab3:
         if not cat_cols:
             st.info("No categorical columns found.")
