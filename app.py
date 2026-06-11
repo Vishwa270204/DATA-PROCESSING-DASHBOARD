@@ -2473,12 +2473,6 @@ elif st.session_state.page == "Visualizations":
             except Exception as e:
                 st.error(f"Plot error: {e}")
 
-            if bv_data_btn:
-                cols_show = [bv_col] + ([bv_group_val] if bv_group_val else [])
-                st.dataframe(
-                    filtered_df3[cols_show].dropna(),
-                    use_container_width=True, height=280
-                )
 
     # ══════════════════════════════════════════
     # TAB 4 — CATEGORY BREAKDOWN
