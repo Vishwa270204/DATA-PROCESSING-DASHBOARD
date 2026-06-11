@@ -881,21 +881,37 @@ elif st.session_state.page == "Statistics & EDA":
             fig_box = make_subplots(rows=1, cols=n_cols_plot, subplot_titles=num_cols,
                 horizontal_spacing=max(0.02, min(0.1, 0.8/max(n_cols_plot,1))))
             for i, col in enumerate(num_cols, start=1):
+                info = outlier_data.get(col, {})
+                outlier_idx = set(info.get("rows", []))
+                series = df[col].dropna()
+                
+                # FIX: use .loc to ensure index alignment
+                out_series = series.loc[series.index.intersection(list(outlier_idx))]
+                normal_series = series.loc[~series.index.isin(outlier_idx)]
+            
                 fig_box.add_trace(go.Box(
-                    y=df[col].dropna(), name=col,
-                    marker_color="rgba(37,99,235,0.6)",
+                    y=series,
+                    name=col,
+                    marker_color="rgba(37,99,235,0.55)",
                     line_color="#2563eb",
-                    boxpoints="outliers",
-                    marker=dict(color="rgba(220,38,38,0.8)", size=5),
-                    showlegend=False
+                    fillcolor="rgba(37,99,235,0.15)",
+                    boxpoints=False,
+                    showlegend=not legend_added,
+                    legendgroup="normal",
                 ), row=1, col=i)
-            fig_box.update_layout(
-                title="Box Plots — Red dots = Outliers",
-                template="plotly_white", height=420,
-                paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc"
-            )
-            st.plotly_chart(fig_box, use_container_width=True)
-
+            
+                if len(out_series) > 0:
+                    fig_box.add_trace(go.Scatter(
+                        y=out_series.values,          # ← .values strips the index
+                        x=[col] * len(out_series),
+                        mode="markers",
+                        marker=dict(color="rgba(220,38,38,0.85)", size=9, symbol="circle"),  # ← solid circle, bigger
+                        name="Outlier" if not legend_added else "",
+                        legendgroup="outlier",
+                        showlegend=not legend_added,
+                    ), row=1, col=i)
+            
+                legend_added = True
     with tab3:
         if not cat_cols:
             st.info("No categorical columns found.")
