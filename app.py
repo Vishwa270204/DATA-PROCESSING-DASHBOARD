@@ -24,7 +24,7 @@ st.set_page_config(
 )
 
 def nav_buttons(current_page):
-    page_order = ["Upload & Inspect", "Statistics & EDA", "Recommendations", "Cleaning & Validation", "Encoding & Outliers", "Visualizations & Insights", "Export"]
+    page_order = ["Upload & Inspect", "Statistics & EDA", "Recommendations", "Cleaning & Validation", "Encoding & Outliers", "Visualizations", "Export"]
     idx = page_order.index(current_page)
     slug = current_page.replace(" ", "_").replace("&", "and")
 
@@ -2053,7 +2053,8 @@ elif st.session_state.page == "Encoding & Outliers":
                     st.rerun()
                 except Exception as e:
                     st.error(str(e))
-        nav_buttons("Encoding & Outliers")
+    
+    nav_buttons("Encoding & Outliers")
 
 # ═══════════════════════════════════════════════
 # PAGE — VISUALIZATIONS 
