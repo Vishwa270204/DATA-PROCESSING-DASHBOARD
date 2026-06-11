@@ -2332,7 +2332,7 @@ elif st.session_state.page == "Visualizations":
                     )
                     if is_date_x:
                         fig.update_xaxes(tickformat="%b %Y", tickangle=-30)
-                     if show_labels:
+                    if show_labels:
                            fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")                
                 elif chart_type == "Bar":
                     fig = px.bar(
