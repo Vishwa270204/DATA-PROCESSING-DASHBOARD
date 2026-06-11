@@ -107,16 +107,22 @@ def fill_missing_values(df, column, strategy, custom_value=None):
         if not m.empty:
             df[column] = df[column].fillna(m[0])
     elif strategy == "ffill":
-        df[column] = df[column].ffill()
+        df[column] = df[column].ffill().bfill()   # ← bfill catches leading nulls
     elif strategy == "bfill":
-        df[column] = df[column].bfill()
+        df[column] = df[column].bfill().ffill()   # ← ffill catches trailing nulls
     elif strategy == "custom" and custom_value is not None:
-        df[column] = df[column].fillna(custom_value)
+        try:
+            # try to cast to column dtype
+            typed_val = df[column].dtype.type(custom_value)
+        except (ValueError, TypeError):
+            typed_val = custom_value
+        df[column] = df[column].fillna(typed_val)
     elif strategy == "drop":
-        df = df[df[column].notna()].reset_index(drop=True)  # ← fix here
+        df = df[df[column].notna()].reset_index(drop=True)
     
     after = df[column].isnull().sum()
     return df, {"before": int(before), "after": int(after), "filled": int(before - after)}
+    
 def detect_outliers_iqr(df):
     result = {}
     if df is None or len(df) == 0:
@@ -1370,9 +1376,10 @@ elif st.session_state.page == "Cleaning & Validation":
                     if st.button(f"Apply to {item['column']}", key=f"apply_{item['column']}"):
                         try:
                             new_df, stats_r = fill_missing_values(df, item["column"], chosen, custom_val)
-                            st.session_state.df = new_df
-                            save_operation(st.session_state.file_name, f"Fill Missing: {item['column']}", f"{chosen} – filled {stats_r['filled']}")
-                            st.success(f"Filled {stats_r['filled']} values using '{chosen}'.")
+                            st.session_state.df = new_df          # ← must assign new_df, not df
+                            st.session_state.original_df = new_df # ← add this line too
+                            save_operation(...)
+                            st.success(...)
                             st.rerun()
                         except Exception as e:
                             st.error(str(e))
