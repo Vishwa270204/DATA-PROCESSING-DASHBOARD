@@ -1058,7 +1058,8 @@ elif st.session_state.page == "Statistics & EDA":
                         font=dict(
                             size=11,
                             color="#94a3b8" if is_diag else (
-                                "#ffffff" if abs(v) > 0.55 else "#1e293b"
+                                "#ffffff" if abs(v) > 0.3 and v < 0 else
+                                "#1e293b" if v >= 0 else "#ffffff"
                             )
                         )
                     ))
