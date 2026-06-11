@@ -1053,7 +1053,7 @@ elif st.session_state.page == "Statistics & EDA":
                     is_diag = (row == col)
                     annotations.append(dict(
                         x=col, y=row,
-                        text="—" if is_diag else f"{v:.2f}",
+                        text="1" if is_diag else f"{v:.2f}",
                         showarrow=False,
                         font=dict(
                             size=11,
