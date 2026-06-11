@@ -624,49 +624,49 @@ if st.session_state.page == "Upload & Inspect":
 
     if uploaded:
         try:
-    
-            # Only load when a NEW file is selected
             if uploaded.name != st.session_state.get("file_name", ""):
                 df = load_file(uploaded, uploaded.name)
-                st.session_state.original_df = df.copy()      # RAW DATA
-                st.session_state.processed_df = df.copy()     # FOR ENCODING / ML
-                # Compatibility with existing code
-                st.session_state.df = st.session_state.processed_df
-                st.session_state.file_name = uploaded.name
-                st.session_state.encoded_columns = []
-                if "cleaning_history" in st.session_state:
-                    st.session_state.cleaning_history = []
-                if "operations" in st.session_state:
-                    st.session_state.operations = []
-                st.rerun()
-                st.session_state.encoded_columns = []
-    
-                if "cleaning_history" in st.session_state:
-                    st.session_state.cleaning_history = []
-    
-                if "operations" in st.session_state:
-                    st.session_state.operations = []
-    
-                size_kb = uploaded.size / 1024
-    
-                conn = sqlite3.connect(DB_NAME)
-                conn.execute(
-                    "INSERT INTO file_metadata VALUES (NULL,?,?,?,?,?)",
-                    (
-                        uploaded.name,
-                        datetime.now().isoformat(),
-                        round(size_kb, 2),
-                        len(df),
-                        len(df.columns)
+
+                # Save everything to session state FIRST before any rerun
+                st.session_state.original_df       = df.copy()
+                st.session_state.processed_df      = df.copy()
+                st.session_state.df                = df.copy()
+                st.session_state.file_name         = uploaded.name
+                st.session_state.encoded_columns   = []
+                st.session_state.encoders          = {}
+                st.session_state.target_col        = "— None —"
+                st.session_state.target_encoded    = False
+                st.session_state.transformed_columns = []
+                st.session_state.export_done       = False
+                st.session_state.cleaning_history  = []
+                st.session_state.operations        = []
+
+                # DB logging — safe to do before rerun
+                try:
+                    size_kb = uploaded.size / 1024
+                    conn = sqlite3.connect(DB_NAME)
+                    conn.execute(
+                        "INSERT INTO file_metadata VALUES (NULL,?,?,?,?,?)",
+                        (
+                            uploaded.name,
+                            datetime.now().isoformat(),
+                            round(size_kb, 2),
+                            len(df),
+                            len(df.columns)
+                        )
                     )
-                )
-                conn.commit()
-                conn.close()
-    
+                    conn.commit()
+                    conn.close()
+                except Exception:
+                    pass
+
                 st.success(
                     f"✅ Loaded **{uploaded.name}** — "
                     f"{len(df):,} rows × {len(df.columns)} columns"
-            )
+                )
+                # rerun LAST — after everything is saved
+                st.rerun()
+
         except Exception as e:
             st.error(f"❌ Error loading file: {e}")
     if st.session_state.df is not None:
