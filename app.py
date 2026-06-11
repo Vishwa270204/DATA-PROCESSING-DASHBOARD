@@ -97,6 +97,7 @@ def missing_value_report(df):
 def fill_missing_values(df, column, strategy, custom_value=None):
     before = df[column].isnull().sum()
     df = df.copy()
+    
     if strategy == "mean":
         df[column] = df[column].fillna(df[column].mean())
     elif strategy == "median":
@@ -112,10 +113,10 @@ def fill_missing_values(df, column, strategy, custom_value=None):
     elif strategy == "custom" and custom_value is not None:
         df[column] = df[column].fillna(custom_value)
     elif strategy == "drop":
-        df = df.dropna(subset=[column]).reset_index(drop=True)
+        df = df[df[column].notna()].reset_index(drop=True)  # ← fix here
+    
     after = df[column].isnull().sum()
-    return df, {"before": before, "after": after, "filled": before - after}
-
+    return df, {"before": int(before), "after": int(after), "filled": int(before - after)}
 def detect_outliers_iqr(df):
     result = {}
     if df is None or len(df) == 0:
