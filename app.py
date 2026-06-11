@@ -2566,13 +2566,7 @@ elif st.session_state.page == "Visualizations":
             except Exception as e:
                 st.error(f"Chart error: {e}")
 
-            if cat_data_btn:
-                st.dataframe(data, use_container_width=True, height=280)
-                st.download_button(
-                    "⬇️ Download", data=data.to_csv(index=False).encode("utf-8"),
-                    file_name="category_breakdown.csv", mime="text/csv",
-                    key="dl_cat"
-                )
+           
 
     nav_buttons("Visualizations")
 # ═══════════════════════════════════════════════
