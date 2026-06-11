@@ -2177,9 +2177,7 @@ elif st.session_state.page == "Visualizations":
             st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
             
         filtered_df1 = render_filter_panel("tab1", df)
-        if reset_clicked:
-            filtered_df1 = df.copy()
-            st.rerun()
+        
 
         color_val = None if color_col == "— None —" else color_col
         y_val     = None if y_col     == "— None —" else y_col
