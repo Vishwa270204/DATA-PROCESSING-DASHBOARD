@@ -24,7 +24,7 @@ st.set_page_config(
 )
 
 def nav_buttons(current_page):
-    page_order = ["Upload & Inspect", "Statistics & EDA", "Recommendations", "Cleaning & Validation", "Encoding & Outliers", "Visualizations", "Export"]
+    page_order = ["Upload & Inspect", "Statistics & EDA", "Recommendations", "Cleaning", "Encoding & Outliers", "Visualizations", "Export"]
     idx = page_order.index(current_page)
     slug = current_page.replace(" ", "_").replace("&", "and")
 
@@ -619,7 +619,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    pages = ["📁 Upload & Inspect","📈 Statistics & EDA","💡 Recommendations","🧹 Cleaning & Validation","🔠 Encoding & Outliers","📊 Visualizations","📦 Export"]
+    pages = ["📁 Upload & Inspect","📈 Statistics & EDA","💡 Recommendations","🧹 Cleaning","🔠 Encoding & Outliers","📊 Visualizations","📦 Export"]
     page_map = {p: p.split(" ", 1)[1] for p in pages}
     page_keys = list(page_map.values())
     selected = st.radio("Navigation", pages, label_visibility="collapsed",
@@ -1381,12 +1381,12 @@ elif st.session_state.page == "Recommendations":
 
     nav_buttons("Recommendations")
 # ═══════════════════════════════════════════════
-# PAGE 4 — CLEANING & VALIDATION
+# PAGE 4 — CLEANING 
 # ═══════════════════════════════════════════════
-elif st.session_state.page == "Cleaning & Validation":
+elif st.session_state.page == "Cleaning":
     st.markdown("""
     <div class='main-header'>
-        <h1>🧹 Cleaning & Validation</h1>
+        <h1>🧹 Cleaning </h1>
         <p>Remove duplicates, fix missing values, and detect data anomalies</p>
     </div>
     """, unsafe_allow_html=True)
@@ -1443,7 +1443,7 @@ elif st.session_state.page == "Cleaning & Validation":
                         except Exception as e:
                             st.error(str(e))
 
-       nav_buttons("Cleaning & Validation")
+       nav_buttons("Cleaning")
 # ═══════════════════════════════════════════════
 # PAGE 5 — ENCODING & OUTLIERS
 # ═══════════════════════════════════════════════
