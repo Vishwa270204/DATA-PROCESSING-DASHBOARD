@@ -2231,7 +2231,7 @@ elif st.session_state.page == "Visualizations":
             
                 # ── LINE CHART ──────────────────────────────────────────────────
                 if chart_type == "Line" and y_val:
-                    plot_df2 = filtered_df1.copy()
+                   
                     is_date = False
                     try:
                         parsed = pd.to_datetime(plot_df2[x_col], errors="coerce")
@@ -2374,7 +2374,7 @@ elif st.session_state.page == "Visualizations":
 
             try:
                 fig_sc = px.scatter(
-                    filtered_df2, x=sx, y=sy, color=sc_color, size=sc_size,
+                    x=sx, y=sy, color=sc_color, size=sc_size,
                     template="plotly_white", height=450,
                     trendline="ols" if add_trendline and sc_color is None else None,
                     opacity=opacity, facet_col=facet
