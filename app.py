@@ -2328,19 +2328,7 @@ elif st.session_state.page == "Visualizations":
         except Exception as e:
             st.error(f"Chart error: {e}")
 
-            if show_data:
-                st.markdown(
-                    "<div class='section-header'><h3>📋 Data Table</h3></div>",
-                    unsafe_allow_html=True
-                )
-                st.dataframe(plot_df, use_container_width=True, height=300)
-                st.download_button(
-                    "⬇️ Download filtered data",
-                    data=plot_df.to_csv(index=False).encode("utf-8"),
-                    file_name="filtered_data.csv", mime="text/csv",
-                    key="dl_filtered_tab1"
-                )
-
+            
     # ══════════════════════════════════════════
     # TAB 2 — SCATTER
     # ══════════════════════════════════════════
