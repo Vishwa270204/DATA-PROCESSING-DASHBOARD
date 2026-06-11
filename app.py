@@ -23,63 +23,26 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-def nav_buttons(current_page):
+ddef nav_buttons(current_page):
     page_order = ["Upload & Inspect", "Statistics & EDA", "Recommendations", "Cleaning & Validation", "Encoding & Outliers", "Visualizations & Insights", "Export"]
     idx = page_order.index(current_page)
     slug = current_page.replace(" ", "_").replace("&", "and")
 
-    st.markdown("""
-    <style>
-    [data-testid="stButton"] button {
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
     st.markdown("---")
-    c_prev, c_mid, c_next = st.columns([3, 4, 3])
+    
+    col_prev, col_space, col_next = st.columns([2, 6, 2])
 
-    with c_prev:
+    with col_prev:
         if idx > 0:
-            prev_label = f"⬅️ Prev: {page_order[idx-1]}"
-            if st.button(prev_label, key=f"nav_prev_{slug}", type="secondary"):
+            if st.button(f"⬅️ {page_order[idx-1]}", key=f"nav_prev_{slug}", type="secondary"):
                 st.session_state.page = page_order[idx-1]
                 st.rerun()
-            st.markdown(f"""
-            <style>
-            div[data-testid="column"]:first-child .stButton button {{
-                background: linear-gradient(135deg,#dc2626,#f97316) !important;
-                color: white !important;
-                border: none !important;
-                border-radius: 8px !important;
-                font-weight: 600 !important;
-                white-space: nowrap !important;
-                width: 100% !important;
-            }}
-            </style>
-            """, unsafe_allow_html=True)
 
-    with c_next:
+    with col_next:
         if idx < len(page_order) - 1:
-            next_label = f"Next: {page_order[idx+1]} ➡️"
-            if st.button(next_label, key=f"nav_next_{slug}", type="secondary"):
+            if st.button(f"{page_order[idx+1]} ➡️", key=f"nav_next_{slug}", type="secondary"):
                 st.session_state.page = page_order[idx+1]
-                st.rerun()
-            st.markdown(f"""
-            <style>
-            div[data-testid="column"]:last-child .stButton button {{
-                background: linear-gradient(135deg,#059669,#10b981) !important;
-                color: white !important;
-                border: none !important;
-                border-radius: 8px !important;
-                font-weight: 600 !important;
-                white-space: nowrap !important;
-                width: 100% !important;
-            }}
-            </style>
-            """, unsafe_allow_html=True)    
+                st.rerun()    
 def save_operation(file_name, operation, details):
     try:
         conn = sqlite3.connect(DB_NAME)
@@ -520,6 +483,23 @@ html,body,[class*="css"]{font-family:'Inter',sans-serif!important;background-col
 .info-box .ib-label{font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
 .info-box .ib-val{font-family:'JetBrains Mono',monospace;font-size:1rem;font-weight:700;color:var(--text);}
 div.stAlert{border-radius:10px!important;}
+/* Nav buttons */
+div[data-testid="column"]:first-child .stButton > button {
+    background: transparent !important;
+    border: 1px solid rgba(255,255,255,0.15) !important;
+    color: var(--text2) !important;
+    width: 100% !important;
+    text-align: left !important;
+    font-size: 0.82rem !important;
+}
+div[data-testid="column"]:last-child .stButton > button {
+    background: var(--accent) !important;
+    border: none !important;
+    color: #fff !important;
+    width: 100% !important;
+    text-align: right !important;
+    font-size: 0.82rem !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
