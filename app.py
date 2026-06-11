@@ -51,16 +51,7 @@ def save_operation(file_name, operation, details):
         conn.commit(); conn.close()
     except: pass
 
-def get_processing_history(file_name=None):
-    try:
-        conn = sqlite3.connect(DB_NAME)
-        if file_name:
-            df = pd.read_sql("SELECT * FROM processing_history WHERE file_name=? ORDER BY timestamp DESC",
-                             conn, params=(file_name,))
-        else:
-            df = pd.read_sql("SELECT * FROM processing_history ORDER BY timestamp DESC", conn)
-        conn.close(); return df
-    except: return pd.DataFrame()
+
 
 # ── File loading ──────────────────────────────
 def load_file(buf, name):
@@ -663,7 +654,7 @@ if st.session_state.page == "Upload & Inspect":
             with col_w:
                 st.markdown(f"""<div class='metric-card'><span class='val'>{val}</span><span class='label'>{label}</span></div>""", unsafe_allow_html=True)
         st.markdown("&nbsp;")
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["👁️ Preview","📋 Schema","🏷️ Column Types","❓ Missing","➕ Add Row","🔄 Encoded data"])
+        tab1, tab2, tab3, tab4, tab5,  = st.tabs(["👁️ Preview","📋 Schema","🏷️ Column Types","❓ Missing","🔄 Encoded data"])
         with tab1:
             st.markdown(f"<div style='font-size:0.85rem;color:#6b7280;margin-bottom:8px;'>Dataset: <b style='color:#111827;'>{summary['rows']:,} rows × {summary['columns']} columns</b></div>", unsafe_allow_html=True)
             preview_opt = st.selectbox("Show", ["First 5 rows","First 10 rows","First 20 rows","Entire dataset"], key="preview_sel")
@@ -721,114 +712,7 @@ if st.session_state.page == "Upload & Inspect":
             else:
                 st.markdown("<span class='badge badge-success'>✅ No missing values detected</span>", unsafe_allow_html=True)
 
-        # ── Add Row  ── FIX 1: row count updates correctly ─────────────────────
         with tab5:
-            st.markdown("**Manually add a new row to the dataset:**")
-
-            # Always read the CURRENT df from session state so count is accurate
-            current_df = st.session_state.get("original_df")
-            if current_df is None or current_df.empty:
-                st.warning("Please upload a dataset first.")
-                st.stop()
-            ct_live = identify_column_types(current_df)            
-            input_data = {}
-            _target_col = st.session_state.get("target_col", "— None —")
-            if _target_col == "— None —":
-                _target_col = None
-            if _target_col:
-                st.caption(f"🎯 Target column: **{_target_col}** — only existing values allowed.")
-            form_cols = st.columns(min(3, len(current_df.columns)))
-            for i, col in enumerate(current_df.columns):
-                with form_cols[i % 3]:
-                    dtype = str(current_df[col].dtype)
-                    if _target_col and col == _target_col:
-                        unique_vals = list(current_df[col].dropna().unique())
-                        if len(unique_vals) > 2:
-                            unique_vals = unique_vals[:2]
-                        input_data[col] = st.selectbox(f"{col} 🎯", unique_vals, key=f"inp_{col}")
-                    elif "int" in dtype or "float" in dtype:
-                        input_data[col] = st.number_input(col, value=0.0, key=f"inp_{col}")
-                    elif col in ct_live["boolean"]:
-                        input_data[col] = st.selectbox(col, [True, False], key=f"inp_{col}")
-                    elif col in ct_live["categorical"] and current_df[col].nunique() < 50:
-                        opts = list(current_df[col].dropna().unique())
-                        input_data[col] = st.selectbox(col, opts, key=f"inp_{col}")
-                    else:
-                        input_data[col] = st.text_input(col, key=f"inp_{col}")
-
-            if st.button("➕ Add Row"):
-                new_row = {col: input_data.get(col, np.nan) for col in current_df.columns}
-                val_results = []
-                for col, val in new_row.items():
-                    status, reason = validate_single_value(col, val, current_df, target_col=_target_col)
-                    val_results.append({"Column": col, "Value": val, "Status": status.title(), "Reason": reason or "—"})
-
-                n_invalid = sum(1 for r in val_results if r["Status"] == "Invalid")
-
-                if n_invalid == 0:
-                    # FIX 1: build updated_df from current snapshot, assign, rerun
-                    updated_original = pd.concat([st.session_state.original_df,pd.DataFrame([new_row])],ignore_index=True)
-                    st.session_state.original_df = updated_original
-                    st.session_state.df = updated_original.copy()
-                    save_operation(st.session_state.file_name, "Add Row", new_row)
-                    st.session_state.pop("_pending_row", None)
-                    st.session_state.pop("_pending_val_results", None)
-                    st.success(f"✅ Row added! Dataset: {len(current_df):,} → {len(updated_original):,} rows.")
-                    st.rerun()
-                else:
-                    st.session_state["_pending_row"] = new_row
-                    st.session_state["_pending_val_results"] = val_results
-
-            # Pending row review
-            if st.session_state.get("_pending_row") and st.session_state.get("_pending_val_results"):
-                pending_row   = st.session_state["_pending_row"]
-                val_results   = st.session_state["_pending_val_results"]
-                n_valid   = sum(1 for r in val_results if r["Status"] == "Valid")
-                n_invalid = sum(1 for r in val_results if r["Status"] == "Invalid")
-
-                st.markdown("---")
-                st.markdown("<div class='section-header'><h3>Row Validation Results</h3></div>", unsafe_allow_html=True)
-
-                def _row_style(row):
-                    if row["Status"] == "Invalid":
-                        return ["background-color:#fef2f2;color:#dc2626"]*len(row)
-                    return ["background-color:#f0fdf4;color:#16a34a"]*len(row)
-
-                val_df = pd.DataFrame(val_results)
-                val_df["Value"] = val_df["Value"].astype(str)
-                try:
-                    st.dataframe(val_df.style.apply(_row_style, axis=1), use_container_width=True, hide_index=True)
-                except:
-                    st.dataframe(val_df, use_container_width=True, hide_index=True)
-
-                st.markdown(f"""
-                <div style='display:flex;gap:16px;margin:12px 0;flex-wrap:wrap;'>
-                    <span class='badge badge-success'>✅ {n_valid} Valid Fields</span>
-                    <span class='badge badge-danger'>❌ {n_invalid} Invalid Fields</span>
-                </div>
-                """, unsafe_allow_html=True)
-                st.warning("⚠️ This row contains invalid values.")
-
-                c_keep, c_edit, c_del = st.columns(3)
-                with c_keep:
-                    if st.button("✅ Keep Row Anyway", key="keep_invalid_row"):
-                        cur = st.session_state.df
-                        upd = pd.concat([cur, pd.DataFrame([pending_row])], ignore_index=True)
-                        st.session_state.df = upd
-                        save_operation(st.session_state.file_name, "Add Row (with issues)", pending_row)
-                        st.session_state.pop("_pending_row", None)
-                        st.session_state.pop("_pending_val_results", None)
-                        st.success(f"Row added. Dataset: {len(cur):,} → {len(upd):,} rows.")
-                        st.rerun()
-                with c_edit:
-                    st.info("💡 Edit the values above and click **➕ Add Row** again.")
-                with c_del:
-                    if st.button("🗑️ Discard Row", key="discard_row"):
-                        st.session_state.pop("_pending_row", None)
-                        st.session_state.pop("_pending_val_results", None)
-                        st.info("Row discarded.")
-                        st.rerun()
-        with tab6:
             st.subheader("🔄 Encoded Dataset")
             if st.session_state.get("processed_df") is not None:
                 st.info(
