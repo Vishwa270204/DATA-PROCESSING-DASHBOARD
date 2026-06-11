@@ -59,7 +59,7 @@ def init_database():
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, file_name TEXT,
                   operation TEXT, details TEXT, timestamp TEXT)""")
     conn.commit()
-    conn.close()
+    conn.close()  
 
 def save_operation(file_name, operation, details):
     try:
