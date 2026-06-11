@@ -2117,9 +2117,8 @@ elif st.session_state.page == "Visualizations":
             with sc2: sy = st.selectbox("Y Axis", num_cols[::-1], key="scatter_y")
             with sc3: sc = st.selectbox("Color by", ["— None —"] + cat_cols + num_cols, key="scatter_color")
             sc_color = None if sc == "— None —" else sc
-            sc_size_val = None if sc_size == "— None —" else sc_size
             try:
-                fig_sc = px.scatter(df, x=sx, y=sy, color=sc_color, size=sc_size_val,
+                fig_sc = px.scatter(df, x=sx, y=sy, color=sc_color, 
                     template="plotly_white", height=450,
                     trendline="ols" if sc_color is None else None, opacity=0.7)
                 fig_sc.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
