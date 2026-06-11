@@ -2323,17 +2323,45 @@ elif st.session_state.page == "Visualizations":
                 text_col = y_val if show_labels and y_val else None
                 
                 if chart_type == "Line" and y_val:
-                    agg_choice = agg_func.lower().replace("none (raw)", "mean")
-                    plot_df, is_date_x = prepare_line_data(
-                        filtered_df1, x_col, y_val, color_val, agg_fn=agg_choice)
+                    # Always aggregate for line charts — prevents raw row noise
+                    agg_choice = agg_func.lower().replace("none (raw)", "sum")
+                
+                    # Try to parse X as date
+                    try:
+                        plot_df[x_col] = pd.to_datetime(plot_df[x_col])
+                        # Group by month automatically if it looks like a date
+                        plot_df["_x_period"] = plot_df[x_col].dt.to_period("M").astype(str)
+                        group_key = "_x_period"
+                    except Exception:
+                        group_key = x_col
+                
+                    # Aggregate
+                    if color_val:
+                        plot_df = plot_df.groupby([group_key, color_val])[y_val].agg(agg_choice).reset_index()
+                    else:
+                        plot_df = plot_df.groupby(group_key)[y_val].agg(agg_choice).reset_index()
+                
+                    plot_df = plot_df.sort_values(group_key)
+                
                     fig = px.line(
-                        plot_df, x=x_col, y=y_val, color=color_val,
-                        template="plotly_white", height=420, markers=True
+                        plot_df, x=group_key, y=y_val, color=color_val,
+                        template="plotly_white", height=420, markers=True,
+                        labels={group_key: x_col, y_val: y_val},
+                        title=f"{y_val} by {x_col} (Monthly)"
                     )
-                    if is_date_x:
-                        fig.update_xaxes(tickformat="%b %Y", tickangle=-30)
+                    fig.update_layout(
+                        paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc",
+                        xaxis=dict(tickangle=-45, tickfont=dict(size=10)),
+                        yaxis_title=y_val,
+                        xaxis_title="Order Month"
+                    )
                     if show_labels:
-                           fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")                
+                        fig.update_traces(
+                            text=plot_df[y_val],
+                            texttemplate="%{text:,.0f}",
+                            textposition="top center"
+                        )
+                    st.plotly_chart(fig, use_container_width=True)               
                 elif chart_type == "Bar":
                     fig = px.bar(
                         plot_df, x=x_col, y=y_val, color=color_val,
