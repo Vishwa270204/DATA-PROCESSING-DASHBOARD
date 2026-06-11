@@ -1069,20 +1069,16 @@ elif st.session_state.page == "Statistics & EDA":
                 y=cols_list,
                 zmin=-1, zmax=1,
                 colorscale=[
-                    [0.0,  "#f97316"],
-                    [0.2,  "#fed7aa"],
-                    [0.45, "#f1f5f9"],
-                    [0.55, "#f1f5f9"],
-                    [0.8,  "#93c5fd"],
-                    [1.0,  "#2563eb"],
+                    [0.0,  "#081d58"],
+                    [0.2,  "#253494"],
+                    [0.4,  "#225ea8"],
+                    [0.6,  "#41b6c4"],
+                    [0.8,  "#a1dab4"],
+                    [1.0,  "#ffffcc"],
                 ],
                 colorbar=dict(
-                    title=dict(
-                        text="r",
-                        font=dict(color="#475569", size=12)
-                    ),
-                    tickvals=[-1, -0.5, 0, 0.5, 1],
-                    ticktext=["-1.0", "-0.5", "0", "0.5", "1.0"],
+                    tickvals=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+                    ticktext=["−1.0", "−0.6", "−0.2", "0.2", "0.6", "1.0"],
                     tickfont=dict(color="#475569", size=10),
                     thickness=10,
                     len=0.8,
