@@ -1110,16 +1110,17 @@ elif st.session_state.page == "Statistics & EDA":
             st.plotly_chart(fig_corr, use_container_width=True)
             # Strong correlations summary
             strong = []
-            for i in range(len(cols_list)):
-                for j in range(i+1, len(cols_list)):
+            for i in range(len(corr.columns)):
+                for j in range(i + 1, len(corr.columns)):
                     v = corr.iloc[i, j]
-                    if abs(v) >= 0.7:
-                        strong.append({
-                            "Column A": cols_list[i],
-                            "Column B": cols_list[j],
-                            "r": round(float(v), 4),
-                            "Strength": "Strong positive" if v >= 0.7 else "Strong negative"
-                        })
+            
+            if abs(v) >= 0.7:
+                strong.append({
+                    "Column A": corr.columns[i],
+                    "Column B": corr.columns[j],
+                    "r": round(float(v), 4),
+                    "Strength": "Strong positive" if v > 0 else "Strong negative"
+                })
             if strong:
                 st.markdown("<div class='section-header'><h3>Strong Correlations ( |r| ≥ 0.7 )</h3></div>", unsafe_allow_html=True)
                 strong_df = pd.DataFrame(strong).sort_values("r", key=abs, ascending=False)
