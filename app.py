@@ -2175,15 +2175,7 @@ elif st.session_state.page == "Visualizations":
                     )
 
             st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
-            btn1, btn2, btn3, _ = st.columns([1, 1, 1, 3])
-            with btn1:
-                plot_clicked  = st.button("📊 Plot Chart",      key="custom_plot_btn",  type="primary")
-            with btn2:
-                reset_clicked = st.button("🔄 Reset Filters",   key="custom_reset_btn")
-            with btn3:
-                show_data     = st.button("🗃️ Show Data Table", key="custom_data_btn")
-            st.markdown("</div>", unsafe_allow_html=True)
-
+            
         filtered_df1 = render_filter_panel("tab1", df)
         if reset_clicked:
             filtered_df1 = df.copy()
