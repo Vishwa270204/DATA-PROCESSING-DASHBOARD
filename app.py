@@ -1068,14 +1068,7 @@ elif st.session_state.page == "Statistics & EDA":
                 x=cols_list,
                 y=cols_list,
                 zmin=-1, zmax=1,
-                colorscale=[
-                    [0.0,  "#081d58"],
-                    [0.2,  "#253494"],
-                    [0.4,  "#225ea8"],
-                    [0.6,  "#41b6c4"],
-                    [0.8,  "#a1dab4"],
-                    [1.0,  "#ffffcc"],
-                ],
+                colorscale='RdBu'
                 colorbar=dict(
                     tickvals=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
                     ticktext=["−1.0", "−0.6", "−0.2", "0.2", "0.6", "1.0"],
