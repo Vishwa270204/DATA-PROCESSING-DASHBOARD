@@ -1566,7 +1566,7 @@ elif st.session_state.page == "Encoding & Outliers":
     ct = identify_column_types(df)
     tab1, tab2, tab3 = st.tabs(["🔡 Encoding","📦 Outliers","〰️ Skewness"])
 
-    # ── Encoding  ── FIX 2: exclude already-encoded columns ──────────────────
+    # ── Encoding  ── exclude already-encoded columns ──────────────────
     with tab1:
         st.markdown("<div class='section-header'><h3>Target-First Categorical Encoding</h3></div>", unsafe_allow_html=True)
 
@@ -2201,7 +2201,7 @@ elif st.session_state.page == "Visualizations":
                 st.plotly_chart(fig_cb, use_container_width=True)
             except Exception as e:
                 st.error(f"Chart error: {e}")
-    nav_buttons("Visualizations & Insights")
+    nav_buttons("Visualizations")
 
 # ═══════════════════════════════════════════════
 # PAGE — EXPORT
