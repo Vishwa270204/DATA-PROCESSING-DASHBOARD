@@ -23,7 +23,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-ddef nav_buttons(current_page):
+def nav_buttons(current_page):
     page_order = ["Upload & Inspect", "Statistics & EDA", "Recommendations", "Cleaning & Validation", "Encoding & Outliers", "Visualizations & Insights", "Export"]
     idx = page_order.index(current_page)
     slug = current_page.replace(" ", "_").replace("&", "and")
