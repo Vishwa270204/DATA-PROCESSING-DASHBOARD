@@ -1084,7 +1084,7 @@ elif st.session_state.page == "Statistics & EDA":
 
             fig_corr.update_layout(
                 annotations=annotations,
-                template="plotly_dark",
+                template="plotly_white",
                 height=max(420, len(cols_list) * 52 + 120),
                 paper_bgcolor="#1a1d27",
                 plot_bgcolor="#1a1d27",
