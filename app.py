@@ -2367,11 +2367,7 @@ elif st.session_state.page == "Visualizations":
                 with sb3: scatter_data_btn  = st.button("🗃️ Show Data",   key="scatter_data_btn")
                 st.markdown("</div>", unsafe_allow_html=True)
 
-            filtered_df2 = render_filter_panel("tab2", df)
-            if scatter_reset_btn:
-                filtered_df2 = df.copy()
-                st.rerun()
-
+            
             sc_color = None if sc         == "— None —" else sc
             sc_size  = None if sz         == "— None —" else sz
             facet    = None if facet_col  == "— None —" else facet_col
@@ -2433,16 +2429,7 @@ elif st.session_state.page == "Visualizations":
                 with bv3: bv_type   = st.radio("Plot type", ["Box","Violin","Both"], key="bv_type", horizontal=True)
                 with bv4: bv_points = st.radio("Show points", ["outliers","all","none"], key="bv_points", horizontal=True)
 
-                bb1, bb2, bb3, _ = st.columns([1, 1, 1, 3])
-                with bb1: bv_plot_btn  = st.button("📦 Plot",      key="bv_plot_btn",  type="primary")
-                with bb2: bv_reset_btn = st.button("🔄 Reset",     key="bv_reset_btn")
-                with bb3: bv_data_btn  = st.button("🗃️ Show Data", key="bv_data_btn")
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            filtered_df3 = render_filter_panel("tab3", df)
-            if bv_reset_btn:
-                filtered_df3 = df.copy()
-                st.rerun()
+               
 
             bv_group_val = None if bv_group == "— None —" else bv_group
             pts = False if bv_points == "none" else bv_points
@@ -2528,17 +2515,9 @@ elif st.session_state.page == "Visualizations":
                     key="cat_colorscale"
                 )
 
-                cbb1, cbb2, cbb3, _ = st.columns([1, 1, 1, 3])
-                with cbb1: cat_plot_btn  = st.button("📊 Plot",      key="cat_plot_btn",  type="primary")
-                with cbb2: cat_reset_btn = st.button("🔄 Reset",     key="cat_reset_btn")
-                with cbb3: cat_data_btn  = st.button("🗃️ Show Data", key="cat_data_btn")
-                st.markdown("</div>", unsafe_allow_html=True)
+          
 
-            filtered_df4 = render_filter_panel("tab4", df)
-            if cat_reset_btn:
-                filtered_df4 = df.copy()
-                st.rerun()
-
+            
             try:
                 agg_map = {
                     "Count": "count", "Mean": "mean", "Sum": "sum",
