@@ -94,10 +94,25 @@ init_database()
 # ── File loading ──────────────────────────────
 def load_file(buf, name):
     n = name.lower()
-    if n.endswith(".csv"):    return pd.read_csv(buf, low_memory=False)
-    elif n.endswith(".xlsx"): return pd.read_excel(buf, engine="openpyxl")
-    elif n.endswith(".xls"):  return pd.read_excel(buf)
-    else: raise ValueError("Unsupported format")
+
+    if n.endswith(".csv"):
+        for enc in ["utf-8", "latin1", "cp1252", "ISO-8859-1"]:
+            try:
+                buf.seek(0)
+                return pd.read_csv(buf, encoding=enc, low_memory=False)
+            except UnicodeDecodeError:
+                continue
+
+        raise ValueError("Unable to determine CSV encoding.")
+
+    elif n.endswith(".xlsx"):
+        return pd.read_excel(buf, engine="openpyxl")
+
+    elif n.endswith(".xls"):
+        return pd.read_excel(buf)
+
+    else:
+        raise ValueError("Unsupported format")
 
 # ── Column type detection ─────────────────────
 def identify_column_types(df):
