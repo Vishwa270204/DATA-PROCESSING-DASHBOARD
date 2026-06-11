@@ -2259,7 +2259,7 @@ elif st.session_state.page == "Visualizations":
                     )
                     # histograms don't support text labels — skip
                 
-                elif == "Area":
+                elif chart_type == "Area":
                     fig = px.area(
                         plot_df, x=x_col_plot, y=y_val, color=color_val,
                         template="plotly_white", height=420, text=text_col
