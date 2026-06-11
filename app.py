@@ -1396,7 +1396,7 @@ elif st.session_state.page == "Cleaning & Validation":
         st.stop()
 
     df = st.session_state.df
-    tab1, tab2, tab3 = st.tabs(["🗑️ Duplicates","🔧 Missing Values","✔️ Validation"])
+    tab1, tab2, tab3 = st.tabs(["🗑️ Duplicates","🔧 Missing Values"])
 
     with tab1:
         st.markdown("<div class='section-header'><h3>Duplicate Row Detection</h3></div>", unsafe_allow_html=True)
@@ -1443,133 +1443,7 @@ elif st.session_state.page == "Cleaning & Validation":
                         except Exception as e:
                             st.error(str(e))
 
-    with tab3:
-        st.markdown("<div class='section-header'><h3>Data Validation & Anomaly Detection</h3></div>", unsafe_allow_html=True)
-    
-        # ── User-defined range validation ──
-        st.markdown("**🎯 Custom Range Validation (Numerical Columns)**")
-        num_cols_v = df.select_dtypes(include=[np.number]).columns.tolist()
-        if num_cols_v:
-            range_col = st.selectbox("Select column to validate", ["— Select —"] + num_cols_v, key="range_val_col")
-            if range_col != "— Select —":
-                col_min = float(df[range_col].min())
-                col_max = float(df[range_col].max())
-                st.caption(f"Actual data range: `{col_min}` → `{col_max}`")
-                # reset defaults only when column changes
-                if st.session_state.get("_range_col_prev") != range_col:
-                    st.session_state["range_min"] = col_min
-                    st.session_state["range_max"] = col_max
-                    st.session_state["_range_col_prev"] = range_col
-                    rc1, rc2 = st.columns(2)
-                    with rc1:
-                        user_min = st.number_input("Minimum allowed value", key="range_min")
-                    with rc2:
-                        user_max = st.number_input("Maximum allowed value", key="range_max")
-                        if user_min >= user_max:
-                            st.error("❌ Min must be less than Max.")
-                        else:
-                            out_of_range = df[(df[range_col] < user_min) | (df[range_col] > user_max)]
-                            if len(out_of_range) > 0:
-                                st.markdown(f"<span class='badge badge-danger'>❌ {len(out_of_range)} rows out of range [{user_min}, {user_max}]</span>", unsafe_allow_html=True)
-                                with st.expander(f"Show {len(out_of_range)} invalid rows"):
-                                    st.dataframe(out_of_range, use_container_width=True)
-                                if st.button("🗑️ Remove out-of-range rows", key="remove_range"):
-                                    before = len(df)
-                                    st.session_state.df = df[
-                                        (df[range_col] >= user_min) & (df[range_col] <= user_max)
-                                    ].reset_index(drop=True)
-                                    save_operation(st.session_state.file_name, f"Range Filter: {range_col}", f"Removed {before - len(st.session_state.df)} rows outside [{user_min},{user_max}]")
-                                    st.success(f"✅ Removed {before - len(st.session_state.df)} rows.")
-                                    st.rerun()
-                            else:
-                                st.markdown(f"<span class='badge badge-success'>✅ All values within [{user_min}, {user_max}]</span>", unsafe_allow_html=True)
-    
-        st.markdown("---")
-        v1, v2 = st.columns(2)
-        with v1:
-            st.markdown("**⚠️ Invalid Domain Values**")
-            inv = detect_invalid_values(df)
-            for col, info in inv.items():
-                st.markdown(f"<span class='badge badge-danger'>{col}</span> {info['issue']} — {info['count']} rows", unsafe_allow_html=True)
-            if not inv: st.markdown("<span class='badge badge-success'>✅ None detected</span>", unsafe_allow_html=True)
-            st.markdown("&nbsp;")
-            st.markdown("**📧 Invalid Emails**")
-            emails = detect_invalid_email(df)
-            for col, info in emails.items():
-                st.markdown(f"<span class='badge badge-warning'>{col}</span> {info['count']} invalid emails", unsafe_allow_html=True)
-            if not emails: st.markdown("<span class='badge badge-success'>✅ None detected</span>", unsafe_allow_html=True)
-        with v2:
-            st.markdown("**➖ Negative Values (domain-aware)**")
-            negs = detect_negative_values(df)
-            for col, info in negs.items():
-                st.markdown(f"<span class='badge badge-warning'>{col}</span> {info['count']} negative rows — {info['reason']}", unsafe_allow_html=True)
-            if not negs: st.markdown("<span class='badge badge-success'>✅ None detected</span>", unsafe_allow_html=True)
-            st.markdown("&nbsp;")
-            st.markdown("**📞 Invalid Phone Numbers**")
-            phones = detect_invalid_phone(df)
-            for col, info in phones.items():
-                st.markdown(f"<span class='badge badge-warning'>{col}</span> {info['count']} invalid", unsafe_allow_html=True)
-            if not phones: st.markdown("<span class='badge badge-success'>✅ None detected</span>", unsafe_allow_html=True)
-
-        st.markdown("&nbsp;")
-        st.markdown("**📅 Future Dates**")
-        future = detect_future_dates(df)
-        for col, info in future.items():
-            st.markdown(f"<span class='badge badge-danger'>{col}</span> {info['count']} future dates", unsafe_allow_html=True)
-        if not future: st.markdown("<span class='badge badge-success'>✅ No future dates detected</span>", unsafe_allow_html=True)
-
-        st.markdown("---")
-        st.markdown("<div class='section-header'><h3>Valid / Invalid Row Segregation</h3></div>", unsafe_allow_html=True)
-
-        def _build_invalid_mask(df):
-            mask = pd.Series(False, index=df.index)
-            for col in df.columns:
-                cl = col.lower()
-                if pd.api.types.is_numeric_dtype(df[col]):
-                    if any(k in cl for k in ["age"]):
-                        mask |= (df[col] < 0) | (df[col] > 150)
-                    if any(k in cl for k in ["pct","percent"]) and "growth" not in cl:
-                        mask |= (df[col] < 0) | (df[col] > 100)
-                    if is_non_negative_column(col):
-                        mask |= df[col] < 0
-            pat_email = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$")
-            for col in df.select_dtypes(include="object").columns:
-                if any(k in col.lower() for k in ["email","mail"]):
-                    bad = df[col].dropna().apply(lambda x: not bool(pat_email.match(str(x))))
-                    mask.loc[bad[bad].index] = True
-            now = pd.Timestamp.now()
-            for col in df.columns:
-                if any(k in col.lower() for k in ["birth","dob","born","date","created","joined"]):
-                    try:
-                        parsed = pd.to_datetime(df[col], errors="coerce")
-                        mask |= (parsed > now).fillna(False)
-                    except: pass
-            return mask
-
-        invalid_mask = _build_invalid_mask(df)
-        valid_df = df[~invalid_mask]; invalid_df = df[invalid_mask]
-        ci1, ci2 = st.columns(2)
-        with ci1: st.markdown(f"""<div class='metric-card'><span class='val' style='color:#16a34a;'>{len(valid_df):,}</span><span class='label'>Valid Rows</span></div>""", unsafe_allow_html=True)
-        with ci2: st.markdown(f"""<div class='metric-card'><span class='val' style='color:#dc2626;'>{len(invalid_df):,}</span><span class='label'>Invalid Rows</span></div>""", unsafe_allow_html=True)
-        st.markdown("&nbsp;")
-        with st.expander(f"✅ Valid Rows ({len(valid_df):,})", expanded=False):
-            st.dataframe(valid_df.head(200), use_container_width=True, height=320)
-        if len(invalid_df) > 0:
-            with st.expander(f"❌ Invalid Rows ({len(invalid_df):,})", expanded=True):
-                st.dataframe(invalid_df, use_container_width=True, height=320)
-                c_rm, c_exp, _ = st.columns(3)
-                with c_rm:
-                    if st.button("🗑️ Remove Invalid Rows"):
-                        before = len(df)
-                        st.session_state.df = valid_df.reset_index(drop=True)
-                        save_operation(st.session_state.file_name, "Remove Invalid Rows", f"Removed {before - len(valid_df)} rows")
-                        st.success(f"✅ Removed {before-len(valid_df)} invalid rows.")
-                        st.rerun()
-                with c_exp:
-                    st.download_button("⬇️ Export Invalid Rows",
-                                       data=invalid_df.to_csv(index=False).encode("utf-8"),
-                                       file_name="invalid_rows.csv", mime="text/csv")
-    nav_buttons("Cleaning & Validation")
+       nav_buttons("Cleaning & Validation")
 # ═══════════════════════════════════════════════
 # PAGE 5 — ENCODING & OUTLIERS
 # ═══════════════════════════════════════════════
