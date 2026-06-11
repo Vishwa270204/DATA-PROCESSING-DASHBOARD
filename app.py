@@ -2006,67 +2006,7 @@ elif st.session_state.page == "Visualizations":
             pass
         return df
  
-    # ── shared filter panel ──────────────────────────────────────────────────
-    def render_filter_panel(tab_key, df):
-        with st.expander("🔽 Filter & Subset Data", expanded=False):
-            st.markdown(
-                "<div style='font-size:0.82rem;color:#6b7280;margin-bottom:10px;'>"
-                "Filters apply only to this chart — original dataset is unchanged.</div>",
-                unsafe_allow_html=True
-            )
-            filtered = df.copy()
-            fc1, fc2 = st.columns(2)
-
-            with fc1:
-                st.markdown("**🏷️ Categorical Filters**")
-                for col in cat_cols[:4]:
-                    unique_vals = df[col].dropna().unique().tolist()
-                    if len(unique_vals) <= 30:
-                        selected_vals = st.multiselect(
-                            f"{col}", unique_vals, default=unique_vals,
-                            key=f"filter_cat_{tab_key}_{col}"
-                        )
-                        if selected_vals:
-                            filtered = filtered[filtered[col].isin(selected_vals)]
-
-            with fc2:
-                st.markdown("**🔢 Numerical Range Filters**")
-                for col in num_cols[:4]:
-                    col_min = float(df[col].min())
-                    col_max = float(df[col].max())
-                    if col_min < col_max:
-                        rng = st.slider(
-                            f"{col}", col_min, col_max, (col_min, col_max),
-                            key=f"filter_num_{tab_key}_{col}"
-                        )
-                        filtered = filtered[
-                            (filtered[col] >= rng[0]) & (filtered[col] <= rng[1])
-                        ]
-
-            st.markdown("**✂️ Row Limit**")
-            rl1, rl2 = st.columns([2, 1])
-            with rl1:
-                row_limit = st.slider(
-                    "Max rows to plot", 100, len(filtered),
-                    min(5000, len(filtered)), step=100,
-                    key=f"row_limit_{tab_key}"
-                )
-            with rl2:
-                sample_method = st.radio(
-                    "Sample", ["First N", "Random"],
-                    key=f"sample_{tab_key}", horizontal=True
-                )
-            if sample_method == "Random":
-                filtered = filtered.sample(min(row_limit, len(filtered)), random_state=42)
-            else:
-                filtered = filtered.head(row_limit)
-
-            st.markdown(
-                f"<span class='badge badge-info'>Showing {len(filtered):,} of {len(df):,} rows</span>",
-                unsafe_allow_html=True
-            )
-        return filtered
-
+   
     tab1, tab2, tab3, tab4 = st.tabs([
         "📈 Custom Plot", "🔵 Scatter", "📦 Box & Violin", "📊 Category Breakdown"
     ])
