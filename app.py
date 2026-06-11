@@ -1118,6 +1118,7 @@ elif st.session_state.page == "Statistics & EDA":
                     linecolor="#e2e8f0",
                     side="bottom",
                     fixedrange=True,
+                    automargin=True,
                 ),
                 yaxis=dict(
                     tickfont=dict(size=11, color="#64748b"),
@@ -1125,13 +1126,9 @@ elif st.session_state.page == "Statistics & EDA":
                     linecolor="#e2e8f0",
                     autorange="reversed",
                     fixedrange=True,
+                    automargin=True,
                 ),
-                hoverlabel=dict(
-                    bgcolor="#ffffff",
-                    bordercolor="#e2e8f0",
-                    font=dict(color="#1e293b", size=12)
-                ),
-                margin=dict(t=48, b=110, l=140, r=60),
+                margin=dict(t=48, b=120, l=160, r=60),
             )
             st.plotly_chart(fig_corr, use_container_width=True)
 
