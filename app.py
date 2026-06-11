@@ -2116,7 +2116,7 @@ elif st.session_state.page == "Visualizations":
 
             st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
             
-        filtered_df1 = render_filter_panel("tab1", df)
+        
         
 
         color_val = None if color_col == "— None —" else color_col
