@@ -1038,65 +1038,89 @@ elif st.session_state.page == "Statistics & EDA":
         if num_df.shape[1] < 2:
             st.info("Need at least 2 numerical columns for correlation.")
         else:
-            st.markdown("<div class='section-header'><h3>Correlation with Selected Column</h3></div>", unsafe_allow_html=True)
-            corr = num_df.corr()
+            st.markdown("<div class='section-header'><h3>Correlation Heatmap</h3></div>", unsafe_allow_html=True)
+            corr = num_df.corr().round(2)
             cols_list = corr.columns.tolist()
-            x_vals, y_vals, vals, texts = [], [], [], []
-            for i, c1 in enumerate(cols_list):
-                for j, c2 in enumerate(cols_list):
-                    if i != j:
-                        v = corr.loc[c1, c2]
-                        x_vals.append(c2)
-                        y_vals.append(c1)
-                        vals.append(v)
-                        texts.append(f"{c1} vs {c2}<br>r = {v:.3f}")
 
-            fig_corr = go.Figure(go.Scatter(
-                x=x_vals,
-                y=y_vals,
-                mode="markers",
-                marker=dict(
-                    size=[abs(v)*60+8 for v in vals],
-                    color=vals,
-                    colorscale=[
-                        [0.0,  "#dc2626"],
-                        [0.5,  "#f8f9fc"],
-                        [1.0,  "#2563eb"]
-                    ],
-                    cmin=-1, cmax=1,
-                    showscale=True,
-                    colorbar=dict(
-                        title="r",
-                        tickvals=[-1,-0.5,0,0.5,1],
-                        thickness=14,
-                        len=0.8
-                    ),
-                    line=dict(width=1, color="#e2e6f0")
+            # Build annotation text matrix
+            annotations = []
+            for i, row in enumerate(cols_list):
+                for j, col in enumerate(cols_list):
+                    v = corr.loc[row, col]
+                    annotations.append(dict(
+                        x=col, y=row,
+                        text=f"{v:.2f}",
+                        showarrow=False,
+                        font=dict(
+                            size=10,
+                            color="white" if abs(v) > 0.5 else "#9fa3b8"
+                        )
+                    ))
+
+            fig_corr = go.Figure(go.Heatmap(
+                z=corr.values,
+                x=cols_list,
+                y=cols_list,
+                zmin=-1, zmax=1,
+                colorscale=[
+                    [0.0,  "#f43f5e"],
+                    [0.25, "#7c3f5e"],
+                    [0.5,  "#1a1d27"],
+                    [0.75, "#3f4a7c"],
+                    [1.0,  "#7c6af7"],
+                ],
+                colorbar=dict(
+                    title=dict(text="r", font=dict(color="#9fa3b8")),
+                    tickvals=[-1, -0.5, 0, 0.5, 1],
+                    tickfont=dict(color="#9fa3b8", size=10),
+                    thickness=12,
+                    len=0.85,
+                    outlinewidth=0,
                 ),
-                text=texts,
-                hoverinfo="text"
+                hovertemplate="%{y} × %{x}<br>r = %{z:.3f}<extra></extra>",
+                xgap=2,
+                ygap=2,
             ))
 
-            # add correlation value labels
-            for x, y, v in zip(x_vals, y_vals, vals):
-                fig_corr.add_annotation(
-                    x=x, y=y,
-                    text=f"{v:.2f}",
-                    showarrow=False,
-                    font=dict(size=9, color="#111827" if abs(v) < 0.6 else "white")
-                )
-
             fig_corr.update_layout(
-                title="Correlation Bubble Chart — All vs All",
-                template="plotly_white",
-                height=max(400, len(cols_list)*50+100),
-                paper_bgcolor="#ffffff",
-                plot_bgcolor="#f8f9fc",
-                xaxis=dict(tickangle=-35, title=""),
-                yaxis=dict(title="", autorange="reversed"),
-                margin=dict(t=60,b=80,l=120,r=40)
+                annotations=annotations,
+                template="plotly_dark",
+                height=max(420, len(cols_list) * 52 + 120),
+                paper_bgcolor="#1a1d27",
+                plot_bgcolor="#1a1d27",
+                xaxis=dict(
+                    tickangle=-40,
+                    tickfont=dict(size=11, color="#9fa3b8"),
+                    showgrid=False,
+                    side="bottom"
+                ),
+                yaxis=dict(
+                    tickfont=dict(size=11, color="#9fa3b8"),
+                    showgrid=False,
+                    autorange="reversed"
+                ),
+                margin=dict(t=40, b=100, l=120, r=60),
             )
             st.plotly_chart(fig_corr, use_container_width=True)
+
+            # Strong correlations summary
+            strong = []
+            for i in range(len(cols_list)):
+                for j in range(i+1, len(cols_list)):
+                    v = corr.iloc[i, j]
+                    if abs(v) >= 0.7:
+                        strong.append({
+                            "Column A": cols_list[i],
+                            "Column B": cols_list[j],
+                            "r": round(float(v), 4),
+                            "Strength": "Strong positive" if v >= 0.7 else "Strong negative"
+                        })
+            if strong:
+                st.markdown("<div class='section-header'><h3>Strong Correlations ( |r| ≥ 0.7 )</h3></div>", unsafe_allow_html=True)
+                strong_df = pd.DataFrame(strong).sort_values("r", key=abs, ascending=False)
+                st.dataframe(strong_df, use_container_width=True, hide_index=True)
+            else:
+                st.markdown("<span class='badge badge-success'>✅ No strong correlations found ( |r| < 0.7 )</span>", unsafe_allow_html=True)
     nav_buttons("Statistics & EDA")
 # ═══════════════════════════════════════════════
 # PAGE 3 — RECOMMENDATIONS
