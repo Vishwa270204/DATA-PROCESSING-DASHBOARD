@@ -1096,8 +1096,8 @@ elif st.session_state.page == "Statistics & EDA":
                     type="rect",
                     x0=i - 0.5, x1=i + 0.5,
                     y0=i - 0.5, y1=i + 0.5,
-                    fillcolor="#081d58",
-                    line=dict(color="#081d58", width=0),
+                    fillcolor="#ffffcc",
+                    line=dict(color="#ffffcc", width=0),
                     layer="above"
                 )
 
