@@ -117,26 +117,55 @@ def fill_missing_values(df, column, strategy, custom_value=None):
 
 def detect_outliers_iqr(df):
     result = {}
+    if df is None or len(df) == 0:
+        return result
     for col in df.select_dtypes(include=[np.number]).columns:
-        Q1, Q3 = df[col].quantile(0.25), df[col].quantile(0.75); IQR = Q3 - Q1
-        lo, hi = Q1 - 1.5*IQR, Q3 + 1.5*IQR
-        out = df[(df[col] < lo) | (df[col] > hi)]
-        result[col] = {"count": len(out), "pct": round(len(out)/len(df)*100, 2),
-                       "lower": lo, "upper": hi, "Q1": Q1, "Q3": Q3, "IQR": IQR,
-                       "mean": df[col].mean(), "std": df[col].std(), "rows": out.index.tolist()}
+        try:
+            s = df[col].dropna()
+            if len(s) < 4:
+                continue
+            Q1, Q3 = s.quantile(0.25), s.quantile(0.75)
+            IQR = Q3 - Q1
+            if IQR == 0:
+                continue
+            lo, hi = Q1 - 1.5*IQR, Q3 + 1.5*IQR
+            out = df[(df[col] < lo) | (df[col] > hi)]
+            result[col] = {
+                "count": len(out),
+                "pct": round(len(out)/len(df)*100, 2),
+                "lower": lo, "upper": hi,
+                "Q1": Q1, "Q3": Q3, "IQR": IQR,
+                "mean": s.mean(), "std": s.std(),
+                "rows": out.index.tolist()
+            }
+        except Exception:
+            continue
     return result
 
 
 def detect_outliers_zscore(df, threshold=3):
     result = {}
+    if df is None or len(df) == 0:
+        return result
     for col in df.select_dtypes(include=[np.number]).columns:
-        s = df[col].dropna()
-        z = np.abs(stats.zscore(s))
-        outlier_idx = s.index[z > threshold].tolist()
-        result[col] = {"count": len(outlier_idx), "pct": round(len(outlier_idx)/len(df)*100, 2),
-                       "mean": s.mean(), "std": s.std(), "threshold": threshold, "rows": outlier_idx}
+        try:
+            s = df[col].dropna()
+            if len(s) < 4:
+                continue
+            z = np.abs(stats.zscore(s))
+            outlier_idx = s.index[z > threshold].tolist()
+            result[col] = {
+                "count": len(outlier_idx),
+                "pct": round(len(outlier_idx)/len(df)*100, 2),
+                "mean": round(s.mean(), 4),
+                "std": round(s.std(), 4),
+                "threshold": threshold,
+                "rows": outlier_idx
+            }
+        except Exception:
+            continue
     return result
-
+    
 def remove_outliers(df, column, method="iqr"):
     before = len(df)
     if method == "iqr":
@@ -414,6 +443,8 @@ def apply_encoding(df, col, enc_type, ordinal_order=None):
 
 
 def calculate_data_quality_score(df):
+    if df is None or len(df) == 0 or df.size == 0:
+        return 0.0
     miss_pct = df.isnull().sum().sum() / df.size * 100
     dup_pct  = df.duplicated().sum() / len(df) * 100
     outliers = detect_outliers_iqr(df)
