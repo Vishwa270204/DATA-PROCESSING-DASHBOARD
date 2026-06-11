@@ -1042,10 +1042,6 @@ elif st.session_state.page == "Statistics & EDA":
             corr = num_df.corr().round(2)
             cols_list = corr.columns.tolist()
 
-            corr_display = corr.copy().astype(float)
-            for i in range(len(cols_list)):
-                corr_display.iloc[i, i] = float('nan')
-
             annotations = []
             for i, row in enumerate(cols_list):
                 for j, col in enumerate(cols_list):
@@ -1057,41 +1053,28 @@ elif st.session_state.page == "Statistics & EDA":
                         showarrow=False,
                         font=dict(
                             size=11,
-                            color="#1e293b" if is_diag else (
-                                "#ffffff" if v < -0.3 else "#1e293b"
-                            )
+                            color="#1e293b" if is_diag or v >= -0.3 else "#ffffff"
                         )
                     ))
 
             fig_corr = go.Figure(go.Heatmap(
-                z=corr_display.values,
+                z=corr.values,
                 x=cols_list,
                 y=cols_list,
                 zmin=-1, zmax=1,
-                colorscale='RdBu',
+                colorscale="RdBu",
                 colorbar=dict(
-                    tickvals=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
-                    ticktext=["−1.0", "−0.6", "−0.2", "0.2", "0.6", "1.0"],
-                    tickfont=dict(color="#475569", size=10),
+                    title=dict(text="r", font=dict(size=12)),
+                    tickvals=[-1, -0.5, 0, 0.5, 1],
+                    ticktext=["-1.0", "-0.5", "0", "0.5", "1.0"],
                     thickness=10,
                     len=0.8,
                     outlinewidth=0,
-                    bgcolor="#f8fafc",
                 ),
                 hovertemplate="%{y} × %{x}<br>r = %{z:.3f}<extra></extra>",
-                xgap=4,
-                ygap=4,
+                xgap=3,
+                ygap=3,
             ))
-
-            for i, col in enumerate(cols_list):
-                fig_corr.add_shape(
-                    type="rect",
-                    x0=i - 0.5, x1=i + 0.5,
-                    y0=i - 0.5, y1=i + 0.5,
-                    fillcolor="#ffffcc",
-                    line=dict(color="#ffffcc", width=0),
-                    layer="above"
-                )
 
             fig_corr.update_layout(
                 annotations=annotations,
@@ -1099,27 +1082,27 @@ elif st.session_state.page == "Statistics & EDA":
                 height=max(420, len(cols_list) * 58 + 140),
                 paper_bgcolor="#f8fafc",
                 plot_bgcolor="#f8fafc",
-                font=dict(color="#475569", family="DM Sans, sans-serif"),
                 title=dict(
                     text="Correlation Heatmap — All vs All",
-                    font=dict(color="#1e293b", size=13)
+                    font=dict(size=13)
                 ),
                 xaxis=dict(
                     tickangle=-40,
-                    tickfont=dict(size=11, color="#64748b"),
+                    tickfont=dict(size=11),
                     showgrid=False,
-                    linecolor="#e2e8f0",
                     side="bottom",
                     fixedrange=True,
                     automargin=True,
                 ),
                 yaxis=dict(
-                    tickfont=dict(size=11, color="#64748b"),
+                    tickfont=dict(size=11),
                     showgrid=False,
-                    linecolor="#e2e8f0",
                     autorange="reversed",
                     fixedrange=True,
                     automargin=True,
+                ),
+                hoverlabel=dict(
+                    font=dict(size=12),
                 ),
                 margin=dict(t=48, b=120, l=160, r=60),
             )
