@@ -43,13 +43,7 @@ def nav_buttons(current_page):
             if st.button(f"{page_order[idx+1]} ➡️", key=f"nav_next_{slug}", type="secondary"):
                 st.session_state.page = page_order[idx+1]
                 st.rerun()    
-def save_operation(file_name, operation, details):
-    try:
-        conn = sqlite3.connect(DB_NAME)
-        conn.execute("INSERT INTO processing_history (file_name,operation,details,timestamp) VALUES (?,?,?,?)",
-                     (file_name, operation, str(details), datetime.now().isoformat()))
-        conn.commit(); conn.close()
-    except: pass
+
 
 
 
@@ -101,19 +95,26 @@ def missing_value_report(df):
     return report
 
 def fill_missing_values(df, column, strategy, custom_value=None):
-    before = df[column].isnull().sum(); df = df.copy()
-    if strategy == "mean":     df[column].fillna(df[column].mean(), inplace=True)
-    elif strategy == "median": df[column].fillna(df[column].median(), inplace=True)
+    before = df[column].isnull().sum()
+    df = df.copy()
+    if strategy == "mean":
+        df[column] = df[column].fillna(df[column].mean())
+    elif strategy == "median":
+        df[column] = df[column].fillna(df[column].median())
     elif strategy == "mode":
         m = df[column].mode()
-        if not m.empty: df[column].fillna(m[0], inplace=True)
-    elif strategy == "ffill": df[column] = df[column].ffill()
-    elif strategy == "bfill": df[column] = df[column].bfill()
-    elif strategy == "custom" and custom_value is not None: df[column].fillna(custom_value, inplace=True)
-    elif strategy == "drop":  df = df.dropna(subset=[column]).reset_index(drop=True)
+        if not m.empty:
+            df[column] = df[column].fillna(m[0])
+    elif strategy == "ffill":
+        df[column] = df[column].ffill()
+    elif strategy == "bfill":
+        df[column] = df[column].bfill()
+    elif strategy == "custom" and custom_value is not None:
+        df[column] = df[column].fillna(custom_value)
+    elif strategy == "drop":
+        df = df.dropna(subset=[column]).reset_index(drop=True)
     after = df[column].isnull().sum()
     return df, {"before": before, "after": after, "filled": before - after}
-
 
 def detect_outliers_iqr(df):
     result = {}
@@ -676,11 +677,11 @@ if st.session_state.page == "Upload & Inspect":
         df = raw_df        
         summary = get_dataset_summary(raw_df)
         ct = identify_column_types(raw_df)
-        cols_m = st.columns(5)
+        cols_m = st.columns(4)
         for col_w, label, val in zip(cols_m,
             ["Rows","Columns","Missing %","Duplicates"],
             [f"{summary['rows']:,}", str(summary['columns']),
-             f"{summary['missing_pct']}%", str(summary['duplicate_rows']),]):
+             f"{summary['missing_pct']}%", str(summary['duplicate_rows'])]):
                  with col_w:
                     st.markdown(f"""<div class='metric-card'><span class='val'>{val}</span><span class='label'>{label}</span></div>""", unsafe_allow_html=True)
                     st.markdown("&nbsp;")
@@ -1004,17 +1005,17 @@ elif st.session_state.page == "Statistics & EDA":
             st.plotly_chart(fig_corr, use_container_width=True)
             # Strong correlations summary
             strong = []
-            for i in range(len(corr.columns)):
-                for j in range(i + 1, len(corr.columns)):
+            cols_list = corr.columns.tolist()
+            for i in range(len(cols_list)):
+                for j in range(i + 1, len(cols_list)):
                     v = corr.iloc[i, j]
-            
-            if abs(v) >= 0.7:
-                strong.append({
-                    "Column A": corr.columns[i],
-                    "Column B": corr.columns[j],
-                    "r": round(float(v), 4),
-                    "Strength": "Strong positive" if v > 0 else "Strong negative"
-                })
+                    if abs(v) >= 0.7:
+                        strong.append({
+                            "Column A": cols_list[i],
+                            "Column B": cols_list[j],
+                            "r": round(float(v), 4),
+                            "Strength": "Strong positive" if v > 0 else "Strong negative"
+                        })
             if strong:
                 st.markdown("<div class='section-header'><h3>Strong Correlations ( |r| ≥ 0.7 )</h3></div>", unsafe_allow_html=True)
                 strong_df = pd.DataFrame(strong).sort_values("r", key=abs, ascending=False)
@@ -2166,9 +2167,9 @@ elif st.session_state.page == "Export":
                 except Exception as e:
                     st.error(f"Excel export error: {e}")
                     clicked_xlsx = False
-                    if clicked_xlsx:
-                        st.session_state.export_done = True
-                        st.rerun()
+                if clicked_xlsx:
+                    st.session_state.export_done = True
+                    st.rerun()
 
     with tab2:
         st.markdown("**Original / Cleaned Dataset (first 20 rows)**")
