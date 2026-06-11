@@ -1966,7 +1966,7 @@ elif st.session_state.page == "Encoding & Outliers":
     
     nav_buttons("Encoding & Outliers")
 
-══════
+
 # ═══════════════════════════════════════════════
 # PAGE — VISUALIZATIONS 
 # ═══════════════════════════════════════════════
