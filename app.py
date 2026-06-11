@@ -46,7 +46,51 @@ def nav_buttons(current_page):
 
 
 
+# ── Database ──────────────────────────────────
+DB_NAME = "dashboard.db"
 
+def init_database():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("""CREATE TABLE IF NOT EXISTS file_metadata
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, file_name TEXT,
+                  upload_date TEXT, file_size_kb REAL, row_count INTEGER, column_count INTEGER)""")
+    c.execute("""CREATE TABLE IF NOT EXISTS processing_history
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, file_name TEXT,
+                  operation TEXT, details TEXT, timestamp TEXT)""")
+    conn.commit()
+    conn.close()
+
+def save_operation(file_name, operation, details):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        conn.execute(
+            "INSERT INTO processing_history (file_name, operation, details, timestamp) VALUES (?,?,?,?)",
+            (file_name, operation, str(details), datetime.now().isoformat())
+        )
+        conn.commit()
+        conn.close()
+    except:
+        pass
+
+def get_processing_history(file_name=None):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        if file_name:
+            df = pd.read_sql(
+                "SELECT * FROM processing_history WHERE file_name=? ORDER BY timestamp DESC",
+                conn, params=(file_name,)
+            )
+        else:
+            df = pd.read_sql(
+                "SELECT * FROM processing_history ORDER BY timestamp DESC", conn
+            )
+        conn.close()
+        return df
+    except:
+        return pd.DataFrame()
+
+init_database()
 # ── File loading ──────────────────────────────
 def load_file(buf, name):
     n = name.lower()
