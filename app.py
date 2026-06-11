@@ -1422,7 +1422,7 @@ elif st.session_state.page == "Cleaning & Validation":
                             new_df, stats_r = fill_missing_values(df, item["column"], chosen, custom_val)
                             st.session_state.df = new_df          # ← must assign new_df, not df
                             st.session_state.original_df = new_df # ← add this line too
-                            save_operation(...)
+                            save_operation(st.session_state.file_name, f"Fill Missing: {item['column']}", f"{chosen} – filled {stats_r['filled']}")
                             st.success(...)
                             st.rerun()
                         except Exception as e:
@@ -1547,7 +1547,7 @@ elif st.session_state.page == "Cleaning & Validation":
                     if st.button("🗑️ Remove Invalid Rows"):
                         before = len(df)
                         st.session_state.df = valid_df.reset_index(drop=True)
-                        save_operation(st.session_state.file_name, "Remove Invalid Rows", f"Removed {before-len(valid_df)} rows")
+                        save_operation(st.session_state.file_name, "Remove Invalid Rows", f"Removed {before - len(valid_df)} rows")
                         st.success(f"✅ Removed {before-len(valid_df)} invalid rows.")
                         st.rerun()
                 with c_exp:
@@ -1938,7 +1938,7 @@ elif st.session_state.page == "Encoding & Outliers":
                         try:
                             new_df, r = remove_outliers(df, selected_col, method=method_key)
                             st.session_state.df = new_df
-                            save_operation(st.session_state.file_name, f"Remove Outliers: {selected_col}", r)
+                            save_operation(st.session_state.file_name, f"Remove Outliers: {selected_col}", str(r))
                             st.success(f"Removed {r['removed']} outlier rows."); st.rerun()
                         except Exception as e: st.error(str(e))
                 with cb:
@@ -1946,7 +1946,7 @@ elif st.session_state.page == "Encoding & Outliers":
                         try:
                             new_df, r = cap_outliers(df, selected_col)
                             st.session_state.df = new_df
-                            save_operation(st.session_state.file_name, f"Cap Outliers: {selected_col}", r)
+                            save_operation(st.session_state.file_name, f"Cap Outliers: {selected_col}", str(r))
                             st.success(f"Capped {r['capped']} outliers."); st.rerun()
                         except Exception as e: st.error(str(e))
                 with cc:
