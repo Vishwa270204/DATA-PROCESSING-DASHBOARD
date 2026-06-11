@@ -650,7 +650,7 @@ if st.session_state.page == "Upload & Inspect":
             ["Rows","Columns","Missing %","Duplicates"],
             [f"{summary['rows']:,}", str(summary['columns'])],
              f"{summary['missing_pct']}%", str(summary['duplicate_rows'])):
-        tab1, tab2, tab3, tab4, tab5,  = st.tabs(["👁️ Preview","📋 Schema","🏷️ Column Types","❓ Missing","🔄 Encoded data"])
+        tab1, tab2, tab3, tab4, tab5  = st.tabs(["👁️ Preview","📋 Schema","🏷️ Column Types","❓ Missing","🔄 Encoded data"])
         with tab1:
             st.markdown(f"<div style='font-size:0.85rem;color:#6b7280;margin-bottom:8px;'>Dataset: <b style='color:#111827;'>{summary['rows']:,} rows × {summary['columns']} columns</b></div>", unsafe_allow_html=True)
             preview_opt = st.selectbox("Show", ["First 5 rows","First 10 rows","First 20 rows","Entire dataset"], key="preview_sel")
