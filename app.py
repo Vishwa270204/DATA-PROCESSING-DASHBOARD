@@ -2243,7 +2243,7 @@ elif st.session_state.page == "Visualizations":
                     if show_labels:
                         fig.update_traces(textposition="top center")
                 
-                elif == "Bar":
+                elif chart_type == "Bar":
                     fig = px.bar(
                         plot_df, x=x_col_plot, y=y_val, color=color_val,
                         template="plotly_white", height=420,
