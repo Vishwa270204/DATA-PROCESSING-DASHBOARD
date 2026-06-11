@@ -232,7 +232,20 @@ def detect_outliers_zscore(df, threshold=3):
         except Exception:
             continue
     return result
-    
+def prepare_line_data(df, x_col, y_col, color_col=None, agg_fn="mean"):
+    df = df.copy()
+    try:
+        df[x_col] = pd.to_datetime(df[x_col])
+        is_date = True
+    except:
+        is_date = False
+    df = df.dropna(subset=[x_col] + ([y_col] if y_col else []))
+    if y_col:
+        group_cols = [x_col] + ([color_col] if color_col else [])
+        agg_map = {"mean":"mean","sum":"sum","count":"count","median":"median","max":"max","min":"min"}
+        df = df.groupby(group_cols)[y_col].agg(agg_map.get(agg_fn,"mean")).reset_index()
+    df = df.sort_values(x_col)
+    return df, is_date    
 def remove_outliers(df, column, method="iqr"):
     before = len(df)
     if method == "iqr":
@@ -1953,9 +1966,7 @@ elif st.session_state.page == "Encoding & Outliers":
     
     nav_buttons("Encoding & Outliers")
 
-# ═══════════════════════════════════════════════
-# PAGE — VISUALIZATIONS 
-# ═══════════════════════════════════════════════
+══════
 # ═══════════════════════════════════════════════
 # PAGE — VISUALIZATIONS 
 # ═══════════════════════════════════════════════
@@ -1975,7 +1986,7 @@ elif st.session_state.page == "Visualizations":
     ct = identify_column_types(df)
     num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     cat_cols = df.select_dtypes(include="object").columns.tolist()
-
+    
     # ── Date grouping helper ─────────────────────────────────────────────────
     def apply_date_grouping(df, col, freq):
         df = df.copy()
@@ -1994,7 +2005,7 @@ elif st.session_state.page == "Visualizations":
         except Exception:
             pass
         return df
-
+ 
     # ── shared filter panel ──────────────────────────────────────────────────
     def render_filter_panel(tab_key, df):
         with st.expander("🔽 Filter & Subset Data", expanded=False):
@@ -2222,7 +2233,8 @@ elif st.session_state.page == "Visualizations":
                         plot_df.columns = [x_col, y_val]
                     except Exception:
                         pass
-
+                x_col_plot = x_col
+                text_col = y_val if st.session_state.get("custom_labels", False) else None
                 if chart_type == "Line":
                     fig = px.line(
                         plot_df, x=x_col_plot, y=y_val, color=color_val,
@@ -2231,7 +2243,7 @@ elif st.session_state.page == "Visualizations":
                     if show_labels:
                         fig.update_traces(textposition="top center")
                 
-                elif chart_type == "Bar":
+                elif == "Bar":
                     fig = px.bar(
                         plot_df, x=x_col_plot, y=y_val, color=color_val,
                         template="plotly_white", height=420,
@@ -2240,14 +2252,14 @@ elif st.session_state.page == "Visualizations":
                     if show_labels:
                         fig.update_traces(texttemplate="%{text:.2f}", textposition="outside")
                 
-                elif chart_type == "Histogram":
+                elif == "Histogram":
                     fig = px.histogram(
                         plot_df, x=x_col_plot, color=color_val,
                         template="plotly_white", height=420, nbins=30
                     )
                     # histograms don't support text labels — skip
                 
-                elif chart_type == "Area":
+                elif == "Area":
                     fig = px.area(
                         plot_df, x=x_col_plot, y=y_val, color=color_val,
                         template="plotly_white", height=420, text=text_col
@@ -2310,12 +2322,23 @@ elif st.session_state.page == "Visualizations":
 
                 text_col = y_val if show_labels and y_val else None
                 if chart_type == "Line":
-                    fig = px.line(
-                        plot_df, x=x_col, y=y_val, color=color_val,
-                        template="plotly_white", height=420, markers=True, text=y_val
-                    )
-                    fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")
-                
+                    
+                    # REPLACE WITH:
+                    if chart_type == "Line" and y_val:
+                        agg_choice = agg_func.lower().replace("none (raw)", "mean")
+                        plot_df, is_date_x = prepare_line_data(
+                            filtered_df1, x_col, y_val, color_val, agg_fn=agg_choice
+                        )
+                        fig = px.line(
+                            plot_df, x=x_col, y=y_val, color=color_val,
+                            template="plotly_white", height=420, markers=True
+                        )
+                        if is_date_x:
+                            fig.update_xaxes(tickformat="%b %Y", tickangle=-30)
+                        if show_labels:
+                            fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")
+                    
+                                    
                 elif chart_type == "Bar":
                     fig = px.bar(
                         plot_df, x=x_col, y=y_val, color=color_val,
