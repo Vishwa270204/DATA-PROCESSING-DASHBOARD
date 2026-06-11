@@ -1042,64 +1042,100 @@ elif st.session_state.page == "Statistics & EDA":
             corr = num_df.corr().round(2)
             cols_list = corr.columns.tolist()
 
-            # Build annotation text matrix
+            corr_display = corr.copy().astype(float)
+            for i in range(len(cols_list)):
+                corr_display.iloc[i, i] = float('nan')
+
             annotations = []
             for i, row in enumerate(cols_list):
                 for j, col in enumerate(cols_list):
                     v = corr.loc[row, col]
+                    is_diag = (row == col)
                     annotations.append(dict(
                         x=col, y=row,
-                        text=f"{v:.2f}",
+                        text="—" if is_diag else f"{v:.2f}",
                         showarrow=False,
                         font=dict(
-                            size=10,
-                            color="white" if abs(v) > 0.5 else "#9fa3b8"
+                            size=11,
+                            color="#6b7280" if is_diag else (
+                                "#ffffff" if abs(v) > 0.45 else "#374151"
+                            )
                         )
                     ))
 
             fig_corr = go.Figure(go.Heatmap(
-                z=corr.values,
+                z=corr_display.values,
                 x=cols_list,
                 y=cols_list,
                 zmin=-1, zmax=1,
                 colorscale=[
-                    [0.0,  "#f43f5e"],
-                    [0.25, "#7c3f5e"],
-                    [0.5,  "#1a1d27"],
-                    [0.75, "#3f4a7c"],
-                    [1.0,  "#7c6af7"],
+                    [0.0,  "#ef4444"],
+                    [0.2,  "#fca5a5"],
+                    [0.45, "#f9fafb"],
+                    [0.55, "#f9fafb"],
+                    [0.8,  "#a5b4fc"],
+                    [1.0,  "#6366f1"],
                 ],
                 colorbar=dict(
-                    title=dict(text="r", font=dict(color="#9fa3b8")),
+                    title=dict(
+                        text="r",
+                        font=dict(color="#374151", size=12)
+                    ),
                     tickvals=[-1, -0.5, 0, 0.5, 1],
-                    tickfont=dict(color="#9fa3b8", size=10),
-                    thickness=12,
-                    len=0.85,
+                    ticktext=["-1.0", "-0.5", "0", "0.5", "1.0"],
+                    tickfont=dict(color="#374151", size=10),
+                    thickness=10,
+                    len=0.8,
                     outlinewidth=0,
+                    bgcolor="#ffffff",
                 ),
                 hovertemplate="%{y} × %{x}<br>r = %{z:.3f}<extra></extra>",
-                xgap=2,
-                ygap=2,
+                xgap=3,
+                ygap=3,
             ))
+
+            for i, col in enumerate(cols_list):
+                fig_corr.add_shape(
+                    type="rect",
+                    x0=i - 0.5, x1=i + 0.5,
+                    y0=i - 0.5, y1=i + 0.5,
+                    fillcolor="#e5e7eb",
+                    line=dict(color="#d1d5db", width=1),
+                    layer="above"
+                )
 
             fig_corr.update_layout(
                 annotations=annotations,
-                template="plotly_white",
-                height=max(420, len(cols_list) * 52 + 120),
-                paper_bgcolor="#1a1d27",
-                plot_bgcolor="#1a1d27",
+                template=None,
+                height=max(420, len(cols_list) * 58 + 140),
+                paper_bgcolor="#ffffff",
+                plot_bgcolor="#ffffff",
+                font=dict(color="#374151", family="DM Sans, sans-serif"),
+                title=dict(
+                    text="Correlation Heatmap — All vs All",
+                    font=dict(color="#111827", size=13)
+                ),
                 xaxis=dict(
                     tickangle=-40,
-                    tickfont=dict(size=11, color="#9fa3b8"),
+                    tickfont=dict(size=11, color="#6b7280"),
                     showgrid=False,
-                    side="bottom"
+                    linecolor="#e5e7eb",
+                    side="bottom",
+                    fixedrange=True,
                 ),
                 yaxis=dict(
-                    tickfont=dict(size=11, color="#9fa3b8"),
+                    tickfont=dict(size=11, color="#6b7280"),
                     showgrid=False,
-                    autorange="reversed"
+                    linecolor="#e5e7eb",
+                    autorange="reversed",
+                    fixedrange=True,
                 ),
-                margin=dict(t=40, b=100, l=120, r=60),
+                hoverlabel=dict(
+                    bgcolor="#f9fafb",
+                    bordercolor="#e5e7eb",
+                    font=dict(color="#111827", size=12)
+                ),
+                margin=dict(t=48, b=110, l=140, r=60),
             )
             st.plotly_chart(fig_corr, use_container_width=True)
 
