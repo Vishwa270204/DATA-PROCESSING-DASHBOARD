@@ -2116,7 +2116,6 @@ elif st.session_state.page == "Visualizations":
             with sc1: sx = st.selectbox("X Axis", num_cols, key="scatter_x")
             with sc2: sy = st.selectbox("Y Axis", num_cols[::-1], key="scatter_y")
             with sc3: sc = st.selectbox("Color by", ["— None —"] + cat_cols + num_cols, key="scatter_color")
-            sc_size = st.selectbox("Size by (optional)", ["— None —"] + num_cols, key="scatter_size")
             sc_color = None if sc == "— None —" else sc
             sc_size_val = None if sc_size == "— None —" else sc_size
             try:
