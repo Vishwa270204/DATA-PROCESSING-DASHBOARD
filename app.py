@@ -2121,7 +2121,7 @@ elif st.session_state.page == "Visualizations":
 
         color_val = None if color_col == "— None —" else color_col
         y_val     = None if y_col     == "— None —" else y_col
-        plot_df   = filtered_df1.copy()
+      
 
         try:
             # ── DATE GROUPING PATH ──────────────────────────────────────────
