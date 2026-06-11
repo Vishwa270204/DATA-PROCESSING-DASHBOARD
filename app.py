@@ -2234,9 +2234,9 @@ elif st.session_state.page == "Visualizations":
                    
                     is_date = False
                     try:
-                        parsed = pd.to_datetime(plot_df2[x_col], errors="coerce")
-                        if parsed.notna().sum() > len(plot_df2) * 0.5:
-                            plot_df2[x_col] = parsed
+                        parsed = pd.to_datetime(plot_df[x_col], errors="coerce")
+                        if parsed.notna().sum() > len(plot_df) * 0.5:
+                            plot_df[x_col] = parsed
                             is_date = True
                     except Exception:
                         pass
@@ -2246,20 +2246,20 @@ elif st.session_state.page == "Visualizations":
                           "median":"median","max":"max","min":"min"}.get(agg_choice, "sum")
             
                     if is_date:
-                        plot_df2["_period"] = plot_df2[x_col].dt.to_period("M").astype(str)
+                        plot_df["_period"] = plot_df[x_col].dt.to_period("M").astype(str)
                         grp_col = "_period"
                     else:
                         grp_col = x_col
             
-                    if color_val and color_val in plot_df2.columns:
-                        plot_df2 = plot_df2.groupby([grp_col, color_val])[y_val].agg(fn).reset_index()
+                    if color_val and color_val in plot_df.columns:
+                        plot_df = plot_df.groupby([grp_col, color_val])[y_val].agg(fn).reset_index()
                     else:
-                        plot_df2 = plot_df2.groupby(grp_col)[y_val].agg(fn).reset_index()
+                        plot_df = plot_df.groupby(grp_col)[y_val].agg(fn).reset_index()
                         color_val = None
             
-                    plot_df2 = plot_df2.sort_values(grp_col)
+                    plot_df = plot_df.sort_values(grp_col)
                     fig = px.line(
-                        plot_df2, x=grp_col, y=y_val, color=color_val,
+                        plot_df, x=grp_col, y=y_val, color=color_val,
                         template="plotly_white", height=420, markers=True,
                         labels={grp_col: x_col},
                         title=f"{y_val} by {x_col} (Monthly)"
@@ -2270,7 +2270,7 @@ elif st.session_state.page == "Visualizations":
                     )
                     if show_labels:
                         fig.update_traces(
-                            text=plot_df2[y_val],
+                            text=plot_df[y_val],
                             texttemplate="%{text:,.0f}",
                             textposition="top center"
                         )
