@@ -2252,7 +2252,7 @@ elif st.session_state.page == "Visualizations":
                     if show_labels:
                         fig.update_traces(texttemplate="%{text:.2f}", textposition="outside")
                 
-                elif == "Histogram":
+                elif chart_type == "Histogram":
                     fig = px.histogram(
                         plot_df, x=x_col_plot, color=color_val,
                         template="plotly_white", height=420, nbins=30
@@ -2321,24 +2321,19 @@ elif st.session_state.page == "Visualizations":
                     plot_df = plot_df.sort_values(y_val, ascending=False)
 
                 text_col = y_val if show_labels and y_val else None
-                if chart_type == "Line":
-                    
-                    # REPLACE WITH:
-                    if chart_type == "Line" and y_val:
-                        agg_choice = agg_func.lower().replace("none (raw)", "mean")
-                        plot_df, is_date_x = prepare_line_data(
-                            filtered_df1, x_col, y_val, color_val, agg_fn=agg_choice
-                        )
-                        fig = px.line(
-                            plot_df, x=x_col, y=y_val, color=color_val,
-                            template="plotly_white", height=420, markers=True
-                        )
-                        if is_date_x:
-                            fig.update_xaxes(tickformat="%b %Y", tickangle=-30)
-                        if show_labels:
-                            fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")
-                    
-                                    
+                
+                if chart_type == "Line" and y_val:
+                    agg_choice = agg_func.lower().replace("none (raw)", "mean")
+                    plot_df, is_date_x = prepare_line_data(
+                        filtered_df1, x_col, y_val, color_val, agg_fn=agg_choice)
+                    fig = px.line(
+                        plot_df, x=x_col, y=y_val, color=color_val,
+                        template="plotly_white", height=420, markers=True
+                    )
+                    if is_date_x:
+                        fig.update_xaxes(tickformat="%b %Y", tickangle=-30)
+                     if show_labels:
+                           fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")                
                 elif chart_type == "Bar":
                     fig = px.bar(
                         plot_df, x=x_col, y=y_val, color=color_val,
