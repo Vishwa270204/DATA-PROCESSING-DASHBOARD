@@ -1396,7 +1396,7 @@ elif st.session_state.page == "Cleaning":
         st.stop()
 
     df = st.session_state.df
-    tab1, tab2, tab3 = st.tabs(["🗑️ Duplicates","🔧 Missing Values"])
+    tab1, tab2 = st.tabs(["🗑️ Duplicates","🔧 Missing Values"])
 
     with tab1:
         st.markdown("<div class='section-header'><h3>Duplicate Row Detection</h3></div>", unsafe_allow_html=True)
