@@ -2293,108 +2293,108 @@ elif st.session_state.page == "Visualizations":
 
             # ── NORMAL PATH ─────────────────────────────────────────────────
             else:
-    group_val  = (None if st.session_state.get("custom_group","— None —") == "— None —"
-                  else st.session_state.get("custom_group"))
-    agg_func   = st.session_state.get("custom_agg",    "None (raw)")
-    sort_order = st.session_state.get("custom_sort",   "None")
-    show_labels= st.session_state.get("custom_labels", False)
-
-    # ── LINE CHART ──────────────────────────────────────────────────
-    if chart_type == "Line" and y_val:
-        plot_df2 = filtered_df1.copy()
-        is_date = False
-        try:
-            parsed = pd.to_datetime(plot_df2[x_col], errors="coerce")
-            if parsed.notna().sum() > len(plot_df2) * 0.5:
-                plot_df2[x_col] = parsed
-                is_date = True
-        except Exception:
-            pass
-
-        agg_choice = agg_func.lower().replace("none (raw)", "sum")
-        fn = {"mean":"mean","sum":"sum","count":"count",
-              "median":"median","max":"max","min":"min"}.get(agg_choice, "sum")
-
-        if is_date:
-            plot_df2["_period"] = plot_df2[x_col].dt.to_period("M").astype(str)
-            grp_col = "_period"
-        else:
-            grp_col = x_col
-
-        if color_val and color_val in plot_df2.columns:
-            plot_df2 = plot_df2.groupby([grp_col, color_val])[y_val].agg(fn).reset_index()
-        else:
-            plot_df2 = plot_df2.groupby(grp_col)[y_val].agg(fn).reset_index()
-            color_val = None
-
-        plot_df2 = plot_df2.sort_values(grp_col)
-        fig = px.line(
-            plot_df2, x=grp_col, y=y_val, color=color_val,
-            template="plotly_white", height=420, markers=True,
-            labels={grp_col: x_col},
-            title=f"{y_val} by {x_col} (Monthly)"
-        )
-        fig.update_layout(
-            paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc",
-            xaxis=dict(tickangle=-45, tickfont=dict(size=10)),
-        )
-        if show_labels:
-            fig.update_traces(
-                text=plot_df2[y_val],
-                texttemplate="%{text:,.0f}",
-                textposition="top center"
-            )
-        st.plotly_chart(fig, use_container_width=True, key="line_chart_normal")
-
-    # ── BAR CHART ────────────────────────────────────────────────────
-    elif chart_type == "Bar" and y_val:
-        if agg_func != "None (raw)" and group_val:
-            agg_map = {"Mean":"mean","Sum":"sum","Count":"count",
-                       "Median":"median","Max":"max","Min":"min"}
-            plot_df = (plot_df.groupby(group_val)[y_val]
-                       .agg(agg_map.get(agg_func,"sum")).reset_index())
-            x_col_plot = group_val
-        else:
-            x_col_plot = x_col
-
-        if sort_order == "X ascending":   plot_df = plot_df.sort_values(x_col_plot, ascending=True)
-        elif sort_order == "X descending": plot_df = plot_df.sort_values(x_col_plot, ascending=False)
-        elif sort_order == "Y ascending":  plot_df = plot_df.sort_values(y_val, ascending=True)
-        elif sort_order == "Y descending": plot_df = plot_df.sort_values(y_val, ascending=False)
-
-        fig = px.bar(
-            plot_df, x=x_col_plot, y=y_val, color=color_val,
-            template="plotly_white", height=420, barmode="group",
-            text=y_val if show_labels else None
-        )
-        if show_labels:
-            fig.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
-        fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
-        st.plotly_chart(fig, use_container_width=True, key="bar_chart_normal")
-
-    # ── AREA CHART ───────────────────────────────────────────────────
-    elif chart_type == "Area" and y_val:
-        fig = px.area(
-            plot_df, x=x_col, y=y_val, color=color_val,
-            template="plotly_white", height=420,
-            text=y_val if show_labels else None
-        )
-        if show_labels:
-            fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")
-        fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
-        st.plotly_chart(fig, use_container_width=True, key="area_chart_normal")
-
-    # ── HISTOGRAM ────────────────────────────────────────────────────
-    elif chart_type == "Histogram":
-        fig = px.histogram(
-            plot_df, x=x_col, color=color_val,
-            template="plotly_white", height=420
-        )
-        fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
-        st.plotly_chart(fig, use_container_width=True, key="hist_chart_normal")
-
-    elif not y_val:
-        st.info("Please select a Y Axis column to plot.")
+                group_val  = (None if st.session_state.get("custom_group","— None —") == "— None —"
+                              else st.session_state.get("custom_group"))
+                agg_func   = st.session_state.get("custom_agg",    "None (raw)")
+                sort_order = st.session_state.get("custom_sort",   "None")
+                show_labels= st.session_state.get("custom_labels", False)
+            
+                # ── LINE CHART ──────────────────────────────────────────────────
+                if chart_type == "Line" and y_val:
+                    plot_df2 = filtered_df1.copy()
+                    is_date = False
+                    try:
+                        parsed = pd.to_datetime(plot_df2[x_col], errors="coerce")
+                        if parsed.notna().sum() > len(plot_df2) * 0.5:
+                            plot_df2[x_col] = parsed
+                            is_date = True
+                    except Exception:
+                        pass
+            
+                    agg_choice = agg_func.lower().replace("none (raw)", "sum")
+                    fn = {"mean":"mean","sum":"sum","count":"count",
+                          "median":"median","max":"max","min":"min"}.get(agg_choice, "sum")
+            
+                    if is_date:
+                        plot_df2["_period"] = plot_df2[x_col].dt.to_period("M").astype(str)
+                        grp_col = "_period"
+                    else:
+                        grp_col = x_col
+            
+                    if color_val and color_val in plot_df2.columns:
+                        plot_df2 = plot_df2.groupby([grp_col, color_val])[y_val].agg(fn).reset_index()
+                    else:
+                        plot_df2 = plot_df2.groupby(grp_col)[y_val].agg(fn).reset_index()
+                        color_val = None
+            
+                    plot_df2 = plot_df2.sort_values(grp_col)
+                    fig = px.line(
+                        plot_df2, x=grp_col, y=y_val, color=color_val,
+                        template="plotly_white", height=420, markers=True,
+                        labels={grp_col: x_col},
+                        title=f"{y_val} by {x_col} (Monthly)"
+                    )
+                    fig.update_layout(
+                        paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc",
+                        xaxis=dict(tickangle=-45, tickfont=dict(size=10)),
+                    )
+                    if show_labels:
+                        fig.update_traces(
+                            text=plot_df2[y_val],
+                            texttemplate="%{text:,.0f}",
+                            textposition="top center"
+                        )
+                    st.plotly_chart(fig, use_container_width=True, key="line_chart_normal")
+            
+                # ── BAR CHART ────────────────────────────────────────────────────
+                elif chart_type == "Bar" and y_val:
+                    if agg_func != "None (raw)" and group_val:
+                        agg_map = {"Mean":"mean","Sum":"sum","Count":"count",
+                                   "Median":"median","Max":"max","Min":"min"}
+                        plot_df = (plot_df.groupby(group_val)[y_val]
+                                   .agg(agg_map.get(agg_func,"sum")).reset_index())
+                        x_col_plot = group_val
+                    else:
+                        x_col_plot = x_col
+            
+                    if sort_order == "X ascending":   plot_df = plot_df.sort_values(x_col_plot, ascending=True)
+                    elif sort_order == "X descending": plot_df = plot_df.sort_values(x_col_plot, ascending=False)
+                    elif sort_order == "Y ascending":  plot_df = plot_df.sort_values(y_val, ascending=True)
+                    elif sort_order == "Y descending": plot_df = plot_df.sort_values(y_val, ascending=False)
+            
+                    fig = px.bar(
+                        plot_df, x=x_col_plot, y=y_val, color=color_val,
+                        template="plotly_white", height=420, barmode="group",
+                        text=y_val if show_labels else None
+                    )
+                    if show_labels:
+                        fig.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
+                    fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
+                    st.plotly_chart(fig, use_container_width=True, key="bar_chart_normal")
+            
+                # ── AREA CHART ───────────────────────────────────────────────────
+                elif chart_type == "Area" and y_val:
+                    fig = px.area(
+                        plot_df, x=x_col, y=y_val, color=color_val,
+                        template="plotly_white", height=420,
+                        text=y_val if show_labels else None
+                    )
+                    if show_labels:
+                        fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")
+                    fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
+                    st.plotly_chart(fig, use_container_width=True, key="area_chart_normal")
+            
+                # ── HISTOGRAM ────────────────────────────────────────────────────
+                elif chart_type == "Histogram":
+                    fig = px.histogram(
+                        plot_df, x=x_col, color=color_val,
+                        template="plotly_white", height=420
+                    )
+                    fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
+                    st.plotly_chart(fig, use_container_width=True, key="hist_chart_normal")
+            
+                elif not y_val:
+                    st.info("Please select a Y Axis column to plot.")
         if show_data:
             st.markdown(
                 "<div class='section-header'><h3>📋 Data Table</h3></div>",
