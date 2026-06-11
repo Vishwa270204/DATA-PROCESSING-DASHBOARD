@@ -2395,6 +2395,9 @@ elif st.session_state.page == "Visualizations":
             
                 elif not y_val:
                     st.info("Please select a Y Axis column to plot.")
+            except Exception as e:
+                st.error(f"Chart error: {e}")
+
             if show_data:
                 st.markdown(
                     "<div class='section-header'><h3>📋 Data Table</h3></div>",
@@ -2480,7 +2483,6 @@ elif st.session_state.page == "Visualizations":
                 """, unsafe_allow_html=True)
             except Exception as e:
                 st.error(f"Scatter error: {e}")
-
             if scatter_data_btn:
                 st.dataframe(
                     filtered_df2[[sx, sy]].dropna(),
