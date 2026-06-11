@@ -1443,7 +1443,7 @@ elif st.session_state.page == "Cleaning":
                         except Exception as e:
                             st.error(str(e))
 
-       nav_buttons("Cleaning")
+    nav_buttons("Cleaning")
 # ═══════════════════════════════════════════════
 # PAGE 5 — ENCODING & OUTLIERS
 # ═══════════════════════════════════════════════
