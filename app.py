@@ -1069,29 +1069,29 @@ elif st.session_state.page == "Statistics & EDA":
                 y=cols_list,
                 zmin=-1, zmax=1,
                 colorscale=[
-                    [0.0,  "#ef4444"],
-                    [0.2,  "#fca5a5"],
-                    [0.45, "#f9fafb"],
-                    [0.55, "#f9fafb"],
-                    [0.8,  "#a5b4fc"],
-                    [1.0,  "#6366f1"],
+                    [0.0,  "#f97316"],
+                    [0.2,  "#fed7aa"],
+                    [0.45, "#f1f5f9"],
+                    [0.55, "#f1f5f9"],
+                    [0.8,  "#93c5fd"],
+                    [1.0,  "#2563eb"],
                 ],
                 colorbar=dict(
                     title=dict(
                         text="r",
-                        font=dict(color="#374151", size=12)
+                        font=dict(color="#475569", size=12)
                     ),
                     tickvals=[-1, -0.5, 0, 0.5, 1],
                     ticktext=["-1.0", "-0.5", "0", "0.5", "1.0"],
-                    tickfont=dict(color="#374151", size=10),
+                    tickfont=dict(color="#475569", size=10),
                     thickness=10,
                     len=0.8,
                     outlinewidth=0,
-                    bgcolor="#ffffff",
+                    bgcolor="#f8fafc",
                 ),
                 hovertemplate="%{y} × %{x}<br>r = %{z:.3f}<extra></extra>",
-                xgap=3,
-                ygap=3,
+                xgap=4,
+                ygap=4,
             ))
 
             for i, col in enumerate(cols_list):
@@ -1099,8 +1099,8 @@ elif st.session_state.page == "Statistics & EDA":
                     type="rect",
                     x0=i - 0.5, x1=i + 0.5,
                     y0=i - 0.5, y1=i + 0.5,
-                    fillcolor="#e5e7eb",
-                    line=dict(color="#d1d5db", width=1),
+                    fillcolor="#e2e8f0",
+                    line=dict(color="#cbd5e1", width=1),
                     layer="above"
                 )
 
@@ -1108,32 +1108,32 @@ elif st.session_state.page == "Statistics & EDA":
                 annotations=annotations,
                 template=None,
                 height=max(420, len(cols_list) * 58 + 140),
-                paper_bgcolor="#ffffff",
-                plot_bgcolor="#ffffff",
-                font=dict(color="#374151", family="DM Sans, sans-serif"),
+                paper_bgcolor="#f8fafc",
+                plot_bgcolor="#f8fafc",
+                font=dict(color="#475569", family="DM Sans, sans-serif"),
                 title=dict(
                     text="Correlation Heatmap — All vs All",
-                    font=dict(color="#111827", size=13)
+                    font=dict(color="#1e293b", size=13)
                 ),
                 xaxis=dict(
                     tickangle=-40,
-                    tickfont=dict(size=11, color="#6b7280"),
+                    tickfont=dict(size=11, color="#64748b"),
                     showgrid=False,
-                    linecolor="#e5e7eb",
+                    linecolor="#e2e8f0",
                     side="bottom",
                     fixedrange=True,
                 ),
                 yaxis=dict(
-                    tickfont=dict(size=11, color="#6b7280"),
+                    tickfont=dict(size=11, color="#64748b"),
                     showgrid=False,
-                    linecolor="#e5e7eb",
+                    linecolor="#e2e8f0",
                     autorange="reversed",
                     fixedrange=True,
                 ),
                 hoverlabel=dict(
-                    bgcolor="#f9fafb",
-                    bordercolor="#e5e7eb",
-                    font=dict(color="#111827", size=12)
+                    bgcolor="#ffffff",
+                    bordercolor="#e2e8f0",
+                    font=dict(color="#1e293b", size=12)
                 ),
                 margin=dict(t=48, b=110, l=140, r=60),
             )
