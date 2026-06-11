@@ -2323,45 +2323,55 @@ elif st.session_state.page == "Visualizations":
                 text_col = y_val if show_labels and y_val else None
                 
                 if chart_type == "Line" and y_val:
-                    # Always aggregate for line charts — prevents raw row noise
-                    agg_choice = agg_func.lower().replace("none (raw)", "sum")
-                
-                    # Try to parse X as date
+                    plot_df2 = filtered_df1.copy()
+                    
+                    # Step 1: Force parse date
+                    is_date = False
                     try:
-                        plot_df[x_col] = pd.to_datetime(plot_df[x_col])
-                        # Group by month automatically if it looks like a date
-                        plot_df["_x_period"] = plot_df[x_col].dt.to_period("M").astype(str)
-                        group_key = "_x_period"
+                        parsed = pd.to_datetime(plot_df2[x_col], errors="coerce")
+                        if parsed.notna().sum() > len(plot_df2) * 0.5:  # majority parseable = it's a date
+                            plot_df2[x_col] = parsed
+                            is_date = True
                     except Exception:
-                        group_key = x_col
+                        pass
                 
-                    # Aggregate
-                    if color_val:
-                        plot_df = plot_df.groupby([group_key, color_val])[y_val].agg(agg_choice).reset_index()
+                    # Step 2: Group by month if date, else group by x_col
+                    agg_choice = agg_func.lower().replace("none (raw)", "sum")
+                    agg_map = {"mean":"mean","sum":"sum","count":"count","median":"median","max":"max","min":"min"}
+                    fn = agg_map.get(agg_choice, "sum")
+                
+                    if is_date:
+                        plot_df2["_period"] = plot_df2[x_col].dt.to_period("M").astype(str)
+                        grp_col = "_period"
                     else:
-                        plot_df = plot_df.groupby(group_key)[y_val].agg(agg_choice).reset_index()
+                        grp_col = x_col
                 
-                    plot_df = plot_df.sort_values(group_key)
+                    if color_val and color_val in plot_df2.columns:
+                        plot_df2 = plot_df2.groupby([grp_col, color_val])[y_val].agg(fn).reset_index()
+                    else:
+                        plot_df2 = plot_df2.groupby(grp_col)[y_val].agg(fn).reset_index()
+                        color_val = None
+                
+                    plot_df2 = plot_df2.sort_values(grp_col)
                 
                     fig = px.line(
-                        plot_df, x=group_key, y=y_val, color=color_val,
+                        plot_df2, x=grp_col, y=y_val, color=color_val,
                         template="plotly_white", height=420, markers=True,
-                        labels={group_key: x_col, y_val: y_val},
-                        title=f"{y_val} by {x_col} (Monthly)"
+                        labels={grp_col: x_col},
+                        title=f"{y_val} by {x_col} (Monthly grouped)"
                     )
                     fig.update_layout(
                         paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc",
                         xaxis=dict(tickangle=-45, tickfont=dict(size=10)),
-                        yaxis_title=y_val,
-                        xaxis_title="Order Month"
                     )
                     if show_labels:
                         fig.update_traces(
-                            text=plot_df[y_val],
+                            text=plot_df2[y_val],
                             texttemplate="%{text:,.0f}",
                             textposition="top center"
                         )
-                    st.plotly_chart(fig, use_container_width=True)               
+                    # Fix: unique key to avoid duplicate plotly_chart ID error
+                    st.plotly_chart(fig, use_container_width=True, key="line_chart_normal")               
                 elif chart_type == "Bar":
                     fig = px.bar(
                         plot_df, x=x_col, y=y_val, color=color_val,
