@@ -648,7 +648,7 @@ if st.session_state.page == "Upload & Inspect":
         cols_m = st.columns(5)
         for col_w, label, val in zip(cols_m,
             ["Rows","Columns","Missing %","Duplicates"],
-            [f"{summary['rows']:,}", str(summary['columns']),
+            [f"{summary['rows']:,}", str(summary['columns'])],
              f"{summary['missing_pct']}%", str(summary['duplicate_rows']),
         tab1, tab2, tab3, tab4, tab5,  = st.tabs(["👁️ Preview","📋 Schema","🏷️ Column Types","❓ Missing","🔄 Encoded data"])
         with tab1:
