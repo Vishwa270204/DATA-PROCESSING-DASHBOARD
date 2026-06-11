@@ -2225,34 +2225,38 @@ elif st.session_state.page == "Visualizations":
 
                 if chart_type == "Line":
                     fig = px.line(
-                        plot_df, x=x_col, y=y_val, color=color_val,
-                        template="plotly_white", height=420, markers=True
+                        plot_df, x=x_col_plot, y=y_val, color=color_val,
+                        template="plotly_white", height=420, text=text_col
                     )
+                    if show_labels:
+                        fig.update_traces(textposition="top center")
+                
                 elif chart_type == "Bar":
                     fig = px.bar(
-                        plot_df, x=x_col, y=y_val, color=color_val,
-                        template="plotly_white", height=420, barmode="group",
-                        text=y_val
+                        plot_df, x=x_col_plot, y=y_val, color=color_val,
+                        template="plotly_white", height=420,
+                        barmode="group", text=text_col
                     )
-                    fig.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
+                    if show_labels:
+                        fig.update_traces(texttemplate="%{text:.2f}", textposition="outside")
+                
+                elif chart_type == "Histogram":
+                    fig = px.histogram(
+                        plot_df, x=x_col_plot, color=color_val,
+                        template="plotly_white", height=420, nbins=30
+                    )
+                    # histograms don't support text labels — skip
+                
                 elif chart_type == "Area":
                     fig = px.area(
-                        plot_df, x=x_col, y=y_val, color=color_val,
-                        template="plotly_white", height=420
+                        plot_df, x=x_col_plot, y=y_val, color=color_val,
+                        template="plotly_white", height=420, text=text_col
                     )
-                else:
-                    fig = px.histogram(
-                        plot_df, x=x_col, color=color_val,
-                        template="plotly_white", height=420
-                    )
-
-                fig.update_layout(
-                    paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc",
-                    xaxis_title=f"{x_col} ({date_freq})",
-                    yaxis_title=f"{date_agg} of {y_val}"
-                )
+                    if show_labels:
+                        fig.update_traces(textposition="top center")
+                
+                fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
                 st.plotly_chart(fig, use_container_width=True)
-
                 # ── summary strip ──
                 total    = plot_df[y_val].sum()
                 avg      = plot_df[y_val].mean()
@@ -2307,24 +2311,29 @@ elif st.session_state.page == "Visualizations":
                 text_col = y_val if show_labels and y_val else None
                 if chart_type == "Line":
                     fig = px.line(
-                        plot_df, x=x_col_plot, y=y_val, color=color_val,
-                        template="plotly_white", height=420, text=text_col
+                        plot_df, x=x_col, y=y_val, color=color_val,
+                        template="plotly_white", height=420, markers=True, text=y_val
                     )
+                    fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")
+                
                 elif chart_type == "Bar":
                     fig = px.bar(
-                        plot_df, x=x_col_plot, y=y_val, color=color_val,
-                        template="plotly_white", height=420,
-                        barmode="group", text=text_col
+                        plot_df, x=x_col, y=y_val, color=color_val,
+                        template="plotly_white", height=420, barmode="group", text=y_val
                     )
-                elif chart_type == "Histogram":
-                    fig = px.histogram(
-                        plot_df, x=x_col_plot, color=color_val,
-                        template="plotly_white", height=420, nbins=30
-                    )
+                    fig.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
+                
                 elif chart_type == "Area":
                     fig = px.area(
-                        plot_df, x=x_col_plot, y=y_val, color=color_val,
-                        template="plotly_white", height=420, text=text_col
+                        plot_df, x=x_col, y=y_val, color=color_val,
+                        template="plotly_white", height=420, text=y_val
+                    )
+                    fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")
+                
+                else:  # Histogram
+                    fig = px.histogram(
+                        plot_df, x=x_col, color=color_val,
+                        template="plotly_white", height=420
                     )
                 if show_labels:
                     fig.update_traces(
