@@ -2461,24 +2461,20 @@ elif st.session_state.page == "Visualizations":
                 agg_fn = agg_map.get(date_agg, "sum")
 
                 # Use group_col if selected, otherwise fall back to x_col
-                effective_group = group_val if group_val and group_val in plot_df.columns else grp_col
-
                 if color_val and color_val in plot_df.columns:
-                    if color_val == x_col_plot:
-                        # Same column — group by it, use it for color too
-                        plot_df = (plot_df.groupby(x_col_plot)[y_val]
-                                   .agg(fn_bar).reset_index())
-                        # color_val stays same as x_col_plot — plotly handles it
+                    if color_val == x_col:
+                        plot_df = (plot_df.groupby(x_col)[y_val]
+                                   .agg(agg_fn).reset_index())
+                        color_val = None
                     else:
-                        plot_df = (plot_df.groupby([x_col_plot, color_val])[y_val]
-                                     .agg(fn_bar).reset_index())
+                        plot_df = (plot_df.groupby([x_col, color_val])[y_val]
+                                   .agg(agg_fn).reset_index())
                 else:
-                    plot_df = (plot_df.groupby(x_col_plot)[y_val]
-                                  .agg(fn_bar).reset_index())
+                    plot_df = (plot_df.groupby(x_col)[y_val]
+                               .agg(agg_fn).reset_index())
                     color_val = None
 
-                grp_col = effective_group  # use for x-axis label
-
+                x_col_plot = x_col
                 if date_sort:
                     plot_df = plot_df.sort_values(x_col)
 
