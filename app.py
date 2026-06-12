@@ -2727,9 +2727,7 @@ elif st.session_state.page == "Visualizations":
                 cb_sort = st.selectbox("Sort", ["Value desc", "Value asc", "Alpha asc"],
                                        key="cb_sort")
             with r2c4:
-                # Filter out the category column itself from color options
-                color_opts = ["— None —"] + [c for c in cat_cols if c != cb_cat]
-                cb_color2 = st.selectbox("Color by", color_opts, key="cb_color2")
+                cb_color2 = st.selectbox("Color by", ["— None —"] + cat_cols, key="cb_color2")
             try:
                 cb_df = df.copy()
 
@@ -2756,9 +2754,8 @@ elif st.session_state.page == "Visualizations":
                 # Top N
                 agg_df_cb = agg_df_cb.head(cb_top)
 
-                cb_color_val = (None if cb_color2 == "— None —"
-                                or cb_color2 == cb_cat else cb_color2)
-
+                # If user picks the same column as the category axis, treat as no color
+                cb_color_val = None if (cb_color2 == "— None —" or cb_color2 == cb_cat) else cb_color2
                 title_cb = (f"{'Count' if cb_y == 'Count' else cb_agg + ' of ' + cb_y}"
                             f" by {cb_cat} (Top {cb_top})")
 
