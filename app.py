@@ -2445,6 +2445,11 @@ elif st.session_state.page == "Visualizations":
       
 
         try:
+            # ── Guard: same column for X and Y ──
+            if y_val and y_val == x_col:
+                st.warning("⚠️ X and Y axes cannot be the same column. Please select different columns.")
+                st.stop()
+
             # ── always defined regardless of branch ──
             group_val  = None
             agg_func   = st.session_state.get("custom_agg", "None (raw)")
@@ -2984,6 +2989,11 @@ elif st.session_state.page == "Visualizations":
                 st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
     
             try:
+                # ── Guard: same column for X and Y ──
+                if y_val and y_val == x_col:
+                    st.warning("⚠️ X and Y axes cannot be the same column. Please select different columns.")
+                    st.stop()
+    
                 if x_is_date and date_freq != "None" and y_val:
                     plot_df_c = plot_df.copy()
                     plot_df_c = apply_date_grouping(plot_df_c, x_col, date_freq)
