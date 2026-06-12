@@ -2415,7 +2415,7 @@ elif st.session_state.page == "Visualizations":
 
     # ── Tabs ──────────────────────────────────────────────────────────────
     tab1, tab2, tab3 = st.tabs([
-        "📈 Line / Bar / Area",
+        "📈 Line / Bar / Area / Histogram",
         "🔵 Scatter",
         "📦 Box & Violin"
     ])
@@ -2424,7 +2424,7 @@ elif st.session_state.page == "Visualizations":
     # TAB 1 — LINE / BAR / AREA
     # ══════════════════════════════════════════════════════════════════════
     with tab1:
-        st.markdown("<div class='section-header'><h3>Line / Bar / Area Chart</h3></div>",
+        st.markdown("<div class='section-header'><h3>Line / Bar / Area / Histogram</h3></div>",
                     unsafe_allow_html=True)
 
         # ── Controls ─────────────────────────────────────────────────────
@@ -2559,26 +2559,56 @@ elif st.session_state.page == "Visualizations":
                         fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")
 
                 else:  # Histogram
-                    # Histogram works on raw data, not aggregated
-                    hist_df = df[[t1_x] + ([t1_color_val] if t1_color_val else [])].dropna()
+                    t1_group_val = (None if st.session_state.get("t1_group", "— None —") == "— None —"
+                                    else st.session_state.get("t1_group"))
+
+                    # Build column list for filtering — x + optional group + optional color
+                    hist_cols = [t1_x]
+                    if t1_group_val and t1_group_val in df.columns and t1_group_val != t1_x:
+                        hist_cols.append(t1_group_val)
+                    if t1_color_val and t1_color_val in df.columns and t1_color_val not in hist_cols:
+                        hist_cols.append(t1_color_val)
+
+                    hist_df = df[hist_cols].dropna()
+
+                    # Color priority: group col > color col > none
+                    hist_color = t1_group_val if t1_group_val and t1_group_val in hist_df.columns else t1_color_val
+
                     fig = px.histogram(
-                        hist_df, x=t1_x, color=t1_color_val,
+                        hist_df, x=t1_x, color=hist_color,
                         nbins=50,
                         opacity=0.75,
-                        barmode="overlay" if t1_color_val else "relative",
-                        color_discrete_sequence=["#2563eb"] if t1_color_val is None else None,
+                        barmode="overlay" if hist_color else "relative",
+                        color_discrete_sequence=["#2563eb"] if hist_color is None else None,
                         labels={t1_x: t1_x},
                     )
-                    # Mean line
-                    if pd.api.types.is_numeric_dtype(df[t1_x]):
-                        fig.add_vline(
-                            x=float(df[t1_x].dropna().mean()),
-                            line_dash="dash", line_color="#dc2626", line_width=1.8,
-                            annotation_text=f"Mean: {df[t1_x].dropna().mean():.2f}",
-                            annotation_position="top right",
-                            annotation_font=dict(color="#dc2626", size=11),
-                        )
 
+                    # Mean line per group or overall
+                    if pd.api.types.is_numeric_dtype(df[t1_x]):
+                        if hist_color and hist_color in hist_df.columns:
+                            # One mean line per group
+                            colors = px.colors.qualitative.Plotly
+                            for i, grp in enumerate(hist_df[hist_color].unique()):
+                                grp_mean = hist_df[hist_df[hist_color] == grp][t1_x].mean()
+                                fig.add_vline(
+                                    x=float(grp_mean),
+                                    line_dash="dash",
+                                    line_color=colors[i % len(colors)],
+                                    line_width=1.5,
+                                    annotation_text=f"{grp}: {grp_mean:.2f}",
+                                    annotation_position="top right",
+                                    annotation_font=dict(size=10),
+                                )
+                        else:
+                            # Single overall mean line
+                            overall_mean = df[t1_x].dropna().mean()
+                            fig.add_vline(
+                                x=float(overall_mean),
+                                line_dash="dash", line_color="#dc2626", line_width=1.8,
+                                annotation_text=f"Mean: {overall_mean:.2f}",
+                                annotation_position="top right",
+                                annotation_font=dict(color="#dc2626", size=11),
+                            )
                 _apply_layout(fig, title if t1_chart != "Histogram" else f"Distribution of {t1_x}")                
                 fig.update_xaxes(tickangle=-45)
                 st.plotly_chart(fig, use_container_width=True)
