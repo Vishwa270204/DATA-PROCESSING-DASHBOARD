@@ -2219,7 +2219,9 @@ elif st.session_state.page == "Visualizations":
     df = st.session_state.df
     ct = identify_column_types(df)
     num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    cat_cols = df.select_dtypes(include="object").columns.tolist()
+    ct_viz = identify_column_types(df)
+    cat_cols = [c for c in df.select_dtypes(include="object").columns.tolist() 
+                if c not in ct_viz.get("null", [])]
     plot_df      = df.copy()
     filtered_df2 = df.copy()
     filtered_df3 = df.copy()
@@ -2519,28 +2521,43 @@ elif st.session_state.page == "Visualizations":
             
                 # ── BAR CHART ────────────────────────────────────────────────────
                 elif chart_type == "Bar" and y_val:
-                    if agg_func != "None (raw)" and group_val:
-                        agg_map = {"Mean":"mean","Sum":"sum","Count":"count",
-                                   "Median":"median","Max":"max","Min":"min"}
-                        plot_df = (plot_df.groupby(group_val)[y_val]
-                                   .agg(agg_map.get(agg_func,"sum")).reset_index())
+                    agg_map = {"Mean":"mean","Sum":"sum","Count":"count",
+                               "Median":"median","Max":"max","Min":"min",
+                               "None (raw)":"sum"}
+                    fn_bar = agg_map.get(agg_func, "sum")
+
+                    # Determine grouping column: prefer Group X by, else X axis
+                    if group_val and group_val in plot_df.columns:
                         x_col_plot = group_val
                     else:
                         x_col_plot = x_col
-            
-                    if sort_order == "X ascending":   plot_df = plot_df.sort_values(x_col_plot, ascending=True)
+
+                    # Always aggregate — raw data per row makes bar unreadable
+                    if color_val and color_val in plot_df.columns and color_val != x_col_plot:
+                        plot_df = (plot_df.groupby([x_col_plot, color_val])[y_val]
+                                   .agg(fn_bar).reset_index())
+                    else:
+                        plot_df = (plot_df.groupby(x_col_plot)[y_val]
+                                   .agg(fn_bar).reset_index())
+                        color_val = None
+
+                    if sort_order == "X ascending":    plot_df = plot_df.sort_values(x_col_plot, ascending=True)
                     elif sort_order == "X descending": plot_df = plot_df.sort_values(x_col_plot, ascending=False)
                     elif sort_order == "Y ascending":  plot_df = plot_df.sort_values(y_val, ascending=True)
                     elif sort_order == "Y descending": plot_df = plot_df.sort_values(y_val, ascending=False)
-            
+
                     fig = px.bar(
                         plot_df, x=x_col_plot, y=y_val, color=color_val,
                         template="plotly_white", height=420, barmode="group",
-                        text=y_val if show_labels else None
+                        text=y_val if show_labels else None,
+                        labels={x_col_plot: x_col_plot, y_val: f"{agg_func} of {y_val}"}
                     )
                     if show_labels:
                         fig.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
-                    fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
+                    fig.update_layout(
+                        paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc",
+                        title=f"{agg_func} of {y_val} by {x_col_plot}"
+                    )
                     st.plotly_chart(fig, use_container_width=True, key="bar_chart_normal")
             
                 # ── AREA CHART ───────────────────────────────────────────────────
