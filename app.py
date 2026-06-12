@@ -1644,6 +1644,16 @@ elif st.session_state.page == "Data Cleaning":
         neg_vals    = detect_negative_values(df)
         ct_live     = identify_column_types(df)
 
+        with st.expander("🔍 Debug — what was scanned", expanded=False):
+            st.write("**Columns scanned for email:**", [c for c in df.select_dtypes(include="object").columns if any(k in c.lower() for k in ["email","mail","e-mail"])])
+            st.write("**Columns scanned for phone:**", [c for c in df.select_dtypes(include="object").columns if _is_phone_column(c)])
+            st.write("**Columns scanned for dates:**", [c for c in df.columns if any(k in c.lower() for k in ["birth","dob","born","date","created","joined"])])
+            st.write("**Domain issues found:**", inv_domain)
+            st.write("**Negative value issues:**", neg_vals)
+            st.write("**Invalid emails:**", inv_emails)
+            st.write("**Invalid phones:**", inv_phones)
+            st.write("**Future dates:**", inv_dates)
+
         total_issues = len(inv_emails) + len(inv_phones) + len(inv_dates) + len(inv_domain) + len(neg_vals)
         if total_issues == 0:
             st.markdown("<span class='badge badge-success'>✅ No invalid values detected</span>", unsafe_allow_html=True)
@@ -1791,7 +1801,7 @@ elif st.session_state.page == "Feature Engineering":
         st.stop()
 
     df = st.session_state.df
-    tab1, tab2 = st.tabs(["🔤 Encoding", "📅 Feature Extraction"])
+    tab1, tab2 = st.tabs(["🔤 Encoding", "🗑️ Redundant Columns"])
 
     # ── TAB 1: Encoding ───────────────────────────────────────────────────
     with tab1:
@@ -1987,129 +1997,118 @@ elif st.session_state.page == "Feature Engineering":
                     st.success("✅ All eligible categorical columns have been encoded.")
                 st.rerun()
 
-    # ── TAB 2: Feature Extraction ─────────────────────────────────────────
+    # ── TAB 2: Redundant Column Detection & Drop ──────────────────────────
     with tab2:
-        if "fe_created_cols" not in st.session_state:
-            st.session_state.fe_created_cols = []
+        st.markdown("<div class='section-header'><h3>🗑️ Detect & Drop Redundant Columns</h3></div>", unsafe_allow_html=True)
+        st.caption("Detects standalone year/month columns when a full date column exists, near-duplicate numeric columns, and zero-variance columns.")
 
         df_fe = st.session_state.df
 
-        existing_fe_cols = [c for c in st.session_state.fe_created_cols if c in df_fe.columns]
-        if existing_fe_cols:
-            fe_chips = "".join([
-                f"<span style='display:inline-flex;background:#eff6ff;border:1px solid #bfdbfe;"
-                f"color:#2563eb;border-radius:999px;padding:2px 10px;font-size:0.72rem;"
-                f"font-weight:600;margin:2px;'>✦ {c}</span>"
-                for c in existing_fe_cols
-            ])
-            st.markdown(f"""
-            <div style='background:#f8faff;border:1px solid #e0eaff;border-radius:10px;
-                 padding:12px 16px;margin-bottom:16px;'>
-                <div style='font-size:0.72rem;color:#6b7280;text-transform:uppercase;
-                     letter-spacing:1px;margin-bottom:8px;'>Engineered columns ({len(existing_fe_cols)})</div>
-                <div style='line-height:2.2;'>{fe_chips}</div>
-            </div>
-            """, unsafe_allow_html=True)
+        TEMPORAL_PATTERNS = {
+            "year":    ["year", "yr"],
+            "month":   ["month", "mon", "mth"],
+            "day":     ["dayofweek", "day_of_week", "weekday"],
+            "quarter": ["quarter", "qtr"],
+            "week":    ["week", "weekofyear", "week_no"],
+        }
 
-        def _try_parse_as_date(series):
-            sample = series.dropna().head(30)
-            if len(sample) == 0: return None, 0.0
-            result = pd.Series([pd.NaT] * len(sample), index=sample.index)
-            for fmt in ["%m/%d/%Y %H:%M","%m/%d/%Y","%m-%d-%Y %H:%M","%m-%d-%Y",
-                        "%Y-%m-%d %H:%M:%S","%Y-%m-%d","%d/%m/%Y %H:%M","%d/%m/%Y",
-                        "%d-%m-%Y %H:%M","%d-%m-%Y","%Y/%m/%d","%b %d %Y","%B %d %Y"]:
-                still_null = result.isna() & sample.notna()
-                if not still_null.any(): break
-                try:
-                    result[still_null] = pd.to_datetime(sample[still_null], format=fmt, errors="coerce")
-                except: continue
-            still_null = result.isna() & sample.notna()
-            if still_null.any():
-                result[still_null] = pd.to_datetime(sample[still_null], errors="coerce")
-            success_rate = result.notna().sum() / max(len(sample), 1)
-            return result if success_rate >= 0.6 else None, success_rate
+        def _is_standalone_temporal(col_name):
+            cl = col_name.lower().replace(" ", "_").replace("-", "_")
+            if any(k in cl for k in ["date", "time", "datetime", "timestamp", "order", "ship", "birth", "created", "joined"]):
+                return False
+            for unit, patterns in TEMPORAL_PATTERNS.items():
+                for p in patterns:
+                    if re.fullmatch(p, cl) or re.search(rf"(^|_){re.escape(p)}($|_)", cl):
+                        return unit
+            return False
 
-        datetime_candidates = []
-        for col in df_fe.columns:
-            if pd.api.types.is_datetime64_any_dtype(df_fe[col]):
-                datetime_candidates.append(col)
-            elif df_fe[col].dtype == object:
-                parsed, rate = _try_parse_as_date(df_fe[col])
-                if parsed is not None:
-                    datetime_candidates.append(col)
+        redundancy_suggestions = []
 
-        if not datetime_candidates:
-            st.info("ℹ️ No feature extraction opportunities detected. No date columns found.")
-        else:
-            st.markdown("**📅 Extract Features from Date Column**")
-            fe_date_col = st.selectbox("Date column", datetime_candidates, key="fe_date_col_fe")
-
-            raw_samples = df_fe[fe_date_col].dropna().head(4).tolist()
+        # Rule 1: High correlation between numeric columns
+        num_df_r = df_fe.select_dtypes(include=[np.number])
+        if num_df_r.shape[1] > 1:
             try:
-                parsed_samples = pd.to_datetime(df_fe[fe_date_col].dropna().head(4), errors="coerce").tolist()
-                preview_pairs = [
-                    f"`{r}` → `{p.strftime('%Y-%m-%d') if pd.notna(p) else 'NaT'}`"
-                    for r, p in zip(raw_samples, parsed_samples)
-                ]
-                st.caption("Parse preview: " + "  |  ".join(preview_pairs))
-            except: pass
+                corr_r = num_df_r.corr().abs()
+                for i in range(len(corr_r.columns)):
+                    for j in range(i+1, len(corr_r.columns)):
+                        v = corr_r.iloc[i, j]
+                        if v > 0.98:
+                            c1, c2 = corr_r.columns[i], corr_r.columns[j]
+                            keep    = c1 if len(c1) >= len(c2) else c2
+                            suggest = c2 if keep == c1 else c1
+                            redundancy_suggestions.append({
+                                "Column to drop": suggest,
+                                "Reason": f"Near-duplicate of '{keep}' (r = {v:.3f})",
+                                "Keep": keep
+                            })
+            except Exception:
+                pass
 
-            fe_parts = st.multiselect(
-                "Features to extract",
-                ["Year","Month","Day","DayOfWeek","DayName","Quarter","WeekOfYear","IsWeekend","MonthName"],
-                default=["Year","Month","Day","DayOfWeek","Quarter"],
-                key="fe_date_parts_fe"
+        # Rule 2: Standalone temporal columns when a full date column exists
+        date_cols_present = [
+            c for c in df_fe.columns
+            if any(k in c.lower() for k in ["date","time","datetime","timestamp","created","joined","birth"])
+            or pd.api.types.is_datetime64_any_dtype(df_fe[c])
+        ]
+        for col in df_fe.columns:
+            unit = _is_standalone_temporal(col)
+            if not unit:
+                continue
+            if date_cols_present:
+                redundancy_suggestions.append({
+                    "Column to drop": col,
+                    "Reason": f"Standalone '{unit}' column — full date column(s) already exist: {date_cols_present}",
+                    "Keep": date_cols_present[0]
+                })
+            else:
+                redundancy_suggestions.append({
+                    "Column to drop": col,
+                    "Reason": f"Standalone '{unit}' — consider extracting from a date column instead",
+                    "Keep": "—"
+                })
+
+        # Rule 3: Zero variance
+        for col in df_fe.columns:
+            if df_fe[col].nunique(dropna=True) <= 1:
+                redundancy_suggestions.append({
+                    "Column to drop": col,
+                    "Reason": "Single unique value — zero variance",
+                    "Keep": "—"
+                })
+
+        # Deduplicate
+        seen_drops = set()
+        unique_suggestions = []
+        for s in redundancy_suggestions:
+            if s["Column to drop"] not in seen_drops:
+                seen_drops.add(s["Column to drop"])
+                unique_suggestions.append(s)
+
+        if not unique_suggestions:
+            st.markdown("<span class='badge badge-success'>✅ No redundant columns detected</span>", unsafe_allow_html=True)
+        else:
+            sugg_df = pd.DataFrame(unique_suggestions)
+            st.dataframe(sugg_df, use_container_width=True, hide_index=True)
+
+            cols_to_drop = st.multiselect(
+                "Select columns to drop",
+                options=[s["Column to drop"] for s in unique_suggestions],
+                default=[s["Column to drop"] for s in unique_suggestions],
+                key="fe_drop_cols_tab"
             )
-
-            if st.button("Extract Date Features", key="fe_extract_btn_fe", type="primary", disabled=len(fe_parts)==0):
-                try:
-                    df_t  = st.session_state.df.copy()
-                    pdf_t = st.session_state.processed_df.copy()
-
-                    parsed_col = pd.Series([pd.NaT]*len(df_t), index=df_t.index)
-                    raw = df_t[fe_date_col]
-                    for fmt in ["%m/%d/%Y %H:%M","%m/%d/%Y","%m-%d-%Y %H:%M","%m-%d-%Y",
-                                "%Y-%m-%d %H:%M:%S","%Y-%m-%d","%d/%m/%Y %H:%M","%d-%m-%Y %H:%M","%d-%m-%Y"]:
-                        still_null = parsed_col.isna() & raw.notna()
-                        if not still_null.any(): break
-                        try:
-                            parsed_col[still_null] = pd.to_datetime(raw[still_null], format=fmt, errors="coerce")
-                        except: continue
-                    still_null = parsed_col.isna() & raw.notna()
-                    if still_null.any():
-                        parsed_col[still_null] = pd.to_datetime(raw[still_null], errors="coerce")
-
-                    extract_map = {
-                        "Year":       lambda s: s.dt.year,
-                        "Month":      lambda s: s.dt.month,
-                        "Day":        lambda s: s.dt.day,
-                        "DayOfWeek":  lambda s: s.dt.dayofweek,
-                        "DayName":    lambda s: s.dt.day_name(),
-                        "Quarter":    lambda s: s.dt.quarter,
-                        "WeekOfYear": lambda s: s.dt.isocalendar().week.astype(int),
-                        "IsWeekend":  lambda s: s.dt.dayofweek.isin([5,6]).astype(int),
-                        "MonthName":  lambda s: s.dt.month_name(),
-                    }
-                    created_cols = []
-                    for part in fe_parts:
-                        new_col = f"{fe_date_col}_{part.lower()}"
-                        vals = extract_map[part](parsed_col)
-                        df_t[new_col]  = vals
-                        pdf_t[new_col] = vals
-                        created_cols.append(new_col)
-                        if new_col not in st.session_state.fe_created_cols:
-                            st.session_state.fe_created_cols.append(new_col)
-
-                    st.session_state.df = df_t
-                    st.session_state.processed_df = pdf_t
-                    save_operation(st.session_state.file_name, f"Feature Engineering: {fe_date_col}", f"Extracted: {', '.join(fe_parts)}")
-                    st.success(f"✅ Created {len(created_cols)} new columns: {', '.join(created_cols)}")
-                    st.markdown("**Preview — first 10 rows:**")
-                    st.dataframe(df_t[[fe_date_col]+created_cols].head(10), use_container_width=True, height=300)
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Extraction error: {e}")
-
+            if st.button("Drop Selected Columns", key="fe_drop_btn_tab", type="primary",
+                         disabled=len(cols_to_drop) == 0):
+                df_t  = st.session_state.df.drop(columns=cols_to_drop, errors="ignore")
+                pdf_t = st.session_state.processed_df.drop(columns=cols_to_drop, errors="ignore")
+                st.session_state.df = df_t
+                st.session_state.processed_df = pdf_t
+                save_operation(
+                    st.session_state.file_name,
+                    "Drop Redundant Columns",
+                    f"Dropped: {', '.join(cols_to_drop)}"
+                )
+                st.success(f"✅ Dropped {len(cols_to_drop)} column(s): {', '.join(cols_to_drop)}")
+                st.rerun()
     nav_buttons("Feature Engineering")
 
 
