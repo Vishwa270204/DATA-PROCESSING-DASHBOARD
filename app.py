@@ -3142,8 +3142,8 @@ elif st.session_state.page == "Visualizations":
                     elif not y_val:
                         st.info("Please select a Y Axis column to plot.")
 
-        except Exception as e:
-            st.error(f"Chart error: {e}")
+            except Exception as e:
+                st.error(f"Chart error: {e}")
 
            
 
