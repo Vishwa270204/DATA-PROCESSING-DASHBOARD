@@ -1508,14 +1508,6 @@ elif st.session_state.page == "Data Cleaning":
     # ── TAB 3: Data Type Conversion ───────────────────────────────────────
     with tab3:
         st.markdown("<div class='section-header'><h3>Data Type Conversion</h3></div>", unsafe_allow_html=True)
-        st.markdown("""
-        <div style='background:#fffbeb;border:1px solid #fde68a;border-radius:10px;
-             padding:12px 16px;margin-bottom:16px;font-size:0.84rem;color:#92400e;'>
-            💡 Fix columns with wrong types — e.g. an <b>Order Date</b> stored as text,
-            or a numeric ID stored as float.
-        </div>
-        """, unsafe_allow_html=True)
-
         all_cols = list(st.session_state.df.columns)
         dt1, dt2, dt3 = st.columns([3, 2, 2])
         with dt1:
@@ -1545,14 +1537,40 @@ elif st.session_state.page == "Data Cleaning":
 
         custom_fmt = None
         if "custom format" in target_dtype:
+            sample_vals = st.session_state.df[dtype_col].dropna().head(3).tolist()
+            
+            st.markdown("""
+            <div style='background:#f8f9fc;border:1px solid #e2e6f0;border-radius:10px;
+                 padding:14px 18px;margin-bottom:12px;'>
+                <div style='font-size:0.8rem;font-weight:700;color:#374151;margin-bottom:8px;'>
+                    📖 Format Code Reference</div>
+                <div style='display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:0.78rem;'>
+                    <div><code>%Y</code> — 4-digit year &nbsp;<i>2003</i></div>
+                    <div><code>%m</code> — month 01-12 &nbsp;<i>07</i></div>
+                    <div><code>%d</code> — day 01-31 &nbsp;<i>24</i></div>
+                    <div><code>%H</code> — hour 00-23 &nbsp;<i>14</i></div>
+                    <div><code>%M</code> — minute 00-59 &nbsp;<i>30</i></div>
+                    <div><code>%S</code> — second 00-59 &nbsp;<i>00</i></div>
+                </div>
+                <div style='margin-top:10px;font-size:0.78rem;color:#6b7280;'>
+                    <b>Common formats:</b><br>
+                    <code>2/24/2003 0:00</code> → <b>%m/%d/%Y %H:%M</b><br>
+                    <code>05-07-2003 00:00</code> → <b>%m-%d-%Y %H:%M</b><br>
+                    <code>2003-02-24</code> → <b>%Y-%m-%d</b><br>
+                    <code>24/02/2003</code> → <b>%d/%m/%Y</b>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
             fmt_col1, fmt_col2 = st.columns([3, 2])
             with fmt_col1:
-                custom_fmt = st.text_input("Format", placeholder="%Y-%m-%d %H:%M:%S",
-                    label_visibility="collapsed", key="dtype_custom_fmt_clean")
+                custom_fmt = st.text_input(
+                    "Enter format string",
+                    placeholder="e.g. %m/%d/%Y %H:%M",
+                    key="dtype_custom_fmt_clean"
+                )
             with fmt_col2:
-                sample_vals = st.session_state.df[dtype_col].dropna().head(3).tolist()
-                st.caption(f"Sample: {', '.join(str(v) for v in sample_vals)}")
-
+                st.caption(f"Your data samples:\n{chr(10).join(str(v) for v in sample_vals)}")
         with st.expander("👁️ Preview conversion on first 5 rows", expanded=False):
             try:
                 preview_s = st.session_state.df[dtype_col].head(5).copy()
@@ -1585,20 +1603,40 @@ elif st.session_state.page == "Data Cleaning":
                 def _convert(series):
                     if dtype_key == "datetime":
                         if custom_fmt:
-                            parsed = pd.to_datetime(series, format=custom_fmt, errors="coerce")
-                            failed_mask = parsed.isna() & series.notna()
-                            if failed_mask.any():
-                                parsed[failed_mask] = pd.to_datetime(series[failed_mask], errors="coerce")
-                            return parsed
-                        else:
+                            # Try exact format first, then fallback row-by-row
                             result = pd.Series([pd.NaT] * len(series), index=series.index)
-                            for fmt in ["%m/%d/%Y %H:%M", "%m/%d/%Y", "%m-%d-%Y %H:%M",
-                                        "%m-%d-%Y", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d",
-                                        "%d/%m/%Y %H:%M", "%d-%m-%Y %H:%M", "%d-%m-%Y"]:
+                            for fmt_try in [custom_fmt,
+                                            custom_fmt.replace("/","-"),
+                                            custom_fmt.replace("-","/")]:
                                 still_null = result.isna() & series.notna()
                                 if not still_null.any(): break
                                 try:
-                                    result[still_null] = pd.to_datetime(series[still_null], format=fmt, errors="coerce")
+                                    result[still_null] = pd.to_datetime(
+                                        series[still_null], format=fmt_try, errors="coerce")
+                                except: continue
+                            # Final generic fallback
+                            still_null = result.isna() & series.notna()
+                            if still_null.any():
+                                result[still_null] = pd.to_datetime(series[still_null], errors="coerce")
+                            return result
+                        else:
+                            # Auto detect — try slash AND dash variants for each format
+                            result = pd.Series([pd.NaT] * len(series), index=series.index)
+                            fmt_list = [
+                                "%m/%d/%Y %H:%M", "%m/%d/%Y",
+                                "%m-%d-%Y %H:%M", "%m-%d-%Y",
+                                "%d/%m/%Y %H:%M", "%d/%m/%Y",
+                                "%d-%m-%Y %H:%M", "%d-%m-%Y",
+                                "%Y-%m-%d %H:%M:%S", "%Y-%m-%d",
+                                "%Y/%m/%d %H:%M:%S", "%Y/%m/%d",
+                                "%m/%d/%Y %H:%M:%S", "%m-%d-%Y %H:%M:%S",
+                            ]
+                            for fmt in fmt_list:
+                                still_null = result.isna() & series.notna()
+                                if not still_null.any(): break
+                                try:
+                                    result[still_null] = pd.to_datetime(
+                                        series[still_null], format=fmt, errors="coerce")
                                 except: continue
                             still_null = result.isna() & series.notna()
                             if still_null.any():
