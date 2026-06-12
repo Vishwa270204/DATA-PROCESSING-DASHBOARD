@@ -2414,11 +2414,10 @@ elif st.session_state.page == "Visualizations":
         return result
 
     # ── Tabs ──────────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3 = st.tabs([
         "📈 Line / Bar / Area",
         "🔵 Scatter",
-        "📦 Box & Violin",
-        "🥧 Category Breakdown",
+        "📦 Box & Violin"
     ])
 
     # ══════════════════════════════════════════════════════════════════════
@@ -2431,7 +2430,7 @@ elif st.session_state.page == "Visualizations":
         # ── Controls ─────────────────────────────────────────────────────
         r1c1, r1c2, r1c3, r1c4 = st.columns(4)
         with r1c1:
-            t1_chart = st.selectbox("Chart type", ["Line", "Bar", "Area"], key="t1_chart")
+            t1_chart = st.selectbox("Chart type", ["Line", "Bar", "Area", "Histogram"], key="t1_chart")
         with r1c2:
             t1_x = st.selectbox("X axis", df.columns.tolist(), key="t1_x")
         with r1c3:
@@ -2552,15 +2551,35 @@ elif st.session_state.page == "Visualizations":
                     if t1_labels:
                         fig.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
 
-                else:  # Area
+                elif t1_chart == "Area":
                     fig = px.area(agg_df, x=x_plot, y=t1_y_val, color=eff_color,
                                   text=text_col,
                                   labels={x_plot: t1_x, t1_y_val: t1_y_val})
                     if t1_labels:
                         fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")
 
-                _apply_layout(fig, title)
-                fig.update_xaxes(tickangle=-45)
+                else:  # Histogram
+                    # Histogram works on raw data, not aggregated
+                    hist_df = df[[t1_x] + ([t1_color_val] if t1_color_val else [])].dropna()
+                    fig = px.histogram(
+                        hist_df, x=t1_x, color=t1_color_val,
+                        nbins=50,
+                        opacity=0.75,
+                        barmode="overlay" if t1_color_val else "relative",
+                        color_discrete_sequence=["#2563eb"] if t1_color_val is None else None,
+                        labels={t1_x: t1_x},
+                    )
+                    # Mean line
+                    if pd.api.types.is_numeric_dtype(df[t1_x]):
+                        fig.add_vline(
+                            x=float(df[t1_x].dropna().mean()),
+                            line_dash="dash", line_color="#dc2626", line_width=1.8,
+                            annotation_text=f"Mean: {df[t1_x].dropna().mean():.2f}",
+                            annotation_position="top right",
+                            annotation_font=dict(color="#dc2626", size=11),
+                        )
+
+                _apply_layout(fig, title if t1_chart != "Histogram" else f"Distribution of {t1_x}")                fig.update_xaxes(tickangle=-45)
                 st.plotly_chart(fig, use_container_width=True)
 
                 if t1_x_is_date:
@@ -2695,110 +2714,6 @@ elif st.session_state.page == "Visualizations":
 
             except Exception as e:
                 st.error(f"Plot error: {e}")
-
-    # ══════════════════════════════════════════════════════════════════════
-    # TAB 4 — CATEGORY BREAKDOWN
-    # ══════════════════════════════════════════════════════════════════════
-    with tab4:
-        st.markdown("<div class='section-header'><h3>Category Breakdown</h3></div>",
-                    unsafe_allow_html=True)
-
-        if not cat_cols:
-            st.info("No categorical columns found.")
-        else:
-            r1c1, r1c2, r1c3 = st.columns(3)
-            with r1c1:
-                cb_cat = st.selectbox("Category column (X)", cat_cols, key="cb_cat")
-            with r1c2:
-                cb_y = st.selectbox("Value column (Y)", ["Count"] + num_cols, key="cb_y")
-            with r1c3:
-                cb_chart = st.selectbox("Chart type",
-                    ["Horizontal Bar", "Vertical Bar", "Pie", "Donut", "Treemap"],
-                    key="cb_chart")
-
-            r2c1, r2c2, r2c3, r2c4 = st.columns(4)
-            with r2c1:
-                cb_agg = st.selectbox("Aggregate by",
-                    ["Count"] + list(AGG_MAP.keys()), key="cb_agg",
-                    disabled=(cb_y == "Count"))
-            with r2c2:
-                cb_top = st.slider("Top N categories", 5, 50, 15, key="cb_top")
-            with r2c3:
-                cb_sort = st.selectbox("Sort", ["Value desc", "Value asc", "Alpha asc"],
-                                       key="cb_sort")
-            with r2c4:
-                cb_color2 = st.selectbox("Color by", ["— None —"] + cat_cols, key="cb_color2")
-            try:
-                cb_df = df.copy()
-
-                # Build aggregated frame
-                if cb_y == "Count":
-                    agg_df_cb = (cb_df.groupby(cb_cat)
-                                 .size().reset_index(name="Count"))
-                    y_plot = "Count"
-                else:
-                    fn_cb = AGG_MAP.get(cb_agg, "sum")
-                    cb_df[cb_y] = pd.to_numeric(cb_df[cb_y], errors="coerce")
-                    agg_df_cb = (cb_df.groupby(cb_cat)[cb_y]
-                                 .agg(fn_cb).reset_index())
-                    y_plot = cb_y
-
-                # Sort
-                if cb_sort == "Value desc":
-                    agg_df_cb = agg_df_cb.sort_values(y_plot, ascending=False)
-                elif cb_sort == "Value asc":
-                    agg_df_cb = agg_df_cb.sort_values(y_plot, ascending=True)
-                else:
-                    agg_df_cb = agg_df_cb.sort_values(cb_cat)
-
-                # Top N
-                agg_df_cb = agg_df_cb.head(cb_top)
-
-                # If user picks the same column as the category axis, treat as no color
-                cb_color_val = None if (cb_color2 == "— None —" or cb_color2 == cb_cat) else cb_color2
-                title_cb = (f"{'Count' if cb_y == 'Count' else cb_agg + ' of ' + cb_y}"
-                            f" by {cb_cat} (Top {cb_top})")
-
-                # Never color by the same column used as the category axis —
-                # it just splits one bar per category into N single-item traces
-                if cb_color_val == cb_cat:
-                    cb_color_val = None
-
-                if cb_chart == "Horizontal Bar":
-                    fig_cb = px.bar(agg_df_cb, x=y_plot, y=cb_cat,
-                                    orientation="h", color=cb_color_val,
-                                    text=y_plot,
-                                    color_discrete_sequence=["#2563eb"] if cb_color_val is None else None)
-                    fig_cb.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
-                    fig_cb.update_layout(yaxis=dict(categoryorder="total ascending"))
-
-                elif cb_chart == "Vertical Bar":
-                    fig_cb = px.bar(agg_df_cb, x=cb_cat, y=y_plot,
-                                    color=cb_color_val, text=y_plot,
-                                    color_discrete_sequence=["#2563eb"] if cb_color_val is None else None)
-                    fig_cb.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
-                elif cb_chart == "Pie":
-                    fig_cb = px.pie(agg_df_cb, names=cb_cat, values=y_plot,
-                                    hole=0)
-
-                elif cb_chart == "Donut":
-                    fig_cb = px.pie(agg_df_cb, names=cb_cat, values=y_plot,
-                                    hole=0.45)
-
-                else:  # Treemap
-                    fig_cb = px.treemap(agg_df_cb, path=[cb_cat], values=y_plot)
-
-                _apply_layout(fig_cb, title_cb)
-                st.plotly_chart(fig_cb, use_container_width=True)
-
-                # Value table toggle
-                if st.checkbox("Show data table", key="cb_table"):
-                    st.dataframe(agg_df_cb.reset_index(drop=True),
-                                 use_container_width=True, height=300)
-
-            except Exception as e:
-                st.error(f"Chart error: {e}")
-
     nav_buttons("Visualizations")
 # ═══════════════════════════════════════════════
 # PAGE — EXPORT
