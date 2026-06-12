@@ -2727,8 +2727,9 @@ elif st.session_state.page == "Visualizations":
                 cb_sort = st.selectbox("Sort", ["Value desc", "Value asc", "Alpha asc"],
                                        key="cb_sort")
             with r2c4:
-                cb_color2 = st.selectbox("Color by", ["— None —"] + cat_cols, key="cb_color2")
-
+                # Filter out the category column itself from color options
+                color_opts = ["— None —"] + [c for c in cat_cols if c != cb_cat]
+                cb_color2 = st.selectbox("Color by", color_opts, key="cb_color2")
             try:
                 cb_df = df.copy()
 
@@ -2761,18 +2762,24 @@ elif st.session_state.page == "Visualizations":
                 title_cb = (f"{'Count' if cb_y == 'Count' else cb_agg + ' of ' + cb_y}"
                             f" by {cb_cat} (Top {cb_top})")
 
+                # Never color by the same column used as the category axis —
+                # it just splits one bar per category into N single-item traces
+                if cb_color_val == cb_cat:
+                    cb_color_val = None
+
                 if cb_chart == "Horizontal Bar":
                     fig_cb = px.bar(agg_df_cb, x=y_plot, y=cb_cat,
                                     orientation="h", color=cb_color_val,
-                                    text=y_plot)
+                                    text=y_plot,
+                                    color_discrete_sequence=["#2563eb"] if cb_color_val is None else None)
                     fig_cb.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
                     fig_cb.update_layout(yaxis=dict(categoryorder="total ascending"))
 
                 elif cb_chart == "Vertical Bar":
                     fig_cb = px.bar(agg_df_cb, x=cb_cat, y=y_plot,
-                                    color=cb_color_val, text=y_plot)
+                                    color=cb_color_val, text=y_plot,
+                                    color_discrete_sequence=["#2563eb"] if cb_color_val is None else None)
                     fig_cb.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
-
                 elif cb_chart == "Pie":
                     fig_cb = px.pie(agg_df_cb, names=cb_cat, values=y_plot,
                                     hole=0)
