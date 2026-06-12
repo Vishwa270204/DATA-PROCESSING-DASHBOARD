@@ -388,7 +388,7 @@ def _is_phone_column(col_name):
         return False
  
     # Must contain one of these root keywords (as a word boundary, not substring)
-    PHONE_ROOTS = ["phone", "mobile", "fax", "tel", "cellphone", "cell_phone",
+    PHONE_ROOTS = ["PHONE", "mobile", "fax", "tel", "cellphone", "cell_phone",
                    "whatsapp", "landline", "pager","contact"]
     for root in PHONE_ROOTS:
         # whole-word match: root must be preceded/followed by _ or start/end of string
