@@ -388,7 +388,7 @@ def _is_phone_column(col_name):
         return False
  
     # Must contain one of these root keywords (as a word boundary, not substring)
-    PHONE_ROOTS = ["PHONE", "mobile", "fax", "tel", "cellphone", "cell_phone",
+    PHONE_ROOTS = ["phone", "mobile", "fax", "tel", "cellphone", "cell_phone",
                    "whatsapp", "landline", "pager","contact"]
     for root in PHONE_ROOTS:
         # whole-word match: root must be preceded/followed by _ or start/end of string
@@ -404,30 +404,27 @@ def _is_phone_column(col_name):
  
  
 def detect_invalid_phone(df):
-    """Improved phone validator — handles dots, 8-digit, extensions, country codes."""
-    PHONE_PAT = re.compile(
-        r"^\+?[\d]{1,4}?"           # optional country code
-        r"[\s.\-()]?"
-        r"[\d]{2,4}"                # area code
-        r"[\s.\-()]?"
-        r"[\d]{2,4}"
-        r"[\s.\-()]?"
-        r"[\d]{0,4}"
-        r"(\s*(x|ext|#)\s*\d{1,6})?$",  # optional extension
-        re.IGNORECASE
-    )
+    """Detect invalid phone numbers — flags letters, wrong length, empty."""
     r = {}
     for col in df.select_dtypes(include="object").columns:
         if not _is_phone_column(col):
             continue
         series = df[col].dropna().astype(str)
+
         def _bad(v):
-            digits = re.sub(r"[^\d]", "", v)
-            if len(digits) == 0:
+            v = v.strip()
+            if not v or v.lower() in ("nan", "none", "null", ""):
                 return True
+            # Strip allowed formatting characters
+            digits = re.sub(r"[\s\.\-\(\)\+]", "", v)
+            # After stripping formatting, should be all digits
+            if not digits.isdigit():
+                return True
+            # Check digit length (7–15 is valid internationally)
             if len(digits) < 7 or len(digits) > 15:
                 return True
             return False
+
         bad = series.apply(_bad)
         if bad.sum():
             r[col] = {"count": int(bad.sum())}
