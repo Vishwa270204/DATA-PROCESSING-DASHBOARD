@@ -1595,7 +1595,7 @@ elif st.session_state.page == "Encoding & Outliers":
                     if custom_fmt:
                         converted = pd.to_datetime(preview_s, format=custom_fmt, errors="coerce")
                     else:
-                        converted = pd.to_datetime(preview_s, infer_datetime_format=True, errors="coerce")
+                        converted = pd.to_datetime(preview_s, errors="coerce")
                 elif dtype_key == "int":
                     converted = pd.to_numeric(preview_s, errors="coerce").astype("Int64")
                 elif dtype_key == "float":
@@ -1628,7 +1628,7 @@ elif st.session_state.page == "Encoding & Outliers":
                         if custom_fmt:
                             return pd.to_datetime(series, format=custom_fmt, errors="coerce")
                         else:
-                            return pd.to_datetime(series, infer_datetime_format=True, errors="coerce")
+                            return pd.to_datetime(series, errors="coerce")
                     elif dtype_key == "int":
                         return pd.to_numeric(series, errors="coerce").astype("Int64")
                     elif dtype_key == "float":
