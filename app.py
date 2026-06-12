@@ -2415,22 +2415,22 @@ elif st.session_state.page == "Visualizations":
 
     # ── Tabs ──────────────────────────────────────────────────────────────
     tab1, tab2, tab3 = st.tabs([
-        "📈 Line / Bar / Area / Histogram",
-        "🔵 Scatter",
-        "📦 Box & Violin"
+        "📈 Line / Bar / Area",
+        "📊 Histogram / Scatter / Pie",
+        "📦 Box & Violin",
     ])
 
     # ══════════════════════════════════════════════════════════════════════
     # TAB 1 — LINE / BAR / AREA
     # ══════════════════════════════════════════════════════════════════════
     with tab1:
-        st.markdown("<div class='section-header'><h3>Line / Bar / Area / Histogram</h3></div>",
+        st.markdown("<div class='section-header'><h3>Line / Bar / Area Chart</h3></div>",
                     unsafe_allow_html=True)
 
         # ── Controls ─────────────────────────────────────────────────────
         r1c1, r1c2, r1c3, r1c4 = st.columns(4)
         with r1c1:
-            t1_chart = st.selectbox("Chart type", ["Line", "Bar", "Area", "Histogram"], key="t1_chart")
+            t1_chart = st.selectbox("Chart type", ["Line", "Bar", "Area"], key="t1_chart")
         with r1c2:
             t1_x = st.selectbox("X axis", df.columns.tolist(), key="t1_x")
         with r1c3:
@@ -2458,25 +2458,7 @@ elif st.session_state.page == "Visualizations":
             t1_group = None
             t1_sort  = "None"
 
-        elif t1_chart == "Histogram":
-            # Histogram gets its own dedicated controls
-            r2c1, r2c2, r2c3, r2c4 = st.columns(4)
-            with r2c1:
-                t1_group = st.selectbox("Group by (split histogram)",
-                    ["— None —"] + cat_cols, key="t1_hist_group")
-            with r2c2:
-                t1_bins = st.slider("Bins", 5, 100, 30, key="t1_hist_bins")
-            with r2c3:
-                t1_norm = st.selectbox("Normalize",
-                    ["count", "percent", "probability", "density"],
-                    key="t1_hist_norm")
-            with r2c4:
-                t1_labels = st.checkbox("Show mean line(s)", value=True, key="t1_hist_mean")
-            t1_agg    = "Sum"
-            t1_freq   = "Month"
-            t1_fill   = False
-            t1_sort   = "None"
-
+        
         else:
             r2c1, r2c2, r2c3, r2c4 = st.columns(4)
             with r2c1:
@@ -2532,173 +2514,227 @@ elif st.session_state.page == "Visualizations":
 
                     x_plot = "_x"
                     title  = f"{t1_agg} of {t1_y_val} by {t1_x} ({t1_freq})"
-
-                else:  # Histogram
-                    t1_group_val = None if t1_group == "— None —" else t1_group
-                    t1_bins      = st.session_state.get("t1_hist_bins", 30)
-                    t1_norm      = st.session_state.get("t1_hist_norm", "count")
-                    show_mean    = st.session_state.get("t1_hist_mean", True)
-                    t1_sort_val  = st.session_state.get("t1_sort", "None")
-                    fn = AGG_MAP.get(st.session_state.get("t1_agg_nd", "Mean"), "mean")
-
-                    x_eff = t1_group_val if t1_group_val and t1_group_val in plot_df.columns else t1_x
-                    plot_df[t1_y_val] = pd.to_numeric(plot_df[t1_y_val], errors="coerce")
-                    agg_df, eff_color = _aggregate(plot_df, x_eff, t1_y_val, t1_color_val, fn)
-
-                    sort_map = {
-                        "X asc":  (x_eff,    True),
-                        "X desc": (x_eff,    False),
-                        "Y asc":  (t1_y_val, True),
-                        "Y desc": (t1_y_val, False),
-                    }
-                    if t1_sort_val in sort_map:
-                        col_s, asc_s = sort_map[t1_sort_val]
-                        agg_df = agg_df.sort_values(col_s, ascending=asc_s)
-
-                    x_plot = x_eff
-                    title  = f"{st.session_state.get('t1_agg_nd','Mean')} of {t1_y_val} by {x_eff}"
-
-                text_col = t1_y_val if t1_labels else None
-
-                if t1_chart == "Line":
-                    fig = px.line(agg_df, x=x_plot, y=t1_y_val, color=eff_color,
-                                  markers=True, text=text_col,
-                                  labels={x_plot: t1_x, t1_y_val: t1_y_val})
-                    if t1_labels:
-                        fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")
-
-                elif t1_chart == "Bar":
-                    fig = px.bar(agg_df, x=x_plot, y=t1_y_val, color=eff_color,
-                                 barmode="group", text=text_col,
-                                 labels={x_plot: t1_x, t1_y_val: t1_y_val})
-                    if t1_labels:
-                        fig.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
-
-                elif t1_chart == "Area":
-                    fig = px.area(agg_df, x=x_plot, y=t1_y_val, color=eff_color,
-                                  text=text_col,
-                                  labels={x_plot: t1_x, t1_y_val: t1_y_val})
-                    if t1_labels:
-                        fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")
-
-                else:  # Histogram
-                    t1_group_val = (None if st.session_state.get("t1_group", "— None —") == "— None —"
-                                    else st.session_state.get("t1_group"))
-
-                    # Build column list for filtering — x + optional group + optional color
-                    hist_cols = [t1_x]
-                    if t1_group_val and t1_group_val in df.columns and t1_group_val != t1_x:
-                        hist_cols.append(t1_group_val)
-                    if t1_color_val and t1_color_val in df.columns and t1_color_val not in hist_cols:
-                        hist_cols.append(t1_color_val)
-
-                    hist_df = df[hist_cols].dropna()
-
-                    # Color priority: group col > color col > none
-                    hist_color = t1_group_val if t1_group_val and t1_group_val in hist_df.columns else t1_color_val
-
-                    fig = px.histogram(
-                        hist_df, x=t1_x, color=hist_color,
-                        nbins=50,
-                        opacity=0.75,
-                        barmode="overlay" if hist_color else "relative",
-                        color_discrete_sequence=["#2563eb"] if hist_color is None else None,
-                        labels={t1_x: t1_x},
-                    )
-
-                    # Mean line per group or overall
-                    if pd.api.types.is_numeric_dtype(df[t1_x]):
-                        if hist_color and hist_color in hist_df.columns:
-                            # One mean line per group
-                            colors = px.colors.qualitative.Plotly
-                            for i, grp in enumerate(hist_df[hist_color].unique()):
-                                grp_mean = hist_df[hist_df[hist_color] == grp][t1_x].mean()
-                                fig.add_vline(
-                                    x=float(grp_mean),
-                                    line_dash="dash",
-                                    line_color=colors[i % len(colors)],
-                                    line_width=1.5,
-                                    annotation_text=f"{grp}: {grp_mean:.2f}",
-                                    annotation_position="top right",
-                                    annotation_font=dict(size=10),
-                                )
-                        else:
-                            # Single overall mean line
-                            overall_mean = df[t1_x].dropna().mean()
-                            fig.add_vline(
-                                x=float(overall_mean),
-                                line_dash="dash", line_color="#dc2626", line_width=1.8,
-                                annotation_text=f"Mean: {overall_mean:.2f}",
-                                annotation_position="top right",
-                                annotation_font=dict(color="#dc2626", size=11),
-                            )
-                _apply_layout(fig, title if t1_chart != "Histogram" else f"Distribution of {t1_x}")                
-                fig.update_xaxes(tickangle=-45)
-                st.plotly_chart(fig, use_container_width=True)
-
-                if t1_x_is_date:
-                    _summary_strip(agg_df, x_plot, t1_y_val, t1_freq)
-
             except Exception as e:
                 st.error(f"Chart error: {e}")
 
     # ══════════════════════════════════════════════════════════════════════
-    # TAB 2 — SCATTER
+    # TAB 2 — HISTOGRAM / SCATTER / PIE
     # ══════════════════════════════════════════════════════════════════════
     with tab2:
-        st.markdown("<div class='section-header'><h3>Scatter Plot</h3></div>",
-                    unsafe_allow_html=True)
+        t2_chart = st.selectbox("Chart type",
+            ["Histogram", "Scatter", "Pie / Donut"], key="t2_chart")
 
-        if len(num_cols) < 2:
-            st.info("Need at least 2 numerical columns.")
-        else:
-            r1c1, r1c2, r1c3, r1c4 = st.columns(4)
-            with r1c1: sc_x = st.selectbox("X axis",  num_cols, key="sc_x")
-            with r1c2: sc_y = st.selectbox("Y axis",  num_cols[::-1], key="sc_y")
-            with r1c3: sc_c = st.selectbox("Color by", ["— None —"] + cat_cols + num_cols, key="sc_c")
-            with r1c4: sc_sz = st.selectbox("Size by (bubble)", ["— None —"] + num_cols, key="sc_sz")
+        st.markdown("---")
 
-            r2c1, r2c2, r2c3, r2c4 = st.columns(4)
-            with r2c1: sc_trend   = st.checkbox("Trendline (OLS)", value=True, key="sc_trend")
-            with r2c2: sc_opacity = st.slider("Opacity", 0.1, 1.0, 0.7, key="sc_opacity")
-            with r2c3: sc_msize   = st.slider("Marker size", 3, 20, 6, key="sc_msize")
-            with r2c4: sc_facet   = st.selectbox("Facet by", ["— None —"] + cat_cols, key="sc_facet")
+        # ── HISTOGRAM ────────────────────────────────────────────────────
+        if t2_chart == "Histogram":
+            st.markdown("<div class='section-header'><h3>Histogram</h3></div>",
+                        unsafe_allow_html=True)
 
-            if sc_x == sc_y:
-                st.warning("⚠️ X and Y axes cannot be the same column.")
+            if not num_cols:
+                st.info("No numerical columns found.")
             else:
+                r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+                with r1c1:
+                    h_col = st.selectbox("Column (X)", num_cols, key="h_col")
+                with r1c2:
+                    h_group = st.selectbox("Group by (split)",
+                        ["— None —"] + cat_cols, key="h_group")
+                with r1c3:
+                    h_bins = st.slider("Bins", 5, 100, 30, key="h_bins")
+                with r1c4:
+                    h_norm = st.selectbox("Normalize",
+                        ["count", "percent", "probability", "density"],
+                        key="h_norm")
+
+                r2c1, r2c2, _, _ = st.columns(4)
+                with r2c1:
+                    h_mean   = st.checkbox("Show mean line(s)",   value=True,  key="h_mean")
+                with r2c2:
+                    h_median = st.checkbox("Show median line(s)", value=False, key="h_median")
+
+                h_group_val = None if h_group == "— None —" else h_group
+
                 try:
-                    sc_color_val = None if sc_c    == "— None —" else sc_c
-                    sc_size_val  = None if sc_sz   == "— None —" else sc_sz
-                    sc_facet_val = None if sc_facet == "— None —" else sc_facet
+                    hist_cols = [h_col] + ([h_group_val] if h_group_val else [])
+                    hist_df   = df[hist_cols].dropna()
 
-                    fig_sc = px.scatter(
-                        df, x=sc_x, y=sc_y,
-                        color=sc_color_val,
-                        size=sc_size_val,
-                        facet_col=sc_facet_val,
-                        trendline="ols" if sc_trend and sc_color_val is None else None,
-                        opacity=sc_opacity,
+                    fig_h = px.histogram(
+                        hist_df, x=h_col, color=h_group_val,
+                        nbins=h_bins, opacity=0.75,
+                        barmode="overlay" if h_group_val else "relative",
+                        histnorm=h_norm if h_norm != "count" else None,
+                        color_discrete_sequence=["#2563eb"] if h_group_val is None else None,
+                        labels={h_col: h_col},
                     )
-                    fig_sc.update_traces(marker=dict(size=sc_msize))
-                    _apply_layout(fig_sc, f"{sc_y} vs {sc_x}")
-                    st.plotly_chart(fig_sc, use_container_width=True)
 
-                    r = df[[sc_x, sc_y]].dropna().corr().iloc[0, 1]
-                    direction = "positive" if r > 0 else "negative"
-                    strength  = "strong" if abs(r) > 0.7 else "moderate" if abs(r) > 0.4 else "weak"
-                    n_pts     = len(df[[sc_x, sc_y]].dropna())
-                    st.markdown(f"""
-                    <div style='background:#f8f9fc;border:1px solid #e2e6f0;border-radius:8px;
-                         padding:12px 16px;font-size:0.88rem;color:#374151;margin-top:4px;'>
-                        <b>Pearson r = {r:.4f}</b> — {strength} {direction} correlation
-                        &nbsp;|&nbsp; <b>N = {n_pts:,} points</b>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    if h_mean:
+                        if h_group_val:
+                            colors = px.colors.qualitative.Plotly
+                            for i, grp in enumerate(hist_df[h_group_val].unique()):
+                                m = hist_df[hist_df[h_group_val] == grp][h_col].mean()
+                                fig_h.add_vline(
+                                    x=float(m), line_dash="dash",
+                                    line_color=colors[i % len(colors)], line_width=1.5,
+                                    annotation_text=f"{grp} mean: {m:.2f}",
+                                    annotation_font=dict(size=10),
+                                )
+                        else:
+                            m = hist_df[h_col].mean()
+                            fig_h.add_vline(
+                                x=float(m), line_dash="dash",
+                                line_color="#dc2626", line_width=1.8,
+                                annotation_text=f"Mean: {m:.2f}",
+                                annotation_position="top right",
+                                annotation_font=dict(color="#dc2626", size=11),
+                            )
+
+                    if h_median:
+                        if h_group_val:
+                            colors = px.colors.qualitative.Plotly
+                            for i, grp in enumerate(hist_df[h_group_val].unique()):
+                                med = hist_df[hist_df[h_group_val] == grp][h_col].median()
+                                fig_h.add_vline(
+                                    x=float(med), line_dash="dot",
+                                    line_color=colors[i % len(colors)], line_width=1.5,
+                                    annotation_text=f"{grp} median: {med:.2f}",
+                                    annotation_font=dict(size=10),
+                                )
+                        else:
+                            med = hist_df[h_col].median()
+                            fig_h.add_vline(
+                                x=float(med), line_dash="dot",
+                                line_color="#16a34a", line_width=1.8,
+                                annotation_text=f"Median: {med:.2f}",
+                                annotation_position="top left",
+                                annotation_font=dict(color="#16a34a", size=11),
+                            )
+
+                    _apply_layout(fig_h, f"Distribution of {h_col}"
+                                  + (f" by {h_group_val}" if h_group_val else ""))
+                    st.plotly_chart(fig_h, use_container_width=True)
 
                 except Exception as e:
-                    st.error(f"Scatter error: {e}")
+                    st.error(f"Histogram error: {e}")
 
+        # ── SCATTER ───────────────────────────────────────────────────────
+        elif t2_chart == "Scatter":
+            st.markdown("<div class='section-header'><h3>Scatter Plot</h3></div>",
+                        unsafe_allow_html=True)
+
+            if len(num_cols) < 2:
+                st.info("Need at least 2 numerical columns.")
+            else:
+                r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+                with r1c1: sc_x = st.selectbox("X axis",  num_cols, key="sc_x")
+                with r1c2: sc_y = st.selectbox("Y axis",  num_cols[::-1], key="sc_y")
+                with r1c3: sc_c = st.selectbox("Color by", ["— None —"] + cat_cols + num_cols, key="sc_c")
+                with r1c4: sc_sz = st.selectbox("Size by (bubble)", ["— None —"] + num_cols, key="sc_sz")
+
+                r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+                with r2c1: sc_trend   = st.checkbox("Trendline (OLS)", value=True, key="sc_trend")
+                with r2c2: sc_opacity = st.slider("Opacity", 0.1, 1.0, 0.7, key="sc_opacity")
+                with r2c3: sc_msize   = st.slider("Marker size", 3, 20, 6, key="sc_msize")
+                with r2c4: sc_facet   = st.selectbox("Facet by", ["— None —"] + cat_cols, key="sc_facet")
+
+                if sc_x == sc_y:
+                    st.warning("⚠️ X and Y axes cannot be the same column.")
+                else:
+                    try:
+                        sc_color_val = None if sc_c     == "— None —" else sc_c
+                        sc_size_val  = None if sc_sz    == "— None —" else sc_sz
+                        sc_facet_val = None if sc_facet == "— None —" else sc_facet
+
+                        fig_sc = px.scatter(
+                            df, x=sc_x, y=sc_y,
+                            color=sc_color_val, size=sc_size_val,
+                            facet_col=sc_facet_val,
+                            trendline="ols" if sc_trend and sc_color_val is None else None,
+                            opacity=sc_opacity,
+                        )
+                        fig_sc.update_traces(marker=dict(size=sc_msize))
+                        _apply_layout(fig_sc, f"{sc_y} vs {sc_x}")
+                        st.plotly_chart(fig_sc, use_container_width=True)
+
+                        r   = df[[sc_x, sc_y]].dropna().corr().iloc[0, 1]
+                        dir = "positive" if r > 0 else "negative"
+                        str_label = "strong" if abs(r) > 0.7 else "moderate" if abs(r) > 0.4 else "weak"
+                        st.markdown(f"""
+                        <div style='background:#f8f9fc;border:1px solid #e2e6f0;border-radius:8px;
+                             padding:12px 16px;font-size:0.88rem;color:#374151;margin-top:4px;'>
+                            <b>Pearson r = {r:.4f}</b> — {str_label} {dir} correlation
+                            &nbsp;|&nbsp; <b>N = {len(df[[sc_x,sc_y]].dropna()):,} points</b>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    except Exception as e:
+                        st.error(f"Scatter error: {e}")
+
+        # ── PIE / DONUT ───────────────────────────────────────────────────
+        else:
+            st.markdown("<div class='section-header'><h3>Pie / Donut Chart</h3></div>",
+                        unsafe_allow_html=True)
+
+            r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+            with r1c1:
+                pie_cat = st.selectbox("Category column", cat_cols, key="pie_cat")
+            with r1c2:
+                pie_val = st.selectbox("Value column", ["Count"] + num_cols, key="pie_val")
+            with r1c3:
+                pie_type = st.radio("Type", ["Pie", "Donut"], horizontal=True, key="pie_type")
+            with r1c4:
+                pie_top = st.slider("Top N slices", 3, 30, 10, key="pie_top")
+
+            r2c1, r2c2, _, _ = st.columns(4)
+            with r2c1:
+                pie_agg = st.selectbox("Aggregate by",
+                    list(AGG_MAP.keys()), key="pie_agg",
+                    disabled=(pie_val == "Count"))
+            with r2c2:
+                pie_labels = st.radio("Labels",
+                    ["percent", "value", "label+percent"],
+                    horizontal=True, key="pie_labels")
+
+            try:
+                if pie_val == "Count":
+                    pie_df = df.groupby(pie_cat).size().reset_index(name="Count")
+                    y_pie  = "Count"
+                else:
+                    fn_pie = AGG_MAP.get(pie_agg, "sum")
+                    pie_df = (df.groupby(pie_cat)[pie_val]
+                              .agg(fn_pie).reset_index())
+                    y_pie  = pie_val
+
+                pie_df = pie_df.sort_values(y_pie, ascending=False).head(pie_top)
+
+                textinfo_map = {
+                    "percent":       "percent",
+                    "value":         "value",
+                    "label+percent": "label+percent",
+                }
+
+                fig_pie = px.pie(
+                    pie_df,
+                    names=pie_cat,
+                    values=y_pie,
+                    hole=0.45 if pie_type == "Donut" else 0,
+                )
+                fig_pie.update_traces(
+                    textinfo=textinfo_map.get(pie_labels, "percent"),
+                    textfont_size=12,
+                    pull=[0.03] * len(pie_df),
+                )
+                _apply_layout(fig_pie,
+                    f"{'Count' if pie_val == 'Count' else pie_agg + ' of ' + pie_val}"
+                    f" by {pie_cat} (Top {pie_top})")
+                st.plotly_chart(fig_pie, use_container_width=True)
+
+                if st.checkbox("Show data table", key="pie_table"):
+                    st.dataframe(pie_df.reset_index(drop=True),
+                                 use_container_width=True, height=280)
+
+            except Exception as e:
+                st.error(f"Pie chart error: {e}")
     # ══════════════════════════════════════════════════════════════════════
     # TAB 3 — BOX & VIOLIN
     # ══════════════════════════════════════════════════════════════════════
