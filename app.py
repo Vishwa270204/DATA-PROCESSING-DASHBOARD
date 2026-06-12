@@ -2533,9 +2533,7 @@ elif st.session_state.page == "Visualizations":
                     x_plot = "_x"
                     title  = f"{t1_agg} of {t1_y_val} by {t1_x} ({t1_freq})"
 
-                else:
-                    # ── Non-date path ──
-                    else:  # Histogram
+                else:  # Histogram
                     t1_group_val = None if t1_group == "— None —" else t1_group
                     t1_bins      = st.session_state.get("t1_hist_bins", 30)
                     t1_norm      = st.session_state.get("t1_hist_norm", "count")
