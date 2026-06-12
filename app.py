@@ -24,7 +24,7 @@ st.set_page_config(
 )
 
 def nav_buttons(current_page):
-    page_order = ["Upload & Inspect", "Statistics & EDA", "Recommendations", "Cleaning", "Encoding & Outliers", "Visualizations", "Export"]
+    page_order = ["Upload & Inspect", "Statistics & EDA", "Recommendations", "Data Cleaning", "Feature Engineering", "Outlier & Distribution", "Visualizations", "Export"]
     idx = page_order.index(current_page)
     slug = current_page.replace(" ", "_").replace("&", "and")
 
@@ -681,7 +681,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    pages = ["📁 Upload & Inspect","📈 Statistics & EDA","💡 Recommendations","🧹 Cleaning","🔠 Encoding & Outliers","📊 Visualizations","📦 Export"]
+    pages = ["📁 Upload & Inspect","📈 Statistics & EDA","💡 Recommendations","🧹 Data Cleaning","⚙️ Feature Engineering","📦 Outlier & Distribution","📊 Visualizations","📦 Export"]
     page_map = {p: p.split(" ", 1)[1] for p in pages}
     page_keys = list(page_map.values())
     selected = st.radio("Navigation", pages, label_visibility="collapsed",
@@ -1443,23 +1443,29 @@ elif st.session_state.page == "Recommendations":
 
     nav_buttons("Recommendations")
 # ═══════════════════════════════════════════════
-# PAGE 4 — CLEANING 
+# PAGE 4 — DATA CLEANING
 # ═══════════════════════════════════════════════
-elif st.session_state.page == "Cleaning":
+elif st.session_state.page == "Data Cleaning":
     st.markdown("""
     <div class='main-header'>
-        <h1>🧹 Cleaning </h1>
-        <p>Remove duplicates, fix missing values, and detect data anomalies</p>
+        <h1>🧹 Data Cleaning</h1>
+        <p>Handle duplicates, missing values, data types, and invalid entries</p>
     </div>
     """, unsafe_allow_html=True)
 
     if st.session_state.df is None:
-        st.warning("⚠️ Please upload a dataset first on the Upload & Inspect page.")
+        st.warning("⚠️ Please upload a dataset first.")
         st.stop()
 
     df = st.session_state.df
-    tab1, tab2, tab3 = st.tabs(["🗑️ Duplicates","🔧 Missing Values","🛠️ Feature Engineering"])
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "🗑️ Duplicate Handling",
+        "❓ Missing Value Treatment",
+        "🔄 Data Type Conversion",
+        "⚠️ Invalid Value Correction"
+    ])
 
+    # ── TAB 1: Duplicate Handling ─────────────────────────────────────────
     with tab1:
         st.markdown("<div class='section-header'><h3>Duplicate Row Detection</h3></div>", unsafe_allow_html=True)
         dupe_rows = df[df.duplicated(keep="first")]
@@ -1482,6 +1488,7 @@ elif st.session_state.page == "Cleaning":
         else:
             st.markdown("<span class='badge badge-success'>✅ No duplicates found</span>", unsafe_allow_html=True)
 
+    # ── TAB 2: Missing Value Treatment ───────────────────────────────────
     with tab2:
         st.markdown("<div class='section-header'><h3>Missing Value Treatment</h3></div>", unsafe_allow_html=True)
         report = missing_value_report(df)
@@ -1497,545 +1504,30 @@ elif st.session_state.page == "Cleaning":
                     if st.button(f"Apply to {item['column']}", key=f"apply_{item['column']}"):
                         try:
                             new_df, stats_r = fill_missing_values(df, item["column"], chosen, custom_val)
-                            st.session_state.df = new_df          # ← must assign new_df, not df
-                            st.session_state.original_df = new_df # ← add this line too
+                            st.session_state.df = new_df
+                            st.session_state.original_df = new_df
                             save_operation(st.session_state.file_name, f"Fill Missing: {item['column']}", f"{chosen} – filled {stats_r['filled']}")
-                            st.success(...)
+                            st.success(f"✅ Filled {stats_r['filled']} missing values in '{item['column']}'.")
                             st.rerun()
                         except Exception as e:
                             st.error(str(e))
+
+    # ── TAB 3: Data Type Conversion ───────────────────────────────────────
     with tab3:
-        st.markdown("<div class='section-header'><h3>🛠️ Feature Engineering</h3></div>", unsafe_allow_html=True)
-     
-        # Initialise cache keys
-        if "fe_created_cols" not in st.session_state:
-            st.session_state.fe_created_cols = []
-     
-        df_fe = st.session_state.df
-     
-        # ── Previously created features strip ────────────────────────────────────
-        existing_fe_cols = [c for c in st.session_state.fe_created_cols if c in df_fe.columns]
-        if existing_fe_cols:
-            fe_chips = "".join([
-                f"<span style='display:inline-flex;background:#eff6ff;border:1px solid #bfdbfe;"
-                f"color:#2563eb;border-radius:999px;padding:2px 10px;font-size:0.72rem;"
-                f"font-weight:600;margin:2px;'>✦ {c}</span>"
-                for c in existing_fe_cols
-            ])
-            st.markdown(f"""
-            <div style='background:#f8faff;border:1px solid #e0eaff;border-radius:10px;
-                 padding:12px 16px;margin-bottom:16px;'>
-                <div style='font-size:0.72rem;color:#6b7280;text-transform:uppercase;
-                     letter-spacing:1px;margin-bottom:8px;'>
-                     Engineered columns in dataset ({len(existing_fe_cols)})</div>
-                <div style='line-height:2.2;'>{fe_chips}</div>
-            </div>
-            """, unsafe_allow_html=True)
-     
-        # ═══════════════════════════════
-        # SECTION 1 — Date Feature Extraction
-        # ═══════════════════════════════
-        st.markdown("**📅 Extract Features from Date Column**")
-     
-        def _try_parse_as_date(series):
-            """
-            Try multiple common date formats on a sample.
-            Returns (parsed_series_or_None, success_rate).
-            Mixed formats handled by iterating format list then generic fallback.
-            """
-            sample = series.dropna().head(30)
-            if len(sample) == 0:
-                return None, 0.0
-            result = pd.Series([pd.NaT] * len(sample), index=sample.index)
-            for fmt in [
-                "%m/%d/%Y %H:%M", "%m/%d/%Y",
-                "%m-%d-%Y %H:%M", "%m-%d-%Y",
-                "%Y-%m-%d %H:%M:%S", "%Y-%m-%d",
-                "%d/%m/%Y %H:%M", "%d/%m/%Y",
-                "%d-%m-%Y %H:%M", "%d-%m-%Y",
-                "%Y/%m/%d", "%b %d %Y", "%B %d %Y",
-            ]:
-                still_null = result.isna() & sample.notna()
-                if not still_null.any():
-                    break
-                try:
-                    attempt = pd.to_datetime(sample[still_null], format=fmt, errors="coerce")
-                    result[still_null] = attempt
-                except Exception:
-                    continue
-            # final generic pass
-            still_null = result.isna() & sample.notna()
-            if still_null.any():
-                result[still_null] = pd.to_datetime(sample[still_null], errors="coerce")
-            success_rate = result.notna().sum() / max(len(sample), 1)
-            return result if success_rate >= 0.6 else None, success_rate
-     
-        # Detect datetime-like columns — proper datetime OR string columns that parse
-        datetime_candidates = []
-        for col in df_fe.columns:
-            if pd.api.types.is_datetime64_any_dtype(df_fe[col]):
-                datetime_candidates.append(col)
-            elif df_fe[col].dtype == object:
-                parsed, rate = _try_parse_as_date(df_fe[col])
-                if parsed is not None:
-                    datetime_candidates.append(col)
-     
-        if not datetime_candidates:
-            st.info("No date columns detected. If your date column is stored as text, convert it first using Data Type Conversion above.")
-        else:
-            fe_date_col = st.selectbox(
-                "Date column",
-                datetime_candidates,
-                key="fe_date_col"
-            )
-     
-            # Show sample values with parsed preview
-            raw_samples = df_fe[fe_date_col].dropna().head(4).tolist()
-            try:
-                parsed_samples = pd.to_datetime(
-                    df_fe[fe_date_col].dropna().head(4), errors="coerce"
-                ).tolist()
-                preview_pairs = [
-                    f"`{r}` → `{p.strftime('%Y-%m-%d') if pd.notna(p) else 'NaT'}`"
-                    for r, p in zip(raw_samples, parsed_samples)
-                ]
-                st.caption("Parse preview: " + "  |  ".join(preview_pairs))
-            except Exception:
-                st.caption(f"Sample values: {', '.join(str(v) for v in raw_samples)}")
-     
-            fe_parts = st.multiselect(
-                "Features to extract",
-                ["Year", "Month", "Day", "DayOfWeek", "DayName",
-                 "Quarter", "WeekOfYear", "IsWeekend", "MonthName"],
-                default=["Year", "Month", "Day", "DayOfWeek", "Quarter"],
-                key="fe_date_parts"
-            )
-     
-            if st.button("Extract Date Features", key="fe_extract_btn", type="primary",
-                         disabled=len(fe_parts) == 0):
-                try:
-                    df_t  = st.session_state.df.copy()
-                    pdf_t = st.session_state.processed_df.copy()
-     
-                    # Parse column regardless of current dtype
-                    parsed_col = pd.Series([pd.NaT] * len(df_t), index=df_t.index)
-                    raw = df_t[fe_date_col]
-                    for fmt in [
-                        "%m/%d/%Y %H:%M", "%m/%d/%Y",
-                        "%m-%d-%Y %H:%M", "%m-%d-%Y",
-                        "%Y-%m-%d %H:%M:%S", "%Y-%m-%d",
-                        "%d/%m/%Y %H:%M", "%d/%m/%Y",
-                        "%d-%m-%Y %H:%M", "%d-%m-%Y",
-                    ]:
-                        still_null = parsed_col.isna() & raw.notna()
-                        if not still_null.any():
-                            break
-                        try:
-                            attempt = pd.to_datetime(raw[still_null], format=fmt, errors="coerce")
-                            parsed_col[still_null] = attempt
-                        except Exception:
-                            continue
-                    still_null = parsed_col.isna() & raw.notna()
-                    if still_null.any():
-                        parsed_col[still_null] = pd.to_datetime(raw[still_null], errors="coerce")
-     
-                    extract_map = {
-                        "Year":       lambda s: s.dt.year,
-                        "Month":      lambda s: s.dt.month,
-                        "Day":        lambda s: s.dt.day,
-                        "DayOfWeek":  lambda s: s.dt.dayofweek,
-                        "DayName":    lambda s: s.dt.day_name(),
-                        "Quarter":    lambda s: s.dt.quarter,
-                        "WeekOfYear": lambda s: s.dt.isocalendar().week.astype(int),
-                        "IsWeekend":  lambda s: s.dt.dayofweek.isin([5, 6]).astype(int),
-                        "MonthName":  lambda s: s.dt.month_name(),
-                    }
-     
-                    created_cols = []
-                    for part in fe_parts:
-                        new_col = f"{fe_date_col}_{part.lower()}"
-                        vals = extract_map[part](parsed_col)
-                        df_t[new_col]  = vals
-                        pdf_t[new_col] = vals
-                        created_cols.append(new_col)
-                        if new_col not in st.session_state.fe_created_cols:
-                            st.session_state.fe_created_cols.append(new_col)
-     
-                    st.session_state.df = df_t
-                    st.session_state.processed_df = pdf_t
-                    save_operation(
-                        st.session_state.file_name,
-                        f"Feature Engineering: {fe_date_col}",
-                        f"Extracted: {', '.join(fe_parts)}"
-                    )
-     
-                    # Show the extracted data immediately
-                    st.success(f"✅ Created {len(created_cols)} new columns: {', '.join(created_cols)}")
-                    preview_cols = [fe_date_col] + created_cols
-                    st.markdown("**Preview — extracted columns (first 10 rows):**")
-                    st.dataframe(
-                        df_t[preview_cols].head(10),
-                        use_container_width=True,
-                        height=300
-                    )
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Extraction error: {e}")
-     
-        st.markdown("---")
-     
-        # ═══════════════════════════════
-        # SECTION 2 — Redundant Column Detection
-        # ═══════════════════════════════
-        st.markdown("**🗑️ Detect & Drop Redundant Columns**")
-        st.caption("Auto-detects standalone year/month/day columns, near-duplicate numeric columns, and zero-variance columns.")
-     
-        df_fe = st.session_state.df  # refresh after extraction
-     
-        # Keywords that indicate a standalone temporal column
-        TEMPORAL_PATTERNS = {
-            "year":    ["year", "yr", "anno"],
-            "month":   ["month", "mon", "mth"],
-            "day":     ["dayofweek", "day_of_week", "weekday"],
-            "quarter": ["quarter", "qtr", "q1", "q2", "q3", "q4"],
-            "week":    ["week", "weekofyear", "week_no"],
-        }
-     
-        def _is_standalone_temporal(col_name):
-            """
-            True if the column name IS a temporal unit name (year, month, etc.)
-            but is NOT itself a date column (e.g. 'OrderDate' is not standalone temporal).
-            """
-            cl = col_name.lower().replace(" ", "_").replace("-", "_")
-            # Skip columns that contain 'date' or 'time' — those are date columns, not standalones
-            if any(k in cl for k in ["date", "time", "datetime", "timestamp"]):
-                return False
-            for unit, patterns in TEMPORAL_PATTERNS.items():
-                for p in patterns:
-                    # whole-word boundary match
-                    if re.fullmatch(p, cl) or re.search(rf"(^|_){re.escape(p)}($|_)", cl):
-                        return unit
-            return False
-     
-        redundancy_suggestions = []
-     
-        # Rule 1: High correlation between numeric columns
-        num_df_r = df_fe.select_dtypes(include=[np.number])
-        if num_df_r.shape[1] > 1:
-            try:
-                corr_r = num_df_r.corr().abs()
-                for i in range(len(corr_r.columns)):
-                    for j in range(i + 1, len(corr_r.columns)):
-                        v = corr_r.iloc[i, j]
-                        if v > 0.98:
-                            c1, c2 = corr_r.columns[i], corr_r.columns[j]
-                            keep    = c1 if len(c1) >= len(c2) else c2
-                            suggest = c2 if keep == c1 else c1
-                            redundancy_suggestions.append({
-                                "Column to drop": suggest,
-                                "Reason": f"Near-duplicate of '{keep}' (r = {v:.3f})",
-                                "Keep": keep
-                            })
-            except Exception:
-                pass
-     
-        # Rule 2: Standalone temporal columns whose info is already in an extracted column
-        extracted_fe = set(st.session_state.fe_created_cols)
-        for col in df_fe.columns:
-            unit = _is_standalone_temporal(col)
-            if not unit:
-                continue
-            # Check if we have an extracted column that covers this unit
-            matching_extracted = [
-                c for c in extracted_fe
-                if unit in c.lower() and c in df_fe.columns
-            ]
-            # Also check if another column literally contains the same values
-            matching_by_value = []
-            col_vals = df_fe[col].dropna()
-            for other in df_fe.columns:
-                if other == col or other not in df_fe.select_dtypes(include=[np.number]).columns:
-                    continue
-                other_vals = df_fe[other].dropna()
-                if len(col_vals) == len(other_vals):
-                    try:
-                        if np.corrcoef(col_vals.astype(float), other_vals.astype(float))[0, 1] > 0.98:
-                            matching_by_value.append(other)
-                    except Exception:
-                        pass
-     
-            if matching_extracted:
-                redundancy_suggestions.append({
-                    "Column to drop": col,
-                    "Reason": f"Standalone '{unit}' — already extracted as '{matching_extracted[0]}'",
-                    "Keep": matching_extracted[0]
-                })
-            elif matching_by_value:
-                redundancy_suggestions.append({
-                    "Column to drop": col,
-                    "Reason": f"Identical values as '{matching_by_value[0]}'",
-                    "Keep": matching_by_value[0]
-                })
-            elif unit in ["year", "month"]:
-                # Flag even without a match — standalone year/month are often redundant
-                redundancy_suggestions.append({
-                    "Column to drop": col,
-                    "Reason": f"Standalone '{unit}' column — likely derivable from a date column",
-                    "Keep": "— (consider extracting from date first)"
-                })
-     
-        # Rule 3: Zero / near-zero variance
-        for col in df_fe.columns:
-            if df_fe[col].nunique(dropna=True) <= 1:
-                redundancy_suggestions.append({
-                    "Column to drop": col,
-                    "Reason": "Single unique value — zero variance",
-                    "Keep": "—"
-                })
-     
-        # Deduplicate
-        seen_drops = set()
-        unique_suggestions = []
-        for s in redundancy_suggestions:
-            if s["Column to drop"] not in seen_drops:
-                seen_drops.add(s["Column to drop"])
-                unique_suggestions.append(s)
-     
-        if not unique_suggestions:
-            st.markdown("<span class='badge badge-success'>✅ No redundant columns detected</span>", unsafe_allow_html=True)
-        else:
-            sugg_df = pd.DataFrame(unique_suggestions)
-            st.dataframe(sugg_df, use_container_width=True, hide_index=True)
-     
-            cols_to_drop = st.multiselect(
-                "Select columns to drop",
-                options=[s["Column to drop"] for s in unique_suggestions],
-                default=[s["Column to drop"] for s in unique_suggestions],
-                key="fe_drop_cols"
-            )
-            if st.button("Drop Selected Columns", key="fe_drop_btn", type="primary",
-                         disabled=len(cols_to_drop) == 0):
-                df_t  = st.session_state.df.drop(columns=cols_to_drop, errors="ignore")
-                pdf_t = st.session_state.processed_df.drop(columns=cols_to_drop, errors="ignore")
-                # Remove dropped cols from fe_created_cols cache too
-                st.session_state.fe_created_cols = [
-                    c for c in st.session_state.fe_created_cols if c not in cols_to_drop
-                ]
-                st.session_state.df = df_t
-                st.session_state.processed_df = pdf_t
-                save_operation(
-                    st.session_state.file_name,
-                    "Drop Redundant Columns",
-                    f"Dropped: {', '.join(cols_to_drop)}"
-                )
-                st.success(f"✅ Dropped {len(cols_to_drop)} column(s): {', '.join(cols_to_drop)}")
-                st.rerun()
-     
-        st.markdown("---")
-     
-        # ═══════════════════════════════
-        # SECTION 3 — Phone Number Cleaning
-        # ═══════════════════════════════
-        st.markdown("**📞 Phone Number Cleaning**")
-        st.caption("Detects phone/mobile/fax columns only — excludes ContactName, TelAviv, MobileSuit, etc.")
-     
-        df_fe = st.session_state.df  # refresh
-     
-        phone_cols = [
-            c for c in df_fe.select_dtypes(include="object").columns
-            if _is_phone_column(c)
-        ]
-     
-        if not phone_cols:
-            st.info(
-                "No phone number columns detected. "
-                "Detected columns must contain: phone, mobile, fax, tel, cell, whatsapp, landline, "
-                "or 'contact' as a standalone word — but NOT contactname, MobileSuit, TelAviv, etc."
-            )
-        else:
-            ph_col = st.selectbox("Phone column", phone_cols, key="ph_col_select")
-            ph_series = df_fe[ph_col].dropna().astype(str)
-     
-            def classify_phone(val):
-                digits = re.sub(r"[^\d]", "", val)
-                n = len(digits)
-                if n == 0:   return val, "invalid", "No digits found"
-                elif n < 7:  return val, "invalid", f"Too short ({n} digits)"
-                elif n == 8: return digits, "warning", "8-digit (local format)"
-                elif 9 <= n <= 15: return digits, "valid", f"{n}-digit number"
-                else:        return val, "invalid", f"Too long ({n} digits)"
-     
-            results = ph_series.apply(classify_phone)
-            valid_ct   = sum(1 for _, s, _ in results if s == "valid")
-            warning_ct = sum(1 for _, s, _ in results if s == "warning")
-            invalid_ct = sum(1 for _, s, _ in results if s == "invalid")
-     
-            ph1, ph2, ph3 = st.columns(3)
-            for w, lbl, cnt, color in [
-                (ph1, "Valid",    valid_ct,   "#16a34a"),
-                (ph2, "8-digit",  warning_ct, "#d97706"),
-                (ph3, "Invalid",  invalid_ct, "#dc2626"),
-            ]:
-                with w:
-                    st.markdown(f"""<div class='metric-card'>
-                        <span class='val' style='color:{color};'>{cnt}</span>
-                        <span class='label'>{lbl}</span></div>""", unsafe_allow_html=True)
-     
-            st.markdown("&nbsp;")
-     
-            invalid_samples = [
-                {"Original value": val, "Issue": reason}
-                for val, (_, status, reason) in zip(ph_series, results)
-                if status == "invalid"
-            ][:10]
-            if invalid_samples:
-                with st.expander(f"👁️ Preview invalid entries ({min(10, invalid_ct)} shown)"):
-                    st.dataframe(pd.DataFrame(invalid_samples), use_container_width=True, hide_index=True)
-     
-            ph_action = st.radio(
-                "Action",
-                [
-                    "Standardise — strip to digits only, keep all rows",
-                    "Flag — add new column '{col}_valid' (1 = valid, 0 = invalid)",
-                    "Drop rows with invalid numbers",
-                    "Replace invalid with NaN",
-                ],
-                key="ph_action_radio"
-            )
-     
-            if st.button("Apply Phone Cleaning", key="ph_clean_btn", type="primary"):
-                try:
-                    df_t  = st.session_state.df.copy()
-                    pdf_t = st.session_state.processed_df.copy()
-     
-                    def clean_val(val):
-                        if pd.isna(val): return val
-                        d = re.sub(r"[^\d]", "", str(val))
-                        return d if d else np.nan
-     
-                    def is_valid(val):
-                        if pd.isna(val): return 0
-                        d = re.sub(r"[^\d]", "", str(val))
-                        return 1 if 7 <= len(d) <= 15 else 0
-     
-                    if "Standardise" in ph_action:
-                        df_t[ph_col] = df_t[ph_col].apply(clean_val)
-                        pdf_t[ph_col] = pdf_t[ph_col].apply(clean_val)
-                        msg = f"✅ Standardised '{ph_col}' to digits only."
-     
-                    elif "Flag" in ph_action:
-                        flag_col = f"{ph_col}_valid"
-                        df_t[flag_col] = df_t[ph_col].apply(is_valid)
-                        pdf_t[flag_col] = pdf_t[ph_col].apply(is_valid)
-                        if flag_col not in st.session_state.fe_created_cols:
-                            st.session_state.fe_created_cols.append(flag_col)
-                        msg = f"✅ Added '{flag_col}' column (1 = valid, 0 = invalid)."
-     
-                    elif "Drop rows" in ph_action:
-                        before = len(df_t)
-                        mask = df_t[ph_col].apply(is_valid).astype(bool)
-                        df_t  = df_t[mask].reset_index(drop=True)
-                        pdf_t = pdf_t[mask].reset_index(drop=True)
-                        msg = f"✅ Removed {before - len(df_t)} rows with invalid phone numbers."
-     
-                    else:
-                        def nullify(val):
-                            if pd.isna(val): return val
-                            d = re.sub(r"[^\d]", "", str(val))
-                            return val if 7 <= len(d) <= 15 else np.nan
-                        df_t[ph_col] = df_t[ph_col].apply(nullify)
-                        pdf_t[ph_col] = pdf_t[ph_col].apply(nullify)
-                        msg = f"✅ Invalid phone values replaced with NaN."
-     
-                    st.session_state.df = df_t
-                    st.session_state.processed_df = pdf_t
-                    save_operation(st.session_state.file_name, f"Phone Cleaning: {ph_col}", ph_action)
-                    st.success(msg)
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Phone cleaning error: {e}")
-    nav_buttons("Cleaning")
-# ═══════════════════════════════════════════════
-# PAGE 5 — ENCODING & OUTLIERS
-# ═══════════════════════════════════════════════
-elif st.session_state.page == "Encoding & Outliers":
-    st.markdown("""
-    <div class='main-header'>
-        <h1>🔠 Encoding & Outliers</h1>
-        <p>Encode categorical features, detect outliers, and analyse distributions</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    if st.session_state.df is None:
-        st.warning("⚠️ Please upload a dataset first.")
-        st.stop()
-
-    df = st.session_state.df
-    ct = identify_column_types(df)
-    tab1, tab2, tab3 = st.tabs(["🔡 Encoding","📦 Outliers","〰️ Skewness"])
-
-    # ── Encoding Tab (tab1) — Redesigned ─────────────────────────────────────
-    with tab1:
-
-        encoding_df = st.session_state.original_df
-        ct = identify_column_types(encoding_df)
-
-        # ── Keywords that disqualify a column from encoding ───────────────────
-        SKIP_KEYWORDS = [
-            "name", "id", "index", "key", "uuid", "guid",
-            "phone", "mobile", "tel", "contact",
-            "date", "time", "datetime", "timestamp", "created", "updated",
-            "dob", "born", "joined", "period", "year", "month", "day",
-            "email", "mail",
-        ]
-
-        def _should_skip_for_encoding(col_name):
-            cl = col_name.lower().replace(" ", "_").replace("-", "_")
-            return any(kw in cl for kw in SKIP_KEYWORDS)
-
-        # All categorical + boolean, excluding ID/name/date/phone columns
-        all_cat_cols = [
-            c for c in list(dict.fromkeys(ct["categorical"] + ct["boolean"]))
-            if not _should_skip_for_encoding(c)
-            and c not in ct["id"]
-            and c not in ct["datetime"]
-        ]
-
-        # Already encoded columns
-        encoded_set = set(st.session_state.get("encoded_columns", []))
-
-        def _is_ohe_dummy(col, enc_set):
-            return any(col.startswith(ec + "_") for ec in enc_set)
-
-        available_cols = [
-            c for c in all_cat_cols
-            if c not in encoded_set
-            and not _is_ohe_dummy(c, encoded_set)
-        ]
-
-        # ═══════════════════════════════════════════
-        # SECTION A — DATA TYPE CONVERSION
-        # ═══════════════════════════════════════════
-        st.markdown("<div class='section-header'><h3>🔄 Data Type Conversion</h3></div>", unsafe_allow_html=True)
-
+        st.markdown("<div class='section-header'><h3>Data Type Conversion</h3></div>", unsafe_allow_html=True)
         st.markdown("""
         <div style='background:#fffbeb;border:1px solid #fde68a;border-radius:10px;
              padding:12px 16px;margin-bottom:16px;font-size:0.84rem;color:#92400e;'>
-            💡 Use this to fix columns with wrong types — e.g. an <b>Order Date</b> stored as text,
-            or a numeric ID stored as float. Changes apply to both the working and processed dataset.
+            💡 Fix columns with wrong types — e.g. an <b>Order Date</b> stored as text,
+            or a numeric ID stored as float.
         </div>
         """, unsafe_allow_html=True)
 
         all_cols = list(st.session_state.df.columns)
-
         dt1, dt2, dt3 = st.columns([3, 2, 2])
         with dt1:
-            dtype_col = st.selectbox(
-                "Column",
-                all_cols,
-                key="dtype_col_select",
-                help="Select any column to change its data type"
-            )
+            dtype_col = st.selectbox("Column", all_cols, key="dtype_col_select_clean",
+                help="Select any column to change its data type")
         with dt2:
             current_dtype = str(st.session_state.df[dtype_col].dtype)
             st.markdown(f"""
@@ -2048,52 +1540,32 @@ elif st.session_state.page == "Encoding & Outliers":
             </div>
             """, unsafe_allow_html=True)
         with dt3:
-            target_dtype = st.selectbox(
-                "Convert to",
-                [
-                    "datetime — parse dates automatically",
-                    "datetime — custom format",
-                    "int — integer",
-                    "float — decimal",
-                    "str — text / object",
-                    "bool — True / False",
-                    "category — pandas category",
-                ],
-                key="dtype_target_select"
-            )
+            target_dtype = st.selectbox("Convert to", [
+                "datetime — parse dates automatically",
+                "datetime — custom format",
+                "int — integer",
+                "float — decimal",
+                "str — text / object",
+                "bool — True / False",
+                "category — pandas category",
+            ], key="dtype_target_select_clean")
 
-        # Show format input only for custom datetime
         custom_fmt = None
         if "custom format" in target_dtype:
-            st.markdown("""
-            <div style='font-size:0.8rem;color:#374151;margin:6px 0 2px;'>
-                <b>Date format string</b>
-                <span style='color:#6b7280;'> — use Python strftime codes</span>
-            </div>
-            """, unsafe_allow_html=True)
             fmt_col1, fmt_col2 = st.columns([3, 2])
             with fmt_col1:
-                custom_fmt = st.text_input(
-                    "Format",
-                    placeholder="%Y-%m-%d %H:%M:%S",
-                    label_visibility="collapsed",
-                    key="dtype_custom_fmt"
-                )
+                custom_fmt = st.text_input("Format", placeholder="%Y-%m-%d %H:%M:%S",
+                    label_visibility="collapsed", key="dtype_custom_fmt_clean")
             with fmt_col2:
-                # Show sample values as hint
                 sample_vals = st.session_state.df[dtype_col].dropna().head(3).tolist()
                 st.caption(f"Sample: {', '.join(str(v) for v in sample_vals)}")
 
-        # Preview sample after conversion
         with st.expander("👁️ Preview conversion on first 5 rows", expanded=False):
             try:
                 preview_s = st.session_state.df[dtype_col].head(5).copy()
                 dtype_key = target_dtype.split(" — ")[0]
                 if dtype_key == "datetime":
-                    if custom_fmt:
-                        converted = pd.to_datetime(preview_s, format=custom_fmt, errors="coerce")
-                    else:
-                        converted = pd.to_datetime(preview_s, errors="coerce")
+                    converted = pd.to_datetime(preview_s, format=custom_fmt, errors="coerce") if custom_fmt else pd.to_datetime(preview_s, errors="coerce")
                 elif dtype_key == "int":
                     converted = pd.to_numeric(preview_s, errors="coerce").astype("Int64")
                 elif dtype_key == "float":
@@ -2106,16 +1578,12 @@ elif st.session_state.page == "Encoding & Outliers":
                     converted = preview_s.astype("category")
                 else:
                     converted = preview_s
-
-                prev_df = pd.DataFrame({
-                    "Original": preview_s.values,
-                    "Converted": converted.values
-                })
-                st.dataframe(prev_df, use_container_width=True, height=200)
+                st.dataframe(pd.DataFrame({"Original": preview_s.values, "Converted": converted.values}),
+                    use_container_width=True, height=200)
             except Exception as e:
                 st.error(f"Preview error: {e}")
 
-        if st.button("Apply Type Conversion", key="apply_dtype_btn", type="primary"):
+        if st.button("Apply Type Conversion", key="apply_dtype_btn_clean", type="primary"):
             try:
                 df_t = st.session_state.df.copy()
                 pdf_t = st.session_state.processed_df.copy()
@@ -2124,43 +1592,25 @@ elif st.session_state.page == "Encoding & Outliers":
                 def _convert(series):
                     if dtype_key == "datetime":
                         if custom_fmt:
-                            # User supplied a specific format — try it first, fall back to auto
                             parsed = pd.to_datetime(series, format=custom_fmt, errors="coerce")
-                            # For rows that failed, retry with flexible parser
                             failed_mask = parsed.isna() & series.notna()
                             if failed_mask.any():
-                                parsed[failed_mask] = pd.to_datetime(
-                                    series[failed_mask], errors="coerce"
-                                )
+                                parsed[failed_mask] = pd.to_datetime(series[failed_mask], errors="coerce")
                             return parsed
                         else:
-                            # Mixed-format path — try slash format, dash format, then generic
-                            # Handles: 2/24/2003 0:00  AND  05-07-2003 00:00
                             result = pd.Series([pd.NaT] * len(series), index=series.index)
-                            remaining = series.copy()
-                 
                             for fmt in ["%m/%d/%Y %H:%M", "%m/%d/%Y", "%m-%d-%Y %H:%M",
                                         "%m-%d-%Y", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d",
                                         "%d/%m/%Y %H:%M", "%d-%m-%Y %H:%M", "%d-%m-%Y"]:
-                                still_null = result.isna() & remaining.notna()
-                                if not still_null.any():
-                                    break
+                                still_null = result.isna() & series.notna()
+                                if not still_null.any(): break
                                 try:
-                                    attempt = pd.to_datetime(
-                                        remaining[still_null], format=fmt, errors="coerce"
-                                    )
-                                    result[still_null] = attempt
-                                except Exception:
-                                    continue
-                 
-                            # Final fallback for anything still unparsed
-                            still_null = result.isna() & remaining.notna()
+                                    result[still_null] = pd.to_datetime(series[still_null], format=fmt, errors="coerce")
+                                except: continue
+                            still_null = result.isna() & series.notna()
                             if still_null.any():
-                                result[still_null] = pd.to_datetime(
-                                    remaining[still_null], errors="coerce"
-                                )
+                                result[still_null] = pd.to_datetime(series[still_null], errors="coerce")
                             return result
-                 
                     elif dtype_key == "int":
                         return pd.to_numeric(series, errors="coerce").astype("Int64")
                     elif dtype_key == "float":
@@ -2172,18 +1622,13 @@ elif st.session_state.page == "Encoding & Outliers":
                     elif dtype_key == "category":
                         return series.astype("category")
                     return series
-                df_t[dtype_col]  = _convert(df_t[dtype_col])
+
+                df_t[dtype_col] = _convert(df_t[dtype_col])
                 pdf_t[dtype_col] = _convert(pdf_t[dtype_col])
-
                 null_count = df_t[dtype_col].isna().sum()
-
                 st.session_state.df = df_t
                 st.session_state.processed_df = pdf_t
-                save_operation(
-                    st.session_state.file_name,
-                    f"Type Conversion: {dtype_col}",
-                    f"{current_dtype} → {dtype_key}"
-                )
+                save_operation(st.session_state.file_name, f"Type Conversion: {dtype_col}", f"{current_dtype} → {dtype_key}")
                 st.success(f"✅ '{dtype_col}' converted to **{dtype_key}**.")
                 if null_count > 0:
                     st.warning(f"⚠️ {null_count} value(s) could not be converted and were set to NaT/NaN.")
@@ -2191,14 +1636,198 @@ elif st.session_state.page == "Encoding & Outliers":
             except Exception as e:
                 st.error(f"Conversion error: {e}")
 
-        st.markdown("---")
+    # ── TAB 4: Invalid Value Correction ──────────────────────────────────
+    with tab4:
+        st.markdown("<div class='section-header'><h3>Invalid Value Detection & Correction</h3></div>", unsafe_allow_html=True)
 
-        # ═══════════════════════════════════════════
-        # SECTION B — CATEGORICAL ENCODING
-        # ═══════════════════════════════════════════
-        st.markdown("<div class='section-header'><h3>🔠 Categorical Encoding</h3></div>", unsafe_allow_html=True)
+        inv_emails  = detect_invalid_email(df)
+        inv_phones  = detect_invalid_phone(df)
+        inv_dates   = detect_future_dates(df)
+        inv_domain  = detect_invalid_values(df)
+        neg_vals    = detect_negative_values(df)
+        ct_live     = identify_column_types(df)
 
-        # Show which columns were auto-skipped
+        total_issues = len(inv_emails) + len(inv_phones) + len(inv_dates) + len(inv_domain) + len(neg_vals)
+        if total_issues == 0:
+            st.markdown("<span class='badge badge-success'>✅ No invalid values detected</span>", unsafe_allow_html=True)
+        else:
+            iv1, iv2, iv3, iv4, iv5 = st.columns(5)
+            for w, lbl, cnt in [
+                (iv1, "Invalid Emails",  len(inv_emails)),
+                (iv2, "Invalid Phones",  len(inv_phones)),
+                (iv3, "Future Dates",    len(inv_dates)),
+                (iv4, "Domain Errors",   len(inv_domain)),
+                (iv5, "Negative Values", len(neg_vals)),
+            ]:
+                color = "#dc2626" if cnt > 0 else "#16a34a"
+                with w:
+                    st.markdown(f"""<div class='metric-card'>
+                        <span class='val' style='color:{color};'>{cnt}</span>
+                        <span class='label'>{lbl}</span></div>""", unsafe_allow_html=True)
+
+            st.markdown("&nbsp;")
+
+            # Invalid emails
+            if inv_emails:
+                st.markdown("**📧 Invalid Email Columns**")
+                for col, info in inv_emails.items():
+                    with st.expander(f"'{col}' — {info['count']} invalid emails"):
+                        bad_mask = df[col].dropna().apply(
+                            lambda x: not bool(re.compile(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$").match(str(x)))
+                        )
+                        st.dataframe(df.loc[bad_mask[bad_mask].index, [col]].head(20),
+                            use_container_width=True, height=200)
+                        action = st.radio("Action", ["Replace with NaN", "Drop rows"],
+                            key=f"email_action_{col}", horizontal=True)
+                        if st.button(f"Fix '{col}'", key=f"fix_email_{col}"):
+                            df_t = st.session_state.df.copy()
+                            pat = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$")
+                            if action == "Replace with NaN":
+                                df_t[col] = df_t[col].apply(
+                                    lambda x: x if pd.isna(x) or bool(pat.match(str(x))) else np.nan
+                                )
+                            else:
+                                mask = df_t[col].apply(
+                                    lambda x: pd.isna(x) or bool(pat.match(str(x)))
+                                )
+                                df_t = df_t[mask].reset_index(drop=True)
+                            st.session_state.df = df_t
+                            save_operation(st.session_state.file_name, f"Fix Invalid Email: {col}", action)
+                            st.success(f"✅ Fixed invalid emails in '{col}'.")
+                            st.rerun()
+
+            # Invalid phones
+            if inv_phones:
+                st.markdown("**📞 Invalid Phone Columns**")
+                for col, info in inv_phones.items():
+                    with st.expander(f"'{col}' — {info['count']} invalid phone numbers"):
+                        def _bad_phone(v):
+                            d = re.sub(r"[^\d]", "", str(v))
+                            return len(d) < 7 or len(d) > 15
+                        bad_mask = df[col].dropna().apply(_bad_phone)
+                        st.dataframe(df.loc[bad_mask[bad_mask].index, [col]].head(20),
+                            use_container_width=True, height=200)
+                        action = st.radio("Action", ["Replace with NaN", "Drop rows", "Standardise (digits only)"],
+                            key=f"phone_action_{col}", horizontal=True)
+                        if st.button(f"Fix '{col}'", key=f"fix_phone_{col}"):
+                            df_t = st.session_state.df.copy()
+                            if action == "Standardise (digits only)":
+                                df_t[col] = df_t[col].apply(
+                                    lambda x: re.sub(r"[^\d]", "", str(x)) if pd.notna(x) else x
+                                )
+                            elif action == "Replace with NaN":
+                                df_t[col] = df_t[col].apply(
+                                    lambda x: x if pd.isna(x) or (7 <= len(re.sub(r"[^\d]","",str(x))) <= 15) else np.nan
+                                )
+                            else:
+                                mask = df_t[col].apply(
+                                    lambda x: pd.isna(x) or (7 <= len(re.sub(r"[^\d]","",str(x))) <= 15)
+                                )
+                                df_t = df_t[mask].reset_index(drop=True)
+                            st.session_state.df = df_t
+                            save_operation(st.session_state.file_name, f"Fix Invalid Phone: {col}", action)
+                            st.success(f"✅ Fixed invalid phones in '{col}'.")
+                            st.rerun()
+
+            # Future dates
+            if inv_dates:
+                st.markdown("**📅 Future Date Columns**")
+                for col, info in inv_dates.items():
+                    with st.expander(f"'{col}' — {info['count']} future dates"):
+                        parsed = pd.to_datetime(df[col], errors="coerce")
+                        bad_mask = parsed > pd.Timestamp.now()
+                        st.dataframe(df.loc[bad_mask, [col]].head(20),
+                            use_container_width=True, height=200)
+                        action = st.radio("Action", ["Replace with NaN", "Drop rows"],
+                            key=f"date_action_{col}", horizontal=True)
+                        if st.button(f"Fix '{col}'", key=f"fix_date_{col}"):
+                            df_t = st.session_state.df.copy()
+                            parsed_t = pd.to_datetime(df_t[col], errors="coerce")
+                            if action == "Replace with NaN":
+                                df_t[col] = df_t[col].where(parsed_t <= pd.Timestamp.now(), other=np.nan)
+                            else:
+                                df_t = df_t[parsed_t <= pd.Timestamp.now()].reset_index(drop=True)
+                            st.session_state.df = df_t
+                            save_operation(st.session_state.file_name, f"Fix Future Dates: {col}", action)
+                            st.success(f"✅ Fixed future dates in '{col}'.")
+                            st.rerun()
+
+            # Domain / negative value errors
+            if inv_domain or neg_vals:
+                st.markdown("**⚠️ Domain & Negative Value Errors**")
+                all_issues = {**inv_domain, **neg_vals}
+                for col, info in all_issues.items():
+                    reason = info.get("issue", info.get("reason", "Invalid value"))
+                    count  = info.get("count", 0)
+                    with st.expander(f"'{col}' — {count} rows — {reason}"):
+                        st.dataframe(df[df[col] < 0][[col]].head(20) if col in neg_vals
+                            else df[[col]].head(20), use_container_width=True, height=200)
+                        action = st.radio("Action", ["Replace with NaN", "Drop rows", "Cap at 0"],
+                            key=f"domain_action_{col}", horizontal=True)
+                        if st.button(f"Fix '{col}'", key=f"fix_domain_{col}"):
+                            df_t = st.session_state.df.copy()
+                            if action == "Replace with NaN":
+                                df_t.loc[df_t[col] < 0, col] = np.nan
+                            elif action == "Drop rows":
+                                df_t = df_t[df_t[col] >= 0].reset_index(drop=True)
+                            else:
+                                df_t[col] = df_t[col].clip(lower=0)
+                            st.session_state.df = df_t
+                            save_operation(st.session_state.file_name, f"Fix Domain Error: {col}", action)
+                            st.success(f"✅ Fixed domain errors in '{col}'.")
+                            st.rerun()
+
+    nav_buttons("Data Cleaning")
+# ═══════════════════════════════════════════════
+# PAGE 5 — FEATURE ENGINEERING
+# ═══════════════════════════════════════════════
+elif st.session_state.page == "Feature Engineering":
+    st.markdown("""
+    <div class='main-header'>
+        <h1>⚙️ Feature Engineering</h1>
+        <p>Encode categorical columns and extract features from existing data</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.session_state.df is None:
+        st.warning("⚠️ Please upload a dataset first.")
+        st.stop()
+
+    df = st.session_state.df
+    tab1, tab2 = st.tabs(["🔤 Encoding", "📅 Feature Extraction"])
+
+    # ── TAB 1: Encoding ───────────────────────────────────────────────────
+    with tab1:
+        encoding_df = st.session_state.original_df
+        ct = identify_column_types(encoding_df)
+
+        SKIP_KEYWORDS = [
+            "name","id","index","key","uuid","guid",
+            "phone","mobile","tel","contact",
+            "date","time","datetime","timestamp","created","updated",
+            "dob","born","joined","period","year","month","day",
+            "email","mail",
+        ]
+        def _should_skip_for_encoding(col_name):
+            cl = col_name.lower().replace(" ","_").replace("-","_")
+            return any(kw in cl for kw in SKIP_KEYWORDS)
+
+        all_cat_cols = [
+            c for c in list(dict.fromkeys(ct["categorical"] + ct["boolean"]))
+            if not _should_skip_for_encoding(c)
+            and c not in ct["id"]
+            and c not in ct["datetime"]
+        ]
+        encoded_set = set(st.session_state.get("encoded_columns", []))
+
+        def _is_ohe_dummy(col, enc_set):
+            return any(col.startswith(ec + "_") for ec in enc_set)
+
+        available_cols = [
+            c for c in all_cat_cols
+            if c not in encoded_set and not _is_ohe_dummy(c, encoded_set)
+        ]
+
         skipped_cols = [
             c for c in list(dict.fromkeys(ct["categorical"] + ct["boolean"]))
             if _should_skip_for_encoding(c) or c in ct["id"] or c in ct["datetime"]
@@ -2218,10 +1847,8 @@ elif st.session_state.page == "Encoding & Outliers":
             </div>
             """, unsafe_allow_html=True)
 
-        # ── All done ──────────────────────────────────────────────────────────
         if not available_cols and all_cat_cols:
-            st.success("✅ All categorical columns have been encoded.")
-            
+            st.success("✅ All eligible categorical columns have been encoded.")
             chips_html = "".join([
                 f"<span style='display:inline-flex;align-items:center;gap:5px;"
                 f"background:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;"
@@ -2238,32 +1865,25 @@ elif st.session_state.page == "Encoding & Outliers":
                 <div style='line-height:2.2;'>{chips_html}</div>
             </div>
             """, unsafe_allow_html=True)
-
         elif not all_cat_cols:
-            st.info("No encodable categorical columns found (ID, name, date, and phone columns are excluded).")
-
+            st.info("No encodable categorical columns found.")
         else:
-            # Progress bar
             done  = len(all_cat_cols) - len(available_cols)
             total = len(all_cat_cols)
             pct   = int(done / total * 100) if total else 0
-
             st.markdown(f"""
             <div style='margin-bottom:18px;'>
-                <div style='display:flex;justify-content:space-between;
-                     align-items:center;margin-bottom:6px;'>
+                <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;'>
                     <span style='font-size:0.8rem;color:#6b7280;'>Encoding progress</span>
                     <span style='font-family:"JetBrains Mono",monospace;font-size:0.8rem;
                          color:#2563eb;font-weight:700;'>{done} / {total}</span>
                 </div>
                 <div style='background:#e2e6f0;border-radius:999px;height:5px;'>
-                    <div style='width:{pct}%;height:100%;background:#2563eb;
-                         border-radius:999px;'></div>
+                    <div style='width:{pct}%;height:100%;background:#2563eb;border-radius:999px;'></div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-            # Already encoded chips
             if encoded_set:
                 chips_html = "".join([
                     f"<span style='display:inline-flex;background:#eff6ff;border:1px solid #bfdbfe;"
@@ -2278,37 +1898,18 @@ elif st.session_state.page == "Encoding & Outliers":
                 </div>
                 """, unsafe_allow_html=True)
 
-            # Main form panel
-            st.markdown("""
-            <div style='background:#ffffff;border:1px solid #e2e6f0;border-radius:12px;
-                 padding:20px 24px;'>
-            """, unsafe_allow_html=True)
-
             enc_technique = st.selectbox(
                 "Encoding Technique",
-                [
-                    "Label Encoding",
-                    "One-Hot Encoding",
-                    "Ordinal Encoding",
-                    "Frequency Encoding",
-                    "Binary Encoding",
-                ],
-                key="enc_technique_unified",
-                help=(
-                    "Label: integer codes 0…N-1  |  "
-                    "One-Hot: new binary column per category  |  "
-                    "Ordinal: user-defined rank order  |  "
-                    "Frequency: replace with category frequency  |  "
-                    "Binary: label → binary bit columns"
-                )
+                ["Label Encoding","One-Hot Encoding","Ordinal Encoding","Frequency Encoding","Binary Encoding"],
+                key="enc_technique_fe",
+                help="Label: integer codes | One-Hot: binary columns per category | Ordinal: user-defined rank | Frequency: relative frequency | Binary: bit columns"
             )
-
             hints = {
                 "Label Encoding":     "Best for binary columns or tree-based models.",
                 "One-Hot Encoding":   "Best for low-cardinality columns (≤ 10 unique values).",
-                "Ordinal Encoding":   "Use when categories have a natural order (e.g. low → medium → high).",
-                "Frequency Encoding": "Best for high-cardinality columns — replaces each category with its relative frequency.",
-                "Binary Encoding":    "Label → binary bit columns. Compact alternative to one-hot for medium cardinality.",
+                "Ordinal Encoding":   "Use when categories have a natural order.",
+                "Frequency Encoding": "Best for high-cardinality columns.",
+                "Binary Encoding":    "Compact alternative to one-hot for medium cardinality.",
             }
             st.caption(hints[enc_technique])
 
@@ -2318,124 +1919,223 @@ elif st.session_state.page == "Encoding & Outliers":
                 options=available_cols,
                 format_func=lambda c: col_labels[c],
                 placeholder="Select one or more columns…",
-                key="enc_cols_unified"
+                key="enc_cols_fe"
             )
 
-            # Ordinal order inputs
             ordinal_orders = {}
             if enc_technique == "Ordinal Encoding" and selected_cols:
-                st.markdown(
-                    "<div style='margin-top:10px;font-size:0.82rem;color:#374151;"
-                    "font-weight:600;margin-bottom:4px;'>Define rank order "
-                    "<span style='color:#6b7280;font-weight:400;'>"
-                    "(comma-separated, lowest → highest)</span></div>",
-                    unsafe_allow_html=True
-                )
+                st.markdown("**Define rank order** (comma-separated, lowest → highest)")
                 for col in selected_cols:
                     existing = sorted(encoding_df[col].dropna().unique().tolist())
-                    ord_input = st.text_input(
+                    ordinal_orders[col] = st.text_input(
                         f"{col}",
                         placeholder=f"e.g. {', '.join(str(v) for v in existing[:5])}",
-                        key=f"ordinal_order_{col}",
+                        key=f"ordinal_order_fe_{col}",
                         help=f"All values: {existing}"
                     )
-                    ordinal_orders[col] = ord_input
 
-            st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
-
-            apply_btn = st.button(
-                "Apply Encoding",
-                type="primary",
-                disabled=len(selected_cols) == 0,
-                key="apply_encoding_unified"
-            )
-
-            st.markdown("</div>", unsafe_allow_html=True)
-
-            # Apply logic
-            if apply_btn and selected_cols:
-                errors    = []
-                successes = []
-
+            if st.button("Apply Encoding", type="primary", disabled=len(selected_cols)==0, key="apply_enc_fe"):
+                errors, successes = [], []
                 for col in selected_cols:
                     try:
                         working_df = st.session_state.processed_df.copy()
-
                         if enc_technique == "Label Encoding":
                             new_df, _ = apply_encoding(working_df, col, "label")
-
                         elif enc_technique == "One-Hot Encoding":
                             new_df, _ = apply_encoding(working_df, col, "onehot")
-
                         elif enc_technique == "Frequency Encoding":
                             new_df, _ = apply_encoding(working_df, col, "frequency")
-
                         elif enc_technique == "Binary Encoding":
                             le = LabelEncoder()
-                            labels   = le.fit_transform(working_df[col].astype(str))
-                            max_bits = max(int(np.ceil(np.log2(len(le.classes_) + 1))), 1)
-                            new_df   = working_df.copy()
+                            labels = le.fit_transform(working_df[col].astype(str))
+                            max_bits = max(int(np.ceil(np.log2(len(le.classes_)+1))), 1)
+                            new_df = working_df.copy()
                             for bit in range(max_bits):
                                 new_df[f"{col}_bin{bit}"] = (labels >> bit) & 1
                             new_df = new_df.drop(columns=[col])
-                            st.session_state.encoders[col] = {
-                                cls: int(code) for code, cls in enumerate(le.classes_)
-                            }
-
+                            st.session_state.encoders[col] = {cls: int(code) for code, cls in enumerate(le.classes_)}
                         elif enc_technique == "Ordinal Encoding":
                             ord_str = ordinal_orders.get(col, "")
                             if not ord_str.strip():
-                                errors.append(f"'{col}': no ordinal order provided.")
-                                continue
+                                errors.append(f"'{col}': no ordinal order provided."); continue
                             ordinal_order = [x.strip() for x in ord_str.split(",")]
-                            existing_vals = [str(v).strip() for v in
-                                             encoding_df[col].dropna().unique()]
+                            existing_vals = [str(v).strip() for v in encoding_df[col].dropna().unique()]
                             invalid = [v for v in ordinal_order if v not in existing_vals]
                             if invalid:
-                                errors.append(
-                                    f"'{col}': values not found in column: {invalid}"
-                                )
-                                continue
-                            val_map      = {str(v).strip(): v for v in encoding_df[col].dropna().unique()}
+                                errors.append(f"'{col}': values not found: {invalid}"); continue
+                            val_map = {str(v).strip(): v for v in encoding_df[col].dropna().unique()}
                             mapped_order = [val_map.get(x, x) for x in ordinal_order]
-                            new_df, _    = apply_encoding(working_df, col, "ordinal", mapped_order)
-
+                            new_df, _ = apply_encoding(working_df, col, "ordinal", mapped_order)
                         else:
-                            errors.append(f"'{col}': unknown technique.")
-                            continue
+                            errors.append(f"'{col}': unknown technique."); continue
 
                         st.session_state.processed_df = new_df
-                        st.session_state.df           = new_df
+                        st.session_state.df = new_df
                         if col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(col)
-                        save_operation(
-                            st.session_state.file_name,
-                            f"Encoding [{enc_technique}]: {col}",
-                            enc_technique
-                        )
+                        save_operation(st.session_state.file_name, f"Encoding [{enc_technique}]: {col}", enc_technique)
                         successes.append(col)
-
                     except Exception as e:
                         errors.append(f"'{col}': {e}")
 
                 if successes:
-                    st.success(f"Successfully encoded: {', '.join(successes)}")
+                    st.success(f"✅ Successfully encoded: {', '.join(successes)}")
                 for err in errors:
                     st.error(f"❌ {err}")
 
-                encoded_set_after = set(st.session_state.encoded_columns)
-                remaining = [
-                    c for c in all_cat_cols
-                    if c not in encoded_set_after
-                    and not _is_ohe_dummy(c, encoded_set_after)
-                ]
+                remaining = [c for c in all_cat_cols
+                    if c not in set(st.session_state.encoded_columns)
+                    and not _is_ohe_dummy(c, set(st.session_state.encoded_columns))]
                 if not remaining and successes:
-                    st.success("✅ All categorical columns have been encoded.")
-                    
+                    st.success("✅ All eligible categorical columns have been encoded.")
+                st.rerun()
 
-                st.rerun()   
-        # ── Outliers  ── FIX 3: go.Strip → go.Box + go.Scatter overlay ──────────
+    # ── TAB 2: Feature Extraction ─────────────────────────────────────────
     with tab2:
+        if "fe_created_cols" not in st.session_state:
+            st.session_state.fe_created_cols = []
+
+        df_fe = st.session_state.df
+
+        existing_fe_cols = [c for c in st.session_state.fe_created_cols if c in df_fe.columns]
+        if existing_fe_cols:
+            fe_chips = "".join([
+                f"<span style='display:inline-flex;background:#eff6ff;border:1px solid #bfdbfe;"
+                f"color:#2563eb;border-radius:999px;padding:2px 10px;font-size:0.72rem;"
+                f"font-weight:600;margin:2px;'>✦ {c}</span>"
+                for c in existing_fe_cols
+            ])
+            st.markdown(f"""
+            <div style='background:#f8faff;border:1px solid #e0eaff;border-radius:10px;
+                 padding:12px 16px;margin-bottom:16px;'>
+                <div style='font-size:0.72rem;color:#6b7280;text-transform:uppercase;
+                     letter-spacing:1px;margin-bottom:8px;'>Engineered columns ({len(existing_fe_cols)})</div>
+                <div style='line-height:2.2;'>{fe_chips}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        def _try_parse_as_date(series):
+            sample = series.dropna().head(30)
+            if len(sample) == 0: return None, 0.0
+            result = pd.Series([pd.NaT] * len(sample), index=sample.index)
+            for fmt in ["%m/%d/%Y %H:%M","%m/%d/%Y","%m-%d-%Y %H:%M","%m-%d-%Y",
+                        "%Y-%m-%d %H:%M:%S","%Y-%m-%d","%d/%m/%Y %H:%M","%d/%m/%Y",
+                        "%d-%m-%Y %H:%M","%d-%m-%Y","%Y/%m/%d","%b %d %Y","%B %d %Y"]:
+                still_null = result.isna() & sample.notna()
+                if not still_null.any(): break
+                try:
+                    result[still_null] = pd.to_datetime(sample[still_null], format=fmt, errors="coerce")
+                except: continue
+            still_null = result.isna() & sample.notna()
+            if still_null.any():
+                result[still_null] = pd.to_datetime(sample[still_null], errors="coerce")
+            success_rate = result.notna().sum() / max(len(sample), 1)
+            return result if success_rate >= 0.6 else None, success_rate
+
+        datetime_candidates = []
+        for col in df_fe.columns:
+            if pd.api.types.is_datetime64_any_dtype(df_fe[col]):
+                datetime_candidates.append(col)
+            elif df_fe[col].dtype == object:
+                parsed, rate = _try_parse_as_date(df_fe[col])
+                if parsed is not None:
+                    datetime_candidates.append(col)
+
+        if not datetime_candidates:
+            st.info("ℹ️ No feature extraction opportunities detected. No date columns found.")
+        else:
+            st.markdown("**📅 Extract Features from Date Column**")
+            fe_date_col = st.selectbox("Date column", datetime_candidates, key="fe_date_col_fe")
+
+            raw_samples = df_fe[fe_date_col].dropna().head(4).tolist()
+            try:
+                parsed_samples = pd.to_datetime(df_fe[fe_date_col].dropna().head(4), errors="coerce").tolist()
+                preview_pairs = [
+                    f"`{r}` → `{p.strftime('%Y-%m-%d') if pd.notna(p) else 'NaT'}`"
+                    for r, p in zip(raw_samples, parsed_samples)
+                ]
+                st.caption("Parse preview: " + "  |  ".join(preview_pairs))
+            except: pass
+
+            fe_parts = st.multiselect(
+                "Features to extract",
+                ["Year","Month","Day","DayOfWeek","DayName","Quarter","WeekOfYear","IsWeekend","MonthName"],
+                default=["Year","Month","Day","DayOfWeek","Quarter"],
+                key="fe_date_parts_fe"
+            )
+
+            if st.button("Extract Date Features", key="fe_extract_btn_fe", type="primary", disabled=len(fe_parts)==0):
+                try:
+                    df_t  = st.session_state.df.copy()
+                    pdf_t = st.session_state.processed_df.copy()
+
+                    parsed_col = pd.Series([pd.NaT]*len(df_t), index=df_t.index)
+                    raw = df_t[fe_date_col]
+                    for fmt in ["%m/%d/%Y %H:%M","%m/%d/%Y","%m-%d-%Y %H:%M","%m-%d-%Y",
+                                "%Y-%m-%d %H:%M:%S","%Y-%m-%d","%d/%m/%Y %H:%M","%d-%m-%Y %H:%M","%d-%m-%Y"]:
+                        still_null = parsed_col.isna() & raw.notna()
+                        if not still_null.any(): break
+                        try:
+                            parsed_col[still_null] = pd.to_datetime(raw[still_null], format=fmt, errors="coerce")
+                        except: continue
+                    still_null = parsed_col.isna() & raw.notna()
+                    if still_null.any():
+                        parsed_col[still_null] = pd.to_datetime(raw[still_null], errors="coerce")
+
+                    extract_map = {
+                        "Year":       lambda s: s.dt.year,
+                        "Month":      lambda s: s.dt.month,
+                        "Day":        lambda s: s.dt.day,
+                        "DayOfWeek":  lambda s: s.dt.dayofweek,
+                        "DayName":    lambda s: s.dt.day_name(),
+                        "Quarter":    lambda s: s.dt.quarter,
+                        "WeekOfYear": lambda s: s.dt.isocalendar().week.astype(int),
+                        "IsWeekend":  lambda s: s.dt.dayofweek.isin([5,6]).astype(int),
+                        "MonthName":  lambda s: s.dt.month_name(),
+                    }
+                    created_cols = []
+                    for part in fe_parts:
+                        new_col = f"{fe_date_col}_{part.lower()}"
+                        vals = extract_map[part](parsed_col)
+                        df_t[new_col]  = vals
+                        pdf_t[new_col] = vals
+                        created_cols.append(new_col)
+                        if new_col not in st.session_state.fe_created_cols:
+                            st.session_state.fe_created_cols.append(new_col)
+
+                    st.session_state.df = df_t
+                    st.session_state.processed_df = pdf_t
+                    save_operation(st.session_state.file_name, f"Feature Engineering: {fe_date_col}", f"Extracted: {', '.join(fe_parts)}")
+                    st.success(f"✅ Created {len(created_cols)} new columns: {', '.join(created_cols)}")
+                    st.markdown("**Preview — first 10 rows:**")
+                    st.dataframe(df_t[[fe_date_col]+created_cols].head(10), use_container_width=True, height=300)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Extraction error: {e}")
+
+    nav_buttons("Feature Engineering")
+
+
+# ═══════════════════════════════════════════════
+# PAGE 6 — OUTLIER & DISTRIBUTION
+# ═══════════════════════════════════════════════
+elif st.session_state.page == "Outlier & Distribution":
+    st.markdown("""
+    <div class='main-header'>
+        <h1>📦 Outlier & Distribution</h1>
+        <p>Detect and treat outliers, and correct skewed distributions</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.session_state.df is None:
+        st.warning("⚠️ Please upload a dataset first.")
+        st.stop()
+
+    df = st.session_state.df
+    tab1, tab2 = st.tabs(["📦 Outlier Treatment", "📈 Skewness Correction"])
+
+    # ── TAB 1: Outlier Treatment ──────────────────────────────────────────
+    with tab1:
         st.markdown("<div class='section-header'><h3>Outlier Detection & Treatment</h3></div>", unsafe_allow_html=True)
         num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         if not num_cols:
@@ -2468,70 +2168,51 @@ elif st.session_state.page == "Encoding & Outliers":
                 stats_rows = [{"Column":c,"Mean":round(i["mean"],3),"Std":round(i["std"],3),
                                 "Threshold":f"|Z|>{i['threshold']}","Outliers":i["count"],"Outlier %":i["pct"]}
                                for c,i in outlier_data.items()]
-           
-            st.dataframe(pd.DataFrame(stats_rows),use_container_width=True)
-            # ── FIX 3: Box plots (go.Box) + outlier scatter overlay ──
+
+            if stats_rows:
+                st.dataframe(pd.DataFrame(stats_rows), use_container_width=True)
+            else:
+                st.markdown("<span class='badge badge-success'>✅ No outliers detected</span>", unsafe_allow_html=True)
+
             st.markdown("<div class='section-header'><h3>Box Plot — Outliers Highlighted</h3></div>", unsafe_allow_html=True)
             st.caption("Blue boxes = normal distribution. Red dots = outlier values beyond whiskers.")
             try:
                 n_cols_plot = len(num_cols)
                 h_space = max(0.02, min(0.1, 0.8/max(n_cols_plot,1)))
-                fig_box = make_subplots(
-                    rows=1, cols=n_cols_plot,
-                    subplot_titles=num_cols,
-                    horizontal_spacing=h_space
-                )
+                fig_box = make_subplots(rows=1, cols=n_cols_plot, subplot_titles=num_cols, horizontal_spacing=h_space)
                 legend_added = False
                 for i, col in enumerate(num_cols, start=1):
                     info = outlier_data.get(col, {})
                     outlier_idx = set(info.get("rows", []))
                     series = df[col].dropna()
                     out_series = series[series.index.isin(outlier_idx)]
-
-                    # Box trace — all data (whiskers auto-clip to IQR fence)
                     fig_box.add_trace(go.Box(
-                        y=series,
-                        name=col,
-                        marker_color="rgba(37,99,235,0.55)",
-                        line_color="#2563eb",
-                        fillcolor="rgba(37,99,235,0.15)",
-                        boxpoints=False,          # hide built-in point overlay
-                        showlegend=not legend_added,
-                        legendgroup="normal",
-                        legendgrouptitle_text="" if legend_added else "Normal",
+                        y=series, name=col,
+                        marker_color="rgba(37,99,235,0.55)", line_color="#2563eb",
+                        fillcolor="rgba(37,99,235,0.15)", boxpoints=False,
+                        showlegend=not legend_added, legendgroup="normal",
                     ), row=1, col=i)
-
-                    # Scatter overlay for outlier points in red
                     if len(out_series) > 0:
                         fig_box.add_trace(go.Scatter(
-                            y=out_series,
-                            x=[col]*len(out_series),
-                            mode="markers",
+                            y=out_series, x=[col]*len(out_series), mode="markers",
                             marker=dict(color="rgba(220,38,38,0.85)", size=7, symbol="circle-open"),
                             name="Outlier" if not legend_added else "",
-                            legendgroup="outlier",
-                            showlegend=not legend_added,
+                            legendgroup="outlier", showlegend=not legend_added,
                         ), row=1, col=i)
-
                     legend_added = True
-
                 fig_box.update_layout(
                     title="Box Plots — Outliers (Red ◯) vs Normal Range",
-                    template="plotly_white",
-                    height=max(420, 380),
-                    paper_bgcolor="#ffffff",
-                    plot_bgcolor="#f8f9fc",
-                    showlegend=True,
+                    template="plotly_white", height=420,
+                    paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc", showlegend=True,
                 )
                 st.plotly_chart(fig_box, use_container_width=True)
             except Exception as e:
                 st.error(f"Box plot error: {e}")
 
-            # Density histogram overlay
             try:
                 n_r = (len(num_cols)+2)//3
-                fig_dens = make_subplots(rows=n_r, cols=3,
-                    subplot_titles=num_cols, horizontal_spacing=0.08, vertical_spacing=0.12)
+                fig_dens = make_subplots(rows=n_r, cols=3, subplot_titles=num_cols,
+                    horizontal_spacing=0.08, vertical_spacing=0.12)
                 for idx, col in enumerate(num_cols):
                     r, c = divmod(idx, 3)
                     info = outlier_data.get(col, {})
@@ -2541,10 +2222,11 @@ elif st.session_state.page == "Encoding & Outliers":
                     outs   = series[(series<lo) | (series>hi)]
                     fig_dens.add_trace(go.Histogram(x=normal, nbinsx=25,
                         marker_color="rgba(37,99,235,0.5)", showlegend=False), row=r+1, col=c+1)
-                    if len(outs)>0:
+                    if len(outs) > 0:
                         fig_dens.add_trace(go.Histogram(x=outs, nbinsx=10,
                             marker_color="rgba(220,38,38,0.7)", showlegend=False), row=r+1, col=c+1)
-                fig_dens.update_layout(title="Density — Normal (Blue) vs Outliers (Red)",
+                fig_dens.update_layout(
+                    title="Density — Normal (Blue) vs Outliers (Red)",
                     template="plotly_white", barmode="overlay",
                     height=max(350, n_r*300), paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
                 st.plotly_chart(fig_dens, use_container_width=True)
@@ -2555,56 +2237,55 @@ elif st.session_state.page == "Encoding & Outliers":
             cols_with_outliers = [c for c in num_cols if outlier_data.get(c, {}).get("count", 0) > 0]
             if not cols_with_outliers:
                 st.markdown("<span class='badge badge-success'>✅ No outliers found in any column</span>", unsafe_allow_html=True)
-                selected_col = None
             else:
                 selected_col = st.selectbox(
                     f"Select column to treat ({len(cols_with_outliers)} columns with outliers)",
-                    cols_with_outliers,
-                    key="out_treat_col")
-            if selected_col:
-                ca, cb, cc = st.columns(3)
+                    cols_with_outliers, key="out_treat_col_od")
                 method_key = "iqr" if use_iqr else "zscore"
+                ca, cb, _ = st.columns(3)
                 with ca:
-                    if st.button("🗑️ Remove Outliers"):
+                    if st.button("🗑️ Remove Outliers", key="rm_out_od"):
                         try:
                             new_df, r = remove_outliers(df, selected_col, method=method_key)
                             st.session_state.df = new_df
                             save_operation(st.session_state.file_name, f"Remove Outliers: {selected_col}", str(r))
-                            st.success(f"Removed {r['removed']} outlier rows."); st.rerun()
+                            st.success(f"✅ Removed {r['removed']} outlier rows."); st.rerun()
                         except Exception as e: st.error(str(e))
                 with cb:
-                    if st.button("📌 Cap Outliers (Winsorise)"):
+                    if st.button("📌 Cap Outliers (Winsorise)", key="cap_out_od"):
                         try:
                             new_df, r = cap_outliers(df, selected_col)
                             st.session_state.df = new_df
                             save_operation(st.session_state.file_name, f"Cap Outliers: {selected_col}", str(r))
-                            st.success(f"Capped {r['capped']} outliers."); st.rerun()
+                            st.success(f"✅ Capped {r['capped']} outliers."); st.rerun()
                         except Exception as e: st.error(str(e))
-                with cc:
-                    st.info("Select Remove or Cap above.")
 
-    with tab3:
-        st.markdown("<div class='section-header'><h3>Skewness Analysis</h3></div>", unsafe_allow_html=True)
+    # ── TAB 2: Skewness Correction ────────────────────────────────────────
+    with tab2:
+        st.markdown("<div class='section-header'><h3>Skewness Analysis & Correction</h3></div>", unsafe_allow_html=True)
         skew_df = calculate_skewness(df)
         if skew_df.empty:
             st.info("No numerical columns.")
         else:
-            st.dataframe(skew_df,use_container_width=True)
-            transformed_suffixes = ("_log", "_sqrt", "_boxcox")
+            st.dataframe(skew_df, use_container_width=True)
+
+            transformed_suffixes = ("_log","_sqrt","_boxcox")
             already_transformed = set(st.session_state.get("transformed_columns", []))
             num_cols_sk = [
                 c for c in df.select_dtypes(include=[np.number]).columns.tolist()
-                if not c.endswith(transformed_suffixes)
-                and c not in already_transformed
+                if not c.endswith(transformed_suffixes) and c not in already_transformed
             ]
+
             n_r = (len(num_cols_sk)+1)//2
             try:
                 fig_sk = make_subplots(rows=n_r, cols=2,
                     subplot_titles=[f"{r['Column']} | sk={r['Skewness']} ({r['Classification']})" for _,r in skew_df.iterrows()],
                     horizontal_spacing=0.08, vertical_spacing=0.14)
-                cls_color = {"Highly Left Skewed":"#dc2626","Moderately Left Skewed":"#f97316",
-                             "Approximately Normal":"#16a34a","Moderately Right Skewed":"#f59e0b",
-                             "Highly Right Skewed":"#dc2626"}
+                cls_color = {
+                    "Highly Left Skewed":"#dc2626","Moderately Left Skewed":"#f97316",
+                    "Approximately Normal":"#16a34a","Moderately Right Skewed":"#f59e0b",
+                    "Highly Right Skewed":"#dc2626"
+                }
                 for idx, col in enumerate(num_cols_sk):
                     r, c = divmod(idx, 2)
                     data = df[col].dropna()
@@ -2617,83 +2298,68 @@ elif st.session_state.page == "Encoding & Outliers":
                         x_r = np.linspace(data.min(), data.max(), 200)
                         kde_y = kde(x_r)*len(data)*(data.max()-data.min())/30
                         fig_sk.add_trace(go.Scatter(x=x_r, y=kde_y, mode="lines",
-                            line=dict(color=color,width=2.5), showlegend=False), row=r+1, col=c+1)
+                            line=dict(color=color, width=2.5), showlegend=False), row=r+1, col=c+1)
                     except: pass
                     fig_sk.add_vline(x=float(data.mean()), line_dash="dash",
                         line_color="#dc2626", line_width=1.5, row=r+1, col=c+1)
-                fig_sk.update_layout(title="Distribution + KDE (Red dashed = Mean)",
-                    template="plotly_white", height=max(400,n_r*320),
+                fig_sk.update_layout(
+                    title="Distribution + KDE (Red dashed = Mean)",
+                    template="plotly_white", height=max(400, n_r*320),
                     paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
                 st.plotly_chart(fig_sk, use_container_width=True)
             except Exception as e:
                 st.error(f"Skewness chart error: {e}")
 
-            st.markdown("**Apply Transformation:**")
-            
-            # Exclude already-transformed columns and approximately normal columns
-            transformed_suffixes = ("_log", "_sqrt", "_boxcox")
             skew_dict_current = dict(zip(skew_df["Column"], skew_df["Skewness"]))
-            
             skew_candidates = [
                 c for c in num_cols_sk
                 if not c.endswith(transformed_suffixes)
                 and c not in already_transformed
                 and abs(skew_dict_current.get(c, 0)) > 0.5
             ]
-            
+
             if not skew_candidates:
-                st.markdown("<span class='badge badge-success'>✅ No skewed columns remaining — all distributions are approximately normal</span>", unsafe_allow_html=True)
+                st.markdown("<span class='badge badge-success'>✅ No significant skewness detected — all distributions are approximately normal.</span>", unsafe_allow_html=True)
             else:
+                st.markdown("**Apply Transformation:**")
                 skew_col = st.selectbox(
                     f"Column ({len(skew_candidates)} skewed remaining)",
-                    skew_candidates,
-                    key="skew_col"
-                )
-            transform = st.radio("Transformation", ["Log","Sqrt","Box-Cox"], horizontal=True)
-            if st.button("Apply Transform"):
-                try:
-                    df_t = st.session_state.df.copy()
-                    
-                    if transform == "Log":
-                        shift = abs(df_t[skew_col].min())+1 if df_t[skew_col].min()<=0 else 0
-                        df_t[skew_col] = np.log(df_t[skew_col]+shift)
-                    elif transform == "Sqrt":
-                        shift = abs(df_t[skew_col].min()) if df_t[skew_col].min()<0 else 0
-                        df_t[skew_col] = np.sqrt(df_t[skew_col]+shift)
-                    elif transform == "Box-Cox":
-                        s = df_t[skew_col].dropna()
-                        shift = abs(s.min())+1 if s.min()<=0 else 0
-                        t, _ = boxcox(s+shift)
-                        df_t.loc[s.index, skew_col] = t
+                    skew_candidates, key="skew_col_od")
+                transform = st.radio("Transformation", ["Log","Sqrt","Box-Cox"], horizontal=True, key="skew_transform_od")
+                if st.button("Apply Transform", key="apply_transform_od"):
+                    try:
+                        df_t = st.session_state.df.copy()
+                        if transform == "Log":
+                            shift = abs(df_t[skew_col].min())+1 if df_t[skew_col].min()<=0 else 0
+                            df_t[skew_col] = np.log(df_t[skew_col]+shift)
+                        elif transform == "Sqrt":
+                            shift = abs(df_t[skew_col].min()) if df_t[skew_col].min()<0 else 0
+                            df_t[skew_col] = np.sqrt(df_t[skew_col]+shift)
+                        elif transform == "Box-Cox":
+                            s = df_t[skew_col].dropna()
+                            shift = abs(s.min())+1 if s.min()<=0 else 0
+                            t, _ = boxcox(s+shift)
+                            df_t.loc[s.index, skew_col] = t
 
-                    # Check if transform actually reduced skewness
-                    new_skew = abs(df_t[skew_col].skew())
-                    old_skew = abs(df[skew_col].skew())
+                        new_skew = abs(df_t[skew_col].skew())
+                        old_skew = abs(df[skew_col].skew())
+                        st.session_state.df = df_t
+                        if skew_col not in st.session_state.transformed_columns:
+                            st.session_state.transformed_columns.append(skew_col)
+                        save_operation(st.session_state.file_name, f"{transform} Transform: {skew_col}",
+                            f"skew {round(old_skew,4)} → {round(new_skew,4)}")
 
-                    st.session_state.df = df_t
+                        if new_skew <= 0.5:
+                            st.success(f"✅ '{skew_col}' is now approximately normal (skew={round(new_skew,4)})")
+                        elif new_skew < old_skew:
+                            st.warning(f"⚠️ Skewness reduced: {round(old_skew,4)} → {round(new_skew,4)}. Try a different transform.")
+                        else:
+                            st.error(f"❌ Transform did not help (skew={round(new_skew,4)}). Try Box-Cox instead.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(str(e))
 
-                    # Track transformed columns
-                    if skew_col not in st.session_state.transformed_columns:
-                        st.session_state.transformed_columns.append(skew_col)
-
-                    save_operation(
-                        st.session_state.file_name,
-                        f"{transform} Transform: {skew_col}",
-                        f"skew {round(old_skew,4)} → {round(new_skew,4)}"
-                    )
-
-                    if new_skew <= 0.5:
-                        st.success(f"✅ '{skew_col}' is now approximately normal (skew={round(new_skew,4)})")
-                    elif new_skew < old_skew:
-                        st.warning(f"⚠️ Skewness reduced but still present: {round(old_skew,4)} → {round(new_skew,4)}. Try a different transform.")
-                    else:
-                        st.error(f"❌ Transform did not help: skew={round(new_skew,4)}. Try Box-Cox instead.")
-
-                    st.rerun()
-                except Exception as e:
-                    st.error(str(e))
-    nav_buttons("Encoding & Outliers")
-
+    nav_buttons("Outlier & Distribution")
 
 # ═══════════════════════════════════════════════
 # PAGE — VISUALIZATIONS 
