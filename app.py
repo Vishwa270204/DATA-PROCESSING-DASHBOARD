@@ -376,7 +376,7 @@ def detect_invalid_email(df):
     return r
 
 def _is_phone_column(col_name):
-    c1 = col_name.lower().replace(" ", "_").replace("-", "_")
+    cl = col_name.lower().replace(" ", "_").replace("-", "_")
  
     # Hard name keywords that are definitively NOT phone numbers
     NOT_PHONE = [
