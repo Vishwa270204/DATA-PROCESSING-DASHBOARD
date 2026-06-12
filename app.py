@@ -2445,6 +2445,12 @@ elif st.session_state.page == "Visualizations":
       
 
         try:
+            # ── always defined regardless of branch ──
+            group_val  = None
+            agg_func   = st.session_state.get("custom_agg", "None (raw)")
+            sort_order = st.session_state.get("custom_sort", "None")
+            show_labels = st.session_state.get("custom_labels", False)
+
             # ── DATE GROUPING PATH ──────────────────────────────────────────
             if x_is_date and date_freq != "None" and y_val:
                 plot_df  = apply_date_grouping(plot_df, x_col, date_freq)
