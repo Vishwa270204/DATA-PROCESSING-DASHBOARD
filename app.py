@@ -2534,40 +2534,26 @@ elif st.session_state.page == "Visualizations":
             if not num_cols:
                 st.info("No numerical columns found.")
             else:
-                r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+                r1c1, r1c2, r1c3 = st.columns(3)
                 with r1c1:
                     h_col = st.selectbox("Column (X)", num_cols, key="h_col")
                 with r1c2:
-                    h_group = st.selectbox("Group by (split)",
-                        ["— None —"] + cat_cols, key="h_group")
-                with r1c3:
                     h_bins = st.slider("Bins", 5, 100, 30, key="h_bins")
-                with r1c4:
-                    h_norm = st.selectbox("Normalize",
-                        ["count", "percent", "probability", "density"],
-                        key="h_norm")
-
-                r2c1, r2c2, _, _ = st.columns(4)
-                with r2c1:
+                with r1c3:
                     h_mean   = st.checkbox("Show mean line(s)",   value=True,  key="h_mean")
-                with r2c2:
-                    h_median = st.checkbox("Show median line(s)", value=False, key="h_median")
-
+                h_group = "— None —"
+                h_norm  = "count"
                 h_group_val = None if h_group == "— None —" else h_group
 
                 try:
-                    hist_cols = [h_col] + ([h_group_val] if h_group_val else [])
-                    hist_df   = df[hist_cols].dropna()
+                    hist_df = df[[h_col]].dropna()
 
                     fig_h = px.histogram(
-                        hist_df, x=h_col, color=h_group_val,
+                        hist_df, x=h_col,
                         nbins=h_bins, opacity=0.75,
-                        barmode="overlay" if h_group_val else "relative",
-                        histnorm=h_norm if h_norm != "count" else None,
-                        color_discrete_sequence=["#2563eb"] if h_group_val is None else None,
+                        color_discrete_sequence=["#2563eb"],
                         labels={h_col: h_col},
                     )
-
                     if h_mean:
                         if h_group_val:
                             colors = px.colors.qualitative.Plotly
@@ -2625,17 +2611,17 @@ elif st.session_state.page == "Visualizations":
             if len(num_cols) < 2:
                 st.info("Need at least 2 numerical columns.")
             else:
-                r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+                r1c1, r1c2, r1c3 = st.columns(3)
                 with r1c1: sc_x = st.selectbox("X axis",  num_cols, key="sc_x")
                 with r1c2: sc_y = st.selectbox("Y axis",  num_cols[::-1], key="sc_y")
                 with r1c3: sc_c = st.selectbox("Color by", ["— None —"] + cat_cols + num_cols, key="sc_c")
-                with r1c4: sc_sz = st.selectbox("Size by (bubble)", ["— None —"] + num_cols, key="sc_sz")
 
-                r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+                r2c1, r2c2, r2c3 = st.columns(3)
                 with r2c1: sc_trend   = st.checkbox("Trendline (OLS)", value=True, key="sc_trend")
                 with r2c2: sc_opacity = st.slider("Opacity", 0.1, 1.0, 0.7, key="sc_opacity")
                 with r2c3: sc_msize   = st.slider("Marker size", 3, 20, 6, key="sc_msize")
-                with r2c4: sc_facet   = st.selectbox("Facet by", ["— None —"] + cat_cols, key="sc_facet")
+                sc_sz    = None
+                sc_facet = "— None —"
 
                 if sc_x == sc_y:
                     st.warning("⚠️ X and Y axes cannot be the same column.")
@@ -2645,10 +2631,9 @@ elif st.session_state.page == "Visualizations":
                         sc_size_val  = None if sc_sz    == "— None —" else sc_sz
                         sc_facet_val = None if sc_facet == "— None —" else sc_facet
 
-                        fig_sc = px.scatter(
+                       fig_sc = px.scatter(
                             df, x=sc_x, y=sc_y,
-                            color=sc_color_val, size=sc_size_val,
-                            facet_col=sc_facet_val,
+                            color=sc_color_val,
                             trendline="ols" if sc_trend and sc_color_val is None else None,
                             opacity=sc_opacity,
                         )
@@ -2713,14 +2698,14 @@ elif st.session_state.page == "Visualizations":
                     "label+percent": "label+percent",
                 }
 
-                fig_pie = px.pie(
+               fig_pie = px.pie(
                     pie_df,
                     names=pie_cat,
                     values=y_pie,
                     hole=0.45 if pie_type == "Donut" else 0,
                 )
                 fig_pie.update_traces(
-                    textinfo=textinfo_map.get(pie_labels, "percent"),
+                    textinfo="label+percent",
                     textfont_size=12,
                     pull=[0.03] * len(pie_df),
                 )
