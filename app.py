@@ -1478,109 +1478,276 @@ elif st.session_state.page == "Encoding & Outliers":
 
     # ── Encoding Tab (tab1) — Redesigned ─────────────────────────────────────
     with tab1:
-        st.markdown("<div class='section-header'><h3>Categorical Encoding</h3></div>", unsafe_allow_html=True)
 
         encoding_df = st.session_state.original_df
         ct = identify_column_types(encoding_df)
 
-        # Collect all categorical + boolean columns
-        all_cat_cols = list(dict.fromkeys(ct["categorical"] + ct["boolean"]))
+        # ── Keywords that disqualify a column from encoding ───────────────────
+        SKIP_KEYWORDS = [
+            "name", "id", "index", "key", "uuid", "guid",
+            "phone", "mobile", "tel", "contact",
+            "date", "time", "datetime", "timestamp", "created", "updated",
+            "dob", "born", "joined", "period", "year", "month", "day",
+            "email", "mail",
+        ]
+
+        def _should_skip_for_encoding(col_name):
+            cl = col_name.lower().replace(" ", "_").replace("-", "_")
+            return any(kw in cl for kw in SKIP_KEYWORDS)
+
+        # All categorical + boolean, excluding ID/name/date/phone columns
+        all_cat_cols = [
+            c for c in list(dict.fromkeys(ct["categorical"] + ct["boolean"]))
+            if not _should_skip_for_encoding(c)
+            and c not in ct["id"]
+            and c not in ct["datetime"]
+        ]
 
         # Already encoded columns
         encoded_set = set(st.session_state.get("encoded_columns", []))
 
-        # Helper: detect one-hot dummy columns (e.g. "City_London" from "City")
-        def _is_ohe_dummy(col, encoded_set):
-            for enc_col in encoded_set:
-                if col.startswith(enc_col + "_"):
-                    return True
-            return False
+        def _is_ohe_dummy(col, enc_set):
+            return any(col.startswith(ec + "_") for ec in enc_set)
 
-        # Columns still available for encoding
         available_cols = [
             c for c in all_cat_cols
             if c not in encoded_set
             and not _is_ohe_dummy(c, encoded_set)
         ]
 
-        # ── All done state ────────────────────────────────────────────────────
+        # ═══════════════════════════════════════════
+        # SECTION A — DATA TYPE CONVERSION
+        # ═══════════════════════════════════════════
+        st.markdown("<div class='section-header'><h3>🔄 Data Type Conversion</h3></div>", unsafe_allow_html=True)
+
+        st.markdown("""
+        <div style='background:#fffbeb;border:1px solid #fde68a;border-radius:10px;
+             padding:12px 16px;margin-bottom:16px;font-size:0.84rem;color:#92400e;'>
+            💡 Use this to fix columns with wrong types — e.g. an <b>Order Date</b> stored as text,
+            or a numeric ID stored as float. Changes apply to both the working and processed dataset.
+        </div>
+        """, unsafe_allow_html=True)
+
+        all_cols = list(st.session_state.df.columns)
+
+        dt1, dt2, dt3 = st.columns([3, 2, 2])
+        with dt1:
+            dtype_col = st.selectbox(
+                "Column",
+                all_cols,
+                key="dtype_col_select",
+                help="Select any column to change its data type"
+            )
+        with dt2:
+            current_dtype = str(st.session_state.df[dtype_col].dtype)
+            st.markdown(f"""
+            <div style='padding:8px 0 4px;'>
+                <div style='font-size:0.72rem;color:#6b7280;text-transform:uppercase;
+                     letter-spacing:1px;margin-bottom:4px;'>Current type</div>
+                <div style='font-family:"JetBrains Mono",monospace;font-size:0.9rem;
+                     color:#374151;font-weight:700;background:#f1f3f9;
+                     border-radius:6px;padding:6px 10px;display:inline-block;'>{current_dtype}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with dt3:
+            target_dtype = st.selectbox(
+                "Convert to",
+                [
+                    "datetime — parse dates automatically",
+                    "datetime — custom format",
+                    "int — integer",
+                    "float — decimal",
+                    "str — text / object",
+                    "bool — True / False",
+                    "category — pandas category",
+                ],
+                key="dtype_target_select"
+            )
+
+        # Show format input only for custom datetime
+        custom_fmt = None
+        if "custom format" in target_dtype:
+            st.markdown("""
+            <div style='font-size:0.8rem;color:#374151;margin:6px 0 2px;'>
+                <b>Date format string</b>
+                <span style='color:#6b7280;'> — use Python strftime codes</span>
+            </div>
+            """, unsafe_allow_html=True)
+            fmt_col1, fmt_col2 = st.columns([3, 2])
+            with fmt_col1:
+                custom_fmt = st.text_input(
+                    "Format",
+                    placeholder="%Y-%m-%d %H:%M:%S",
+                    label_visibility="collapsed",
+                    key="dtype_custom_fmt"
+                )
+            with fmt_col2:
+                # Show sample values as hint
+                sample_vals = st.session_state.df[dtype_col].dropna().head(3).tolist()
+                st.caption(f"Sample: {', '.join(str(v) for v in sample_vals)}")
+
+        # Preview sample after conversion
+        with st.expander("👁️ Preview conversion on first 5 rows", expanded=False):
+            try:
+                preview_s = st.session_state.df[dtype_col].head(5).copy()
+                dtype_key = target_dtype.split(" — ")[0]
+                if dtype_key == "datetime":
+                    if custom_fmt:
+                        converted = pd.to_datetime(preview_s, format=custom_fmt, errors="coerce")
+                    else:
+                        converted = pd.to_datetime(preview_s, infer_datetime_format=True, errors="coerce")
+                elif dtype_key == "int":
+                    converted = pd.to_numeric(preview_s, errors="coerce").astype("Int64")
+                elif dtype_key == "float":
+                    converted = pd.to_numeric(preview_s, errors="coerce")
+                elif dtype_key == "str":
+                    converted = preview_s.astype(str)
+                elif dtype_key == "bool":
+                    converted = preview_s.astype(bool)
+                elif dtype_key == "category":
+                    converted = preview_s.astype("category")
+                else:
+                    converted = preview_s
+
+                prev_df = pd.DataFrame({
+                    "Original": preview_s.values,
+                    "Converted": converted.values
+                })
+                st.dataframe(prev_df, use_container_width=True, height=200)
+            except Exception as e:
+                st.error(f"Preview error: {e}")
+
+        if st.button("Apply Type Conversion", key="apply_dtype_btn", type="primary"):
+            try:
+                df_t = st.session_state.df.copy()
+                pdf_t = st.session_state.processed_df.copy()
+                dtype_key = target_dtype.split(" — ")[0]
+
+                def _convert(series):
+                    if dtype_key == "datetime":
+                        if custom_fmt:
+                            return pd.to_datetime(series, format=custom_fmt, errors="coerce")
+                        else:
+                            return pd.to_datetime(series, infer_datetime_format=True, errors="coerce")
+                    elif dtype_key == "int":
+                        return pd.to_numeric(series, errors="coerce").astype("Int64")
+                    elif dtype_key == "float":
+                        return pd.to_numeric(series, errors="coerce")
+                    elif dtype_key == "str":
+                        return series.astype(str)
+                    elif dtype_key == "bool":
+                        return series.astype(bool)
+                    elif dtype_key == "category":
+                        return series.astype("category")
+                    return series
+
+                df_t[dtype_col]  = _convert(df_t[dtype_col])
+                pdf_t[dtype_col] = _convert(pdf_t[dtype_col])
+
+                null_count = df_t[dtype_col].isna().sum()
+
+                st.session_state.df = df_t
+                st.session_state.processed_df = pdf_t
+                save_operation(
+                    st.session_state.file_name,
+                    f"Type Conversion: {dtype_col}",
+                    f"{current_dtype} → {dtype_key}"
+                )
+                st.success(f"✅ '{dtype_col}' converted to **{dtype_key}**.")
+                if null_count > 0:
+                    st.warning(f"⚠️ {null_count} value(s) could not be converted and were set to NaT/NaN.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Conversion error: {e}")
+
+        st.markdown("---")
+
+        # ═══════════════════════════════════════════
+        # SECTION B — CATEGORICAL ENCODING
+        # ═══════════════════════════════════════════
+        st.markdown("<div class='section-header'><h3>🔠 Categorical Encoding</h3></div>", unsafe_allow_html=True)
+
+        # Show which columns were auto-skipped
+        skipped_cols = [
+            c for c in list(dict.fromkeys(ct["categorical"] + ct["boolean"]))
+            if _should_skip_for_encoding(c) or c in ct["id"] or c in ct["datetime"]
+        ]
+        if skipped_cols:
+            skip_chips = "".join([
+                f"<span style='display:inline-flex;background:#f1f3f9;border:1px solid #e2e6f0;"
+                f"color:#6b7280;border-radius:999px;padding:2px 10px;font-size:0.72rem;"
+                f"font-weight:600;margin:2px;'>{c}</span>"
+                for c in skipped_cols
+            ])
+            st.markdown(f"""
+            <div style='margin-bottom:14px;'>
+                <span style='font-size:0.72rem;color:#6b7280;text-transform:uppercase;
+                     letter-spacing:1px;'>Auto-excluded (ID / name / date / phone)&nbsp;</span>
+                {skip_chips}
+            </div>
+            """, unsafe_allow_html=True)
+
+        # ── All done ──────────────────────────────────────────────────────────
         if not available_cols and all_cat_cols:
             st.success("✅ All categorical columns have been encoded.")
             
-
-            # Show encoding summary
-            st.markdown("""
+            chips_html = "".join([
+                f"<span style='display:inline-flex;align-items:center;gap:5px;"
+                f"background:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;"
+                f"border-radius:999px;padding:3px 12px;font-size:0.75rem;"
+                f"font-weight:600;margin:3px;'>✓ {c}</span>"
+                for c in sorted(encoded_set) if c in all_cat_cols
+            ])
+            st.markdown(f"""
             <div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;
-                 padding:20px;margin-top:12px;'>
-                <div style='font-size:0.8rem;color:#16a34a;font-weight:700;
-                     text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;'>
-                     Encoding Summary
-                </div>
+                 padding:16px 20px;margin-top:8px;'>
+                <div style='font-size:0.72rem;color:#16a34a;font-weight:700;
+                     text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;'>
+                     Encoded columns</div>
+                <div style='line-height:2.2;'>{chips_html}</div>
+            </div>
             """, unsafe_allow_html=True)
 
-            for col in all_cat_cols:
-                enc_info = st.session_state.get("encoders", {}).get(col)
-                method_label = "One-Hot" if _is_ohe_dummy(col, {col}) else "Encoded"
-                st.markdown(f"""
-                <div style='display:flex;align-items:center;gap:10px;padding:8px 0;
-                     border-bottom:1px solid #dcfce7;'>
-                    <span style='font-size:0.9rem;'>✅</span>
-                    <span style='font-family:"JetBrains Mono",monospace;font-size:0.88rem;
-                         color:#111827;font-weight:600;'>{col}</span>
-                    <span style='margin-left:auto;background:#dcfce7;color:#16a34a;
-                         border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:600;'>
-                         Encoded
-                    </span>
-                </div>
-                """, unsafe_allow_html=True)
-
-            st.markdown("</div>", unsafe_allow_html=True)
-
         elif not all_cat_cols:
-            st.info("No categorical columns found in this dataset.")
+            st.info("No encodable categorical columns found (ID, name, date, and phone columns are excluded).")
 
         else:
-            # ── Progress bar ─────────────────────────────────────────────────
-            done = len(all_cat_cols) - len(available_cols)
+            # Progress bar
+            done  = len(all_cat_cols) - len(available_cols)
             total = len(all_cat_cols)
-            pct = int(done / total * 100) if total else 0
+            pct   = int(done / total * 100) if total else 0
 
             st.markdown(f"""
-            <div style='margin-bottom:20px;'>
+            <div style='margin-bottom:18px;'>
                 <div style='display:flex;justify-content:space-between;
-                     align-items:center;margin-bottom:8px;'>
-                    <span style='font-size:0.82rem;color:#6b7280;'>
-                        Encoding progress
-                    </span>
-                    <span style='font-family:"JetBrains Mono",monospace;font-size:0.82rem;
-                         color:#2563eb;font-weight:700;'>{done} / {total} columns encoded</span>
+                     align-items:center;margin-bottom:6px;'>
+                    <span style='font-size:0.8rem;color:#6b7280;'>Encoding progress</span>
+                    <span style='font-family:"JetBrains Mono",monospace;font-size:0.8rem;
+                         color:#2563eb;font-weight:700;'>{done} / {total}</span>
                 </div>
-                <div style='background:#e2e6f0;border-radius:999px;height:6px;'>
+                <div style='background:#e2e6f0;border-radius:999px;height:5px;'>
                     <div style='width:{pct}%;height:100%;background:#2563eb;
-                         border-radius:999px;transition:width 0.4s;'></div>
+                         border-radius:999px;'></div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-            # ── Already encoded chips ─────────────────────────────────────────
+            # Already encoded chips
             if encoded_set:
                 chips_html = "".join([
-                    f"<span style='display:inline-flex;align-items:center;gap:5px;"
-                    f"background:#eff6ff;border:1px solid #bfdbfe;color:#2563eb;"
-                    f"border-radius:999px;padding:3px 12px;font-size:0.75rem;"
-                    f"font-weight:600;margin:3px;'>"
-                    f"✓ {c}</span>"
+                    f"<span style='display:inline-flex;background:#eff6ff;border:1px solid #bfdbfe;"
+                    f"color:#2563eb;border-radius:999px;padding:2px 10px;font-size:0.72rem;"
+                    f"font-weight:600;margin:2px;'>✓ {c}</span>"
                     for c in sorted(encoded_set) if c in all_cat_cols
                 ])
                 st.markdown(f"""
-                <div style='margin-bottom:20px;'>
-                    <div style='font-size:0.75rem;color:#6b7280;margin-bottom:6px;
-                         text-transform:uppercase;letter-spacing:1px;'>Already encoded</div>
-                    <div style='line-height:2;'>{chips_html}</div>
+                <div style='margin-bottom:14px;'>
+                    <span style='font-size:0.72rem;color:#6b7280;text-transform:uppercase;
+                         letter-spacing:1px;'>Already encoded&nbsp;</span>{chips_html}
                 </div>
                 """, unsafe_allow_html=True)
 
-            # ── Main encoding form ────────────────────────────────────────────
+            # Main form panel
             st.markdown("""
             <div style='background:#ffffff;border:1px solid #e2e6f0;border-radius:12px;
                  padding:20px 24px;'>
@@ -1605,49 +1772,45 @@ elif st.session_state.page == "Encoding & Outliers":
                 )
             )
 
-            # Technique hint
             hints = {
                 "Label Encoding":     "Best for binary columns or tree-based models.",
                 "One-Hot Encoding":   "Best for low-cardinality columns (≤ 10 unique values).",
                 "Ordinal Encoding":   "Use when categories have a natural order (e.g. low → medium → high).",
-                "Frequency Encoding": "Best for high-cardinality columns. Replaces each category with its frequency.",
-                "Binary Encoding":    "Label → binary bits. Compact alternative to one-hot for medium cardinality.",
+                "Frequency Encoding": "Best for high-cardinality columns — replaces each category with its relative frequency.",
+                "Binary Encoding":    "Label → binary bit columns. Compact alternative to one-hot for medium cardinality.",
             }
             st.caption(hints[enc_technique])
 
-            # Column multiselect — show unique counts as hint
-            col_options = available_cols
-            col_labels  = {c: f"{c}  ({encoding_df[c].nunique()} unique)" for c in col_options}
-
+            col_labels = {c: f"{c}  ({encoding_df[c].nunique()} unique)" for c in available_cols}
             selected_cols = st.multiselect(
                 "Columns to Encode",
-                options=col_options,
+                options=available_cols,
                 format_func=lambda c: col_labels[c],
-                placeholder="Select one or more categorical columns…",
+                placeholder="Select one or more columns…",
                 key="enc_cols_unified"
             )
 
-            # Ordinal order input — show only when Ordinal selected
+            # Ordinal order inputs
             ordinal_orders = {}
             if enc_technique == "Ordinal Encoding" and selected_cols:
                 st.markdown(
-                    "<div style='margin-top:12px;font-size:0.82rem;color:#374151;"
-                    "font-weight:600;margin-bottom:6px;'>Define order for each column "
-                    "<span style='color:#6b7280;font-weight:400;'>(comma-separated, low → high)</span>"
-                    "</div>",
+                    "<div style='margin-top:10px;font-size:0.82rem;color:#374151;"
+                    "font-weight:600;margin-bottom:4px;'>Define rank order "
+                    "<span style='color:#6b7280;font-weight:400;'>"
+                    "(comma-separated, lowest → highest)</span></div>",
                     unsafe_allow_html=True
                 )
                 for col in selected_cols:
                     existing = sorted(encoding_df[col].dropna().unique().tolist())
                     ord_input = st.text_input(
                         f"{col}",
-                        placeholder=f"e.g. {', '.join(str(v) for v in existing[:4])}…",
+                        placeholder=f"e.g. {', '.join(str(v) for v in existing[:5])}",
                         key=f"ordinal_order_{col}",
-                        help=f"Existing values: {existing}"
+                        help=f"All values: {existing}"
                     )
                     ordinal_orders[col] = ord_input
 
-            st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
 
             apply_btn = st.button(
                 "Apply Encoding",
@@ -1658,9 +1821,9 @@ elif st.session_state.page == "Encoding & Outliers":
 
             st.markdown("</div>", unsafe_allow_html=True)
 
-            # ── Apply logic ──────────────────────────────────────────────────
+            # Apply logic
             if apply_btn and selected_cols:
-                errors = []
+                errors    = []
                 successes = []
 
                 for col in selected_cols:
@@ -1677,11 +1840,10 @@ elif st.session_state.page == "Encoding & Outliers":
                             new_df, _ = apply_encoding(working_df, col, "frequency")
 
                         elif enc_technique == "Binary Encoding":
-                            # Label encode first, then convert to binary bit columns
                             le = LabelEncoder()
-                            labels = le.fit_transform(working_df[col].astype(str))
+                            labels   = le.fit_transform(working_df[col].astype(str))
                             max_bits = max(int(np.ceil(np.log2(len(le.classes_) + 1))), 1)
-                            new_df = working_df.copy()
+                            new_df   = working_df.copy()
                             for bit in range(max_bits):
                                 new_df[f"{col}_bin{bit}"] = (labels >> bit) & 1
                             new_df = new_df.drop(columns=[col])
@@ -1700,22 +1862,19 @@ elif st.session_state.page == "Encoding & Outliers":
                             invalid = [v for v in ordinal_order if v not in existing_vals]
                             if invalid:
                                 errors.append(
-                                    f"'{col}': these values don't exist in the column: {invalid}"
+                                    f"'{col}': values not found in column: {invalid}"
                                 )
                                 continue
-                            # Remap to original exact values
-                            val_map = {str(v).strip(): v for v in
-                                       encoding_df[col].dropna().unique()}
+                            val_map      = {str(v).strip(): v for v in encoding_df[col].dropna().unique()}
                             mapped_order = [val_map.get(x, x) for x in ordinal_order]
-                            new_df, _ = apply_encoding(working_df, col, "ordinal", mapped_order)
+                            new_df, _    = apply_encoding(working_df, col, "ordinal", mapped_order)
 
                         else:
                             errors.append(f"'{col}': unknown technique.")
                             continue
 
-                        # Persist
                         st.session_state.processed_df = new_df
-                        st.session_state.df = new_df
+                        st.session_state.df           = new_df
                         if col not in st.session_state.encoded_columns:
                             st.session_state.encoded_columns.append(col)
                         save_operation(
@@ -1733,7 +1892,6 @@ elif st.session_state.page == "Encoding & Outliers":
                 for err in errors:
                     st.error(f"❌ {err}")
 
-                # Check if all done now
                 encoded_set_after = set(st.session_state.encoded_columns)
                 remaining = [
                     c for c in all_cat_cols
@@ -1742,9 +1900,9 @@ elif st.session_state.page == "Encoding & Outliers":
                 ]
                 if not remaining and successes:
                     st.success("✅ All categorical columns have been encoded.")
-                  
+                    
 
-                st.rerun()    
+                st.rerun()   
     nav_buttons("Encoding & Outliers")
 
 
