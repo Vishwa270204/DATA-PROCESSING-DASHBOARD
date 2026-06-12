@@ -2461,6 +2461,14 @@ elif st.session_state.page == "Visualizations":
                 agg_fn = agg_map.get(date_agg, "sum")
 
                 # Use group_col if selected, otherwise fall back to x_col
+                # Drop any remaining datetime columns before aggregation to avoid
+                # "datetime64 does not support operation 'sum'" errors
+                safe_cols = [x_col] + ([color_val] if color_val and color_val in plot_df.columns else []) + ([y_val] if y_val else [])
+                plot_df = plot_df[[c for c in safe_cols if c in plot_df.columns]].copy()
+                # Cast y_val to numeric — if it was datetime this will produce NaN instead of crashing
+                if y_val and y_val in plot_df.columns:
+                    plot_df[y_val] = pd.to_numeric(plot_df[y_val], errors="coerce")
+
                 if color_val and color_val in plot_df.columns:
                     if color_val == x_col:
                         plot_df = (plot_df.groupby(x_col)[y_val]
