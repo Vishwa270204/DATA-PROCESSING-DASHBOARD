@@ -2631,7 +2631,7 @@ elif st.session_state.page == "Visualizations":
                         sc_size_val  = None if sc_sz    == "— None —" else sc_sz
                         sc_facet_val = None if sc_facet == "— None —" else sc_facet
 
-                       fig_sc = px.scatter(
+                        fig_sc = px.scatter(
                             df, x=sc_x, y=sc_y,
                             color=sc_color_val,
                             trendline="ols" if sc_trend and sc_color_val is None else None,
