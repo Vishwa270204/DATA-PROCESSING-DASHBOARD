@@ -1845,7 +1845,6 @@ elif st.session_state.page == "Feature Engineering":
     # ── TAB 2: Redundant Column Detection & Drop ──────────────────────────
     with tab2:
         st.markdown("<div class='section-header'><h3>🗑️ Detect & Drop Redundant Columns</h3></div>", unsafe_allow_html=True)
-        st.caption("Detects standalone year/month columns when a full date column exists, near-duplicate numeric columns, and zero-variance columns.")
 
         df_fe = st.session_state.df
 
