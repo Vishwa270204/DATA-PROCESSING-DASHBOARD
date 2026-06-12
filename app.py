@@ -2377,6 +2377,10 @@ elif st.session_state.page == "Visualizations":
     ct = identify_column_types(df)
     num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     cat_cols = df.select_dtypes(include="object").columns.tolist()
+    plot_df      = df.copy()
+    filtered_df2 = df.copy()
+    filtered_df3 = df.copy()
+    filtered_df4 = df.copy()
     
     # ── Date grouping helper ─────────────────────────────────────────────────
     def apply_date_grouping(df, col, freq):
