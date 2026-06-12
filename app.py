@@ -1409,7 +1409,7 @@ elif st.session_state.page == "Cleaning":
         st.stop()
 
     df = st.session_state.df
-    tab1, tab2 = st.tabs(["🗑️ Duplicates","🔧 Missing Values"])
+    tab1, tab2, tab3 = st.tabs(["🗑️ Duplicates","🔧 Missing Values","🛠️ Feature Engineering"])
 
     with tab1:
         st.markdown("<div class='section-header'><h3>Duplicate Row Detection</h3></div>", unsafe_allow_html=True)
@@ -1455,7 +1455,312 @@ elif st.session_state.page == "Cleaning":
                             st.rerun()
                         except Exception as e:
                             st.error(str(e))
-
+    with tab3:
+        st.markdown("<div class='section-header'><h3>🛠️ Feature Engineering</h3></div>", unsafe_allow_html=True)
+    
+        df_fe = st.session_state.df
+    
+        # ── Section 1: Date Feature Extraction ──────────────────────────────────
+        st.markdown("**📅 Extract Features from Date Columns**")
+    
+        # Auto-detect datetime columns (including object cols that look like dates)
+        datetime_candidates = []
+        for col in df_fe.columns:
+            if pd.api.types.is_datetime64_any_dtype(df_fe[col]):
+                datetime_candidates.append((col, "datetime"))
+            elif df_fe[col].dtype == object:
+                sample = df_fe[col].dropna().head(20)
+                try:
+                    parsed = pd.to_datetime(sample, errors="coerce")
+                    if parsed.notna().sum() >= len(sample) * 0.7:
+                        datetime_candidates.append((col, "object-date"))
+                except Exception:
+                    pass
+    
+        if not datetime_candidates:
+            st.info("No datetime columns detected. Use the Data Type Conversion panel above to convert date columns first.")
+        else:
+            date_col_names = [c for c, _ in datetime_candidates]
+            fe_date_col = st.selectbox("Select date column", date_col_names, key="fe_date_col")
+    
+            # Show sample
+            sample_vals = df_fe[fe_date_col].dropna().head(3).tolist()
+            st.caption(f"Sample values: {', '.join(str(v) for v in sample_vals)}")
+    
+            fe_parts = st.multiselect(
+                "Features to extract",
+                ["Year", "Month", "Day", "DayOfWeek", "DayName", "Quarter",
+                 "WeekOfYear", "IsWeekend", "MonthName"],
+                default=["Year", "Month", "Day", "DayOfWeek", "Quarter"],
+                key="fe_date_parts"
+            )
+    
+            if st.button("Extract Date Features", key="fe_extract_btn", type="primary"):
+                try:
+                    df_t = st.session_state.df.copy()
+                    pdf_t = st.session_state.processed_df.copy()
+    
+                    # Parse if still object
+                    parsed_col = pd.to_datetime(df_t[fe_date_col], errors="coerce")
+    
+                    extract_map = {
+                        "Year":       ("dt.year",       lambda s: s.dt.year),
+                        "Month":      ("dt.month",      lambda s: s.dt.month),
+                        "Day":        ("dt.day",        lambda s: s.dt.day),
+                        "DayOfWeek":  ("dt.dayofweek",  lambda s: s.dt.dayofweek),
+                        "DayName":    ("dt.day_name",   lambda s: s.dt.day_name()),
+                        "Quarter":    ("dt.quarter",    lambda s: s.dt.quarter),
+                        "WeekOfYear": ("dt.isocalendar", lambda s: s.dt.isocalendar().week.astype(int)),
+                        "IsWeekend":  ("weekend",       lambda s: s.dt.dayofweek.isin([5, 6]).astype(int)),
+                        "MonthName":  ("dt.month_name", lambda s: s.dt.month_name()),
+                    }
+    
+                    created_cols = []
+                    for part in fe_parts:
+                        new_col_name = f"{fe_date_col}_{part.lower()}"
+                        _, extractor = extract_map[part]
+                        df_t[new_col_name]  = extractor(parsed_col)
+                        pdf_t[new_col_name] = extractor(parsed_col)
+                        created_cols.append(new_col_name)
+    
+                    st.session_state.df = df_t
+                    st.session_state.processed_df = pdf_t
+                    save_operation(
+                        st.session_state.file_name,
+                        f"Feature Engineering: {fe_date_col}",
+                        f"Extracted: {', '.join(fe_parts)}"
+                    )
+                    st.success(f"✅ Created {len(created_cols)} new columns: {', '.join(created_cols)}")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Extraction error: {e}")
+    
+        st.markdown("---")
+    
+        # ── Section 2: Redundant Column Detection ───────────────────────────────
+        st.markdown("**🗑️ Detect & Drop Redundant Columns**")
+        st.caption("Finds columns that duplicate information already present — e.g. a 'Year' column when you've extracted year from OrderDate.")
+    
+        df_fe = st.session_state.df  # refresh after possible extraction above
+    
+        redundancy_suggestions = []
+    
+        # Rule 1: near-identical numeric columns (high correlation)
+        num_df_r = df_fe.select_dtypes(include=[np.number])
+        if num_df_r.shape[1] > 1:
+            corr_r = num_df_r.corr().abs()
+            for i in range(len(corr_r.columns)):
+                for j in range(i + 1, len(corr_r.columns)):
+                    v = corr_r.iloc[i, j]
+                    if v > 0.98:
+                        c1, c2 = corr_r.columns[i], corr_r.columns[j]
+                        # Prefer keeping the extracted feature (longer name usually)
+                        keep    = c1 if len(c1) >= len(c2) else c2
+                        suggest = c2 if keep == c1 else c1
+                        redundancy_suggestions.append({
+                            "Column to drop": suggest,
+                            "Reason": f"Near-duplicate of '{keep}' (correlation = {v:.3f})",
+                            "Keep": keep
+                        })
+    
+        # Rule 2: standalone year/month/day columns that match extracted cols
+        STANDALONE_DATE_KEYWORDS = ["year", "month", "day", "quarter", "week"]
+        existing_cols_lower = {c.lower(): c for c in df_fe.columns}
+        for col in df_fe.columns:
+            cl = col.lower().replace(" ", "_").replace("-", "_")
+            for kw in STANDALONE_DATE_KEYWORDS:
+                if cl == kw or cl == kw + "s":
+                    # Check if an extracted version exists
+                    extracted_matches = [
+                        c for c in df_fe.columns
+                        if kw in c.lower() and c != col and "_" in c
+                    ]
+                    if extracted_matches:
+                        redundancy_suggestions.append({
+                            "Column to drop": col,
+                            "Reason": f"Standalone '{kw}' column — same info in: {extracted_matches[0]}",
+                            "Keep": extracted_matches[0]
+                        })
+    
+        # Rule 3: columns with only 1 unique value (zero variance)
+        for col in df_fe.columns:
+            if df_fe[col].nunique(dropna=True) <= 1:
+                redundancy_suggestions.append({
+                    "Column to drop": col,
+                    "Reason": "Single unique value — zero variance, no predictive power",
+                    "Keep": "—"
+                })
+    
+        # Deduplicate
+        seen_drops = set()
+        unique_suggestions = []
+        for s in redundancy_suggestions:
+            if s["Column to drop"] not in seen_drops:
+                seen_drops.add(s["Column to drop"])
+                unique_suggestions.append(s)
+    
+        if not unique_suggestions:
+            st.markdown("<span class='badge badge-success'>✅ No redundant columns detected</span>", unsafe_allow_html=True)
+        else:
+            sugg_df = pd.DataFrame(unique_suggestions)
+            st.dataframe(sugg_df, use_container_width=True, hide_index=True)
+    
+            cols_to_drop = st.multiselect(
+                "Select columns to drop",
+                options=[s["Column to drop"] for s in unique_suggestions],
+                default=[s["Column to drop"] for s in unique_suggestions],
+                key="fe_drop_cols"
+            )
+            if st.button("Drop Selected Columns", key="fe_drop_btn", type="primary",
+                         disabled=len(cols_to_drop) == 0):
+                df_t  = st.session_state.df.drop(columns=cols_to_drop, errors="ignore")
+                pdf_t = st.session_state.processed_df.drop(columns=cols_to_drop, errors="ignore")
+                st.session_state.df = df_t
+                st.session_state.processed_df = pdf_t
+                save_operation(
+                    st.session_state.file_name,
+                    "Drop Redundant Columns",
+                    f"Dropped: {', '.join(cols_to_drop)}"
+                )
+                st.success(f"✅ Dropped {len(cols_to_drop)} column(s): {', '.join(cols_to_drop)}")
+                st.rerun()
+    
+        st.markdown("---")
+    
+        # ── Section 3: Phone Number Cleaning ────────────────────────────────────
+        st.markdown("**📞 Phone Number Cleaning**")
+        st.caption("Detects and standardises phone columns — handles dots, dashes, spaces, extensions, short numbers, country codes.")
+    
+        # Detect phone-like columns
+        phone_cols = [
+            c for c in df_fe.select_dtypes(include="object").columns
+            if any(k in c.lower() for k in ["phone", "mobile", "tel", "contact", "fax"])
+        ]
+    
+        if not phone_cols:
+            st.info("No phone columns detected (looking for columns named phone, mobile, tel, contact, fax).")
+        else:
+            ph_col = st.selectbox("Phone column", phone_cols, key="ph_col_select")
+    
+            # Analyse current state
+            ph_series = df_fe[ph_col].dropna().astype(str)
+    
+            def classify_phone(val):
+                """Return (clean_digits, status, reason)"""
+                # Strip everything except digits and leading +
+                digits_only = re.sub(r"[^\d]", "", val)
+                n = len(digits_only)
+                if n == 0:
+                    return val, "invalid", "No digits found"
+                elif n < 7:
+                    return val, "invalid", f"Too short ({n} digits)"
+                elif n == 8:
+                    return digits_only, "warning", "8-digit number (may be local format)"
+                elif 9 <= n <= 10:
+                    return digits_only, "valid", f"{n}-digit number"
+                elif 11 <= n <= 15:
+                    return digits_only, "valid", f"{n}-digit (with country code)"
+                else:
+                    return val, "invalid", f"Too long ({n} digits)"
+    
+            results = ph_series.apply(lambda v: classify_phone(v))
+            valid_ct   = sum(1 for _, s, _ in results if s == "valid")
+            warning_ct = sum(1 for _, s, _ in results if s == "warning")
+            invalid_ct = sum(1 for _, s, _ in results if s == "invalid")
+            total_ct   = len(results)
+    
+            ph1, ph2, ph3 = st.columns(3)
+            with ph1:
+                st.markdown(f"""<div class='metric-card'>
+                    <span class='val' style='color:#16a34a;'>{valid_ct}</span>
+                    <span class='label'>Valid</span></div>""", unsafe_allow_html=True)
+            with ph2:
+                st.markdown(f"""<div class='metric-card'>
+                    <span class='val' style='color:#d97706;'>{warning_ct}</span>
+                    <span class='label'>Warnings (8-digit)</span></div>""", unsafe_allow_html=True)
+            with ph3:
+                st.markdown(f"""<div class='metric-card'>
+                    <span class='val' style='color:#dc2626;'>{invalid_ct}</span>
+                    <span class='label'>Invalid</span></div>""", unsafe_allow_html=True)
+    
+            st.markdown("&nbsp;")
+    
+            # Show sample invalid rows
+            invalid_samples = [
+                {"Value": val, "Issue": reason}
+                for val, (_, status, reason) in zip(ph_series, results)
+                if status == "invalid"
+            ][:10]
+            if invalid_samples:
+                with st.expander(f"👁️ Preview invalid rows ({min(10, invalid_ct)} shown)"):
+                    st.dataframe(pd.DataFrame(invalid_samples), use_container_width=True, hide_index=True)
+    
+            ph_action = st.radio(
+                "Action for invalid/malformed numbers",
+                [
+                    "Standardise — strip to digits only (keep all rows)",
+                    "Flag — add a new column 'phone_valid' (1/0)",
+                    "Drop rows — remove rows with invalid phone numbers",
+                    "Replace with NaN — mark invalid as missing",
+                ],
+                key="ph_action_radio"
+            )
+    
+            if st.button("Apply Phone Cleaning", key="ph_clean_btn", type="primary"):
+                try:
+                    df_t  = st.session_state.df.copy()
+                    pdf_t = st.session_state.processed_df.copy()
+    
+                    def clean_phone_val(val):
+                        if pd.isna(val):
+                            return val
+                        digits = re.sub(r"[^\d]", "", str(val))
+                        return digits if digits else np.nan
+    
+                    def is_valid_phone(val):
+                        if pd.isna(val):
+                            return 0
+                        digits = re.sub(r"[^\d]", "", str(val))
+                        return 1 if 7 <= len(digits) <= 15 else 0
+    
+                    if "Standardise" in ph_action:
+                        df_t[ph_col]  = df_t[ph_col].apply(clean_phone_val)
+                        pdf_t[ph_col] = pdf_t[ph_col].apply(clean_phone_val)
+                        st.success(f"✅ Standardised '{ph_col}' — stripped to digits only.")
+    
+                    elif "Flag" in ph_action:
+                        flag_col = f"{ph_col}_valid"
+                        df_t[flag_col]  = df_t[ph_col].apply(is_valid_phone)
+                        pdf_t[flag_col] = pdf_t[ph_col].apply(is_valid_phone)
+                        st.success(f"✅ Added column '{flag_col}' (1 = valid, 0 = invalid).")
+    
+                    elif "Drop rows" in ph_action:
+                        before = len(df_t)
+                        mask = df_t[ph_col].apply(is_valid_phone).astype(bool)
+                        df_t  = df_t[mask].reset_index(drop=True)
+                        pdf_t = pdf_t[mask].reset_index(drop=True)
+                        st.success(f"✅ Removed {before - len(df_t)} rows with invalid phone numbers.")
+    
+                    elif "Replace with NaN" in ph_action:
+                        def nullify_invalid(val):
+                            if pd.isna(val):
+                                return val
+                            digits = re.sub(r"[^\d]", "", str(val))
+                            return val if 7 <= len(digits) <= 15 else np.nan
+                        df_t[ph_col]  = df_t[ph_col].apply(nullify_invalid)
+                        pdf_t[ph_col] = pdf_t[ph_col].apply(nullify_invalid)
+                        st.success(f"✅ Invalid phone values replaced with NaN.")
+    
+                    st.session_state.df = df_t
+                    st.session_state.processed_df = pdf_t
+                    save_operation(
+                        st.session_state.file_name,
+                        f"Phone Cleaning: {ph_col}",
+                        ph_action
+                    )
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Phone cleaning error: {e}")
     nav_buttons("Cleaning")
 # ═══════════════════════════════════════════════
 # PAGE 5 — ENCODING & OUTLIERS
@@ -1626,9 +1931,43 @@ elif st.session_state.page == "Encoding & Outliers":
                 def _convert(series):
                     if dtype_key == "datetime":
                         if custom_fmt:
-                            return pd.to_datetime(series, format=custom_fmt, errors="coerce")
+                            # User supplied a specific format — try it first, fall back to auto
+                            parsed = pd.to_datetime(series, format=custom_fmt, errors="coerce")
+                            # For rows that failed, retry with flexible parser
+                            failed_mask = parsed.isna() & series.notna()
+                            if failed_mask.any():
+                                parsed[failed_mask] = pd.to_datetime(
+                                    series[failed_mask], errors="coerce"
+                                )
+                            return parsed
                         else:
-                            return pd.to_datetime(series, errors="coerce")
+                            # Mixed-format path — try slash format, dash format, then generic
+                            # Handles: 2/24/2003 0:00  AND  05-07-2003 00:00
+                            result = pd.Series([pd.NaT] * len(series), index=series.index)
+                            remaining = series.copy()
+                 
+                            for fmt in ["%m/%d/%Y %H:%M", "%m/%d/%Y", "%m-%d-%Y %H:%M",
+                                        "%m-%d-%Y", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d",
+                                        "%d/%m/%Y %H:%M", "%d-%m-%Y %H:%M", "%d-%m-%Y"]:
+                                still_null = result.isna() & remaining.notna()
+                                if not still_null.any():
+                                    break
+                                try:
+                                    attempt = pd.to_datetime(
+                                        remaining[still_null], format=fmt, errors="coerce"
+                                    )
+                                    result[still_null] = attempt
+                                except Exception:
+                                    continue
+                 
+                            # Final fallback for anything still unparsed
+                            still_null = result.isna() & remaining.notna()
+                            if still_null.any():
+                                result[still_null] = pd.to_datetime(
+                                    remaining[still_null], errors="coerce"
+                                )
+                            return result
+                 
                     elif dtype_key == "int":
                         return pd.to_numeric(series, errors="coerce").astype("Int64")
                     elif dtype_key == "float":
@@ -1640,7 +1979,6 @@ elif st.session_state.page == "Encoding & Outliers":
                     elif dtype_key == "category":
                         return series.astype("category")
                     return series
-
                 df_t[dtype_col]  = _convert(df_t[dtype_col])
                 pdf_t[dtype_col] = _convert(pdf_t[dtype_col])
 
