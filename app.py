@@ -2890,17 +2890,17 @@ elif st.session_state.page == "Visualizations":
                 with cp1:
                     chart_type = st.selectbox(
                         "Chart Type", ["Line", "Bar", "Histogram", "Area"],
-                        key="custom_chart_type"
+                        key="cat_chart_type"           # ← was "custom_chart_type"
                     )
                 with cp2:
-                    x_col = st.selectbox("X Axis", df.columns.tolist(), key="custom_x")
+                    x_col = st.selectbox("X Axis", df.columns.tolist(), key="cat_x")   # ← was "custom_x"
                 with cp3:
-                    y_col = st.selectbox("Y Axis", ["— None —"] + num_cols, key="custom_y")
+                    y_col = st.selectbox("Y Axis", ["— None —"] + num_cols, key="cat_y")  # ← was "custom_y"
                 with cp4:
                     color_col = st.selectbox(
-                        "Color by", ["— None —"] + cat_cols, key="custom_color"
+                        "Color by", ["— None —"] + cat_cols, key="cat_color"  # ← was "custom_color"
                     )
-    
+
                 ct_live   = identify_column_types(df)
                 x_is_date = (
                     x_col in ct_live["datetime"]
@@ -2911,8 +2911,7 @@ elif st.session_state.page == "Visualizations":
                                 ["date","month","year","time","day","week","period"])
                     )
                 )
-    
-                # ── always initialise all control variables ──
+
                 color_val   = None if color_col == "— None —" else color_col
                 y_val       = None if y_col     == "— None —" else y_col
                 group_val   = None
@@ -2923,7 +2922,7 @@ elif st.session_state.page == "Visualizations":
                 date_agg    = "Mean"
                 fill_gaps   = False
                 date_sort   = True
-    
+
                 if x_is_date:
                     st.markdown("""
                     <div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;
@@ -2936,22 +2935,22 @@ elif st.session_state.page == "Visualizations":
                         date_freq = st.radio(
                             "Group dates by",
                             ["None", "Day", "Week", "Month", "Quarter", "Year"],
-                            horizontal=True, key="date_freq"
+                            horizontal=True, key="cat_date_freq"       # ← was "date_freq"
                         )
                     with dg2:
                         date_agg = st.selectbox(
                             "Aggregate Y by",
                             ["Sum", "Mean", "Count", "Median", "Max", "Min"],
-                            key="date_agg"
+                            key="cat_date_agg"                          # ← was "date_agg"
                         )
                     with dg3:
                         fill_gaps = st.checkbox(
                             "Fill missing periods with 0",
-                            value=False, key="date_fill_gaps"
+                            value=False, key="cat_date_fill_gaps"       # ← was "date_fill_gaps"
                         )
                     with dg4:
                         date_sort = st.checkbox(
-                            "Sort by date", value=True, key="date_sort"
+                            "Sort by date", value=True, key="cat_date_sort"  # ← was "date_sort"
                         )
                 else:
                     dg1, dg2, dg3, dg4 = st.columns(4)
@@ -2959,11 +2958,11 @@ elif st.session_state.page == "Visualizations":
                         agg_func = st.selectbox(
                             "Aggregate Y by",
                             ["None (raw)", "Mean", "Sum", "Count", "Median", "Max", "Min"],
-                            key="custom_agg"
+                            key="cat_agg"                               # ← was "custom_agg"
                         )
                     with dg2:
                         group_val_sel = st.selectbox(
-                            "Group X by", ["— None —"] + cat_cols, key="custom_group"
+                            "Group X by", ["— None —"] + cat_cols, key="cat_group"  # ← was "custom_group"
                         )
                         group_val = None if group_val_sel == "— None —" else group_val_sel
                     with dg3:
@@ -2971,13 +2970,13 @@ elif st.session_state.page == "Visualizations":
                             "Sort by",
                             ["None", "X ascending", "X descending",
                              "Y ascending", "Y descending"],
-                            key="custom_sort"
+                            key="cat_sort"                              # ← was "custom_sort"
                         )
                     with dg4:
                         show_labels = st.checkbox(
-                            "Show value labels", value=False, key="custom_labels"
+                            "Show value labels", value=False, key="cat_labels"  # ← was "custom_labels"
                         )
-    
+
                 st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
     
             try:
