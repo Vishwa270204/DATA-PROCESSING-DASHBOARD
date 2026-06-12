@@ -2440,7 +2440,7 @@ elif st.session_state.page == "Visualizations":
 
         t1_x_is_date = _is_date_col(t1_x)
 
-        if t1_x_is_date:
+        if t1_x_is_date and t1_chart != "Histogram":
             st.markdown("""<div style='background:#eff6ff;border:1px solid #bfdbfe;
                 border-radius:8px;padding:9px 14px;margin:6px 0;font-size:0.82rem;color:#2563eb;'>
                 📅 Date column detected — choose a grouping period below</div>""",
@@ -2455,6 +2455,28 @@ elif st.session_state.page == "Visualizations":
                 t1_fill = st.checkbox("Fill missing periods → 0", key="t1_fill")
             with r2c4:
                 t1_labels = st.checkbox("Show value labels", key="t1_labels")
+            t1_group = None
+            t1_sort  = "None"
+
+        elif t1_chart == "Histogram":
+            # Histogram gets its own dedicated controls
+            r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+            with r2c1:
+                t1_group = st.selectbox("Group by (split histogram)",
+                    ["— None —"] + cat_cols, key="t1_hist_group")
+            with r2c2:
+                t1_bins = st.slider("Bins", 5, 100, 30, key="t1_hist_bins")
+            with r2c3:
+                t1_norm = st.selectbox("Normalize",
+                    ["count", "percent", "probability", "density"],
+                    key="t1_hist_norm")
+            with r2c4:
+                t1_labels = st.checkbox("Show mean line(s)", value=True, key="t1_hist_mean")
+            t1_agg    = "Sum"
+            t1_freq   = "Month"
+            t1_fill   = False
+            t1_sort   = "None"
+
         else:
             r2c1, r2c2, r2c3, r2c4 = st.columns(4)
             with r2c1:
@@ -2513,8 +2535,11 @@ elif st.session_state.page == "Visualizations":
 
                 else:
                     # ── Non-date path ──
-                    t1_group_val = (None if st.session_state.get("t1_group","— None —") == "— None —"
-                                    else st.session_state.get("t1_group"))
+                    else:  # Histogram
+                    t1_group_val = None if t1_group == "— None —" else t1_group
+                    t1_bins      = st.session_state.get("t1_hist_bins", 30)
+                    t1_norm      = st.session_state.get("t1_hist_norm", "count")
+                    show_mean    = st.session_state.get("t1_hist_mean", True)
                     t1_sort_val  = st.session_state.get("t1_sort", "None")
                     fn = AGG_MAP.get(st.session_state.get("t1_agg_nd", "Mean"), "mean")
 
