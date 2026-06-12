@@ -960,7 +960,7 @@ elif st.session_state.page == "Statistics & EDA":
             fig_type = go.Figure(go.Pie(
                 labels=list(type_data.keys()),
                 values=list(type_data.values()),
-                hole=0.5,
+                
                 marker_colors=["#2563eb","#f59e0b","#10b981","#8b5cf6","#6b7280"]
             ))
             fig_type.update_layout(
