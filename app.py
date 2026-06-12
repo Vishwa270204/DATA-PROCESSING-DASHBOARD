@@ -1571,29 +1571,61 @@ elif st.session_state.page == "Data Cleaning":
                 )
             with fmt_col2:
                 st.caption(f"Your data samples:\n{chr(10).join(str(v) for v in sample_vals)}")
+        # Date output options — show BEFORE preview
+        strip_time = False
+        if "datetime" in target_dtype:
+            strip_time = st.checkbox(
+                "Strip time — keep date only (e.g. 2003-02-24)",
+                value=False, key="strip_time_clean"
+            )
+
         with st.expander("👁️ Preview conversion on first 5 rows", expanded=False):
             try:
-                preview_s = st.session_state.df[dtype_col].head(5).copy()
+                # Always read from ORIGINAL raw string values, not already-converted
+                raw_series = st.session_state.df[dtype_col].head(5).copy()
+                # If already datetime, show as-is in original col
+                if pd.api.types.is_datetime64_any_dtype(raw_series):
+                    original_display = raw_series.astype(str)
+                else:
+                    original_display = raw_series.astype(str)
+
                 dtype_key = target_dtype.split(" — ")[0]
                 if dtype_key == "datetime":
-                    converted = pd.to_datetime(preview_s, format=custom_fmt, errors="coerce") if custom_fmt else pd.to_datetime(preview_s, errors="coerce")
+                    if custom_fmt:
+                        converted = pd.to_datetime(raw_series, format=custom_fmt, errors="coerce")
+                        # try slash/dash swap as fallback
+                        failed = converted.isna() & raw_series.notna()
+                        if failed.any():
+                            alt_fmt = custom_fmt.replace("/", "-") if "/" in custom_fmt else custom_fmt.replace("-", "/")
+                            converted[failed] = pd.to_datetime(raw_series[failed], format=alt_fmt, errors="coerce")
+                        # final generic fallback
+                        still_failed = converted.isna() & raw_series.notna()
+                        if still_failed.any():
+                            converted[still_failed] = pd.to_datetime(raw_series[still_failed], errors="coerce")
+                    else:
+                        converted = pd.to_datetime(raw_series, errors="coerce")
+                    if strip_time:
+                        converted = converted.dt.date
                 elif dtype_key == "int":
-                    converted = pd.to_numeric(preview_s, errors="coerce").astype("Int64")
+                    converted = pd.to_numeric(raw_series, errors="coerce").astype("Int64")
                 elif dtype_key == "float":
-                    converted = pd.to_numeric(preview_s, errors="coerce")
+                    converted = pd.to_numeric(raw_series, errors="coerce")
                 elif dtype_key == "str":
-                    converted = preview_s.astype(str)
+                    converted = raw_series.astype(str)
                 elif dtype_key == "bool":
-                    converted = preview_s.astype(bool)
+                    converted = raw_series.astype(bool)
                 elif dtype_key == "category":
-                    converted = preview_s.astype("category")
+                    converted = raw_series.astype("category")
                 else:
-                    converted = preview_s
-                st.dataframe(pd.DataFrame({"Original": preview_s.values, "Converted": converted.values}),
-                    use_container_width=True, height=200)
+                    converted = raw_series
+
+                st.dataframe(
+                    pd.DataFrame({"Original": original_display.values, "Converted": converted.values}),
+                    use_container_width=True, height=200
+                )
             except Exception as e:
                 st.error(f"Preview error: {e}")
-
+        strip_time = st.session_state.get("strip_time_clean", False)
         if st.button("Apply Type Conversion", key="apply_dtype_btn_clean", type="primary"):
             try:
                 df_t = st.session_state.df.copy()
@@ -1603,24 +1635,34 @@ elif st.session_state.page == "Data Cleaning":
                 def _convert(series):
                     if dtype_key == "datetime":
                         if custom_fmt:
-                            # Try exact format first, then fallback row-by-row
                             result = pd.Series([pd.NaT] * len(series), index=series.index)
-                            for fmt_try in [custom_fmt,
-                                            custom_fmt.replace("/","-"),
-                                            custom_fmt.replace("-","/")]:
-                                still_null = result.isna() & series.notna()
-                                if not still_null.any(): break
-                                try:
-                                    result[still_null] = pd.to_datetime(
-                                        series[still_null], format=fmt_try, errors="coerce")
-                                except: continue
+                            # Try exact format first
+                            try:
+                                attempt = pd.to_datetime(series, format=custom_fmt, errors="coerce")
+                                result = attempt
+                            except: pass
+                            # For still-null rows try separator swap
+                            still_null = result.isna() & series.notna()
+                            if still_null.any():
+                                if "/" in custom_fmt:
+                                    alt = custom_fmt.replace("/", "-")
+                                elif "-" in custom_fmt and not custom_fmt.startswith("%Y"):
+                                    alt = custom_fmt.replace("-", "/")
+                                else:
+                                    alt = None
+                                if alt:
+                                    try:
+                                        result[still_null] = pd.to_datetime(
+                                            series[still_null], format=alt, errors="coerce")
+                                    except: pass
                             # Final generic fallback
                             still_null = result.isna() & series.notna()
                             if still_null.any():
                                 result[still_null] = pd.to_datetime(series[still_null], errors="coerce")
+                            if strip_time:
+                                result = pd.to_datetime(result).dt.normalize()
                             return result
                         else:
-                            # Auto detect — try slash AND dash variants for each format
                             result = pd.Series([pd.NaT] * len(series), index=series.index)
                             fmt_list = [
                                 "%m/%d/%Y %H:%M", "%m/%d/%Y",
@@ -1629,7 +1671,6 @@ elif st.session_state.page == "Data Cleaning":
                                 "%d-%m-%Y %H:%M", "%d-%m-%Y",
                                 "%Y-%m-%d %H:%M:%S", "%Y-%m-%d",
                                 "%Y/%m/%d %H:%M:%S", "%Y/%m/%d",
-                                "%m/%d/%Y %H:%M:%S", "%m-%d-%Y %H:%M:%S",
                             ]
                             for fmt in fmt_list:
                                 still_null = result.isna() & series.notna()
@@ -1641,6 +1682,8 @@ elif st.session_state.page == "Data Cleaning":
                             still_null = result.isna() & series.notna()
                             if still_null.any():
                                 result[still_null] = pd.to_datetime(series[still_null], errors="coerce")
+                            if strip_time:
+                                result = pd.to_datetime(result).dt.normalize()
                             return result
                     elif dtype_key == "int":
                         return pd.to_numeric(series, errors="coerce").astype("Int64")
@@ -1653,7 +1696,6 @@ elif st.session_state.page == "Data Cleaning":
                     elif dtype_key == "category":
                         return series.astype("category")
                     return series
-
                 df_t[dtype_col] = _convert(df_t[dtype_col])
                 pdf_t[dtype_col] = _convert(pdf_t[dtype_col])
                 null_count = df_t[dtype_col].isna().sum()
