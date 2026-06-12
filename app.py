@@ -2666,20 +2666,19 @@ elif st.session_state.page == "Visualizations":
             with r1c2:
                 pie_val = st.selectbox("Value column", ["Count"] + num_cols, key="pie_val")
             with r1c3:
-                pie_type = st.radio("Type", ["Pie", "Donut"], horizontal=True, key="pie_type")
-            with r1c4:
-                pie_top = st.slider("Top N slices", 3, 30, 10, key="pie_top")
-
-            r2c1, r2c2, _, _ = st.columns(4)
-            with r2c1:
                 pie_agg = st.selectbox("Aggregate by",
                     list(AGG_MAP.keys()), key="pie_agg",
                     disabled=(pie_val == "Count"))
+            with r1c4:
+                pie_top = st.slider("Top N slices", 3, 30, 10, key="pie_top")
+
+            r2c1, r2c2, r2c3, _ = st.columns(4)
+            with r2c1:
+                pie_type = st.radio("Type", ["Pie", "Donut"], horizontal=True, key="pie_type")
             with r2c2:
                 pie_labels = st.radio("Labels",
                     ["percent", "value", "label+percent"],
                     horizontal=True, key="pie_labels")
-
             try:
                 if pie_val == "Count":
                     pie_df = df.groupby(pie_cat).size().reset_index(name="Count")
@@ -2705,9 +2704,8 @@ elif st.session_state.page == "Visualizations":
                     hole=0.45 if pie_type == "Donut" else 0,
                 )
                 fig_pie.update_traces(
-                    textinfo="label+percent",
+                    textinfo=pie_labels,
                     textfont_size=12,
-                    pull=[0.03] * len(pie_df),
                 )
                 _apply_layout(fig_pie,
                     f"{'Count' if pie_val == 'Count' else pie_agg + ' of ' + pie_val}"
