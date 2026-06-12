@@ -1386,18 +1386,6 @@ elif st.session_state.page == "Recommendations":
                         f"Column type: {'Boolean' if col in ct['boolean'] else 'Categorical'}",
                         f"Use {enc.upper()} encoding — {exp} → Go to 🔠 Encoding tab", "warn")
 
-    with rt6:
-        if not has_invalid:
-            rec_row("✅", "No invalid values", "All values pass domain validation.", "No action needed.", "ok")
-        else:
-            for col, info in inv_vals.items():
-                rec_row("⚠️", f"'{col}' — {info['issue']}",
-                    f"{info['count']} rows with invalid values",
-                    "Use Custom Range Validation → Go to 🧹 Cleaning → Validation tab", "bad")
-            for col, info in neg_vals.items():
-                rec_row("➖", f"'{col}' — {info['count']} negative values",
-                    info["reason"],
-                    "Remove or cap rows → Go to 🧹 Cleaning → Validation tab", "warn")
 
     with rt7:
         checklist = [
@@ -1464,11 +1452,10 @@ elif st.session_state.page == "Data Cleaning":
         st.stop()
 
     df = st.session_state.df
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3 = st.tabs([
         "🗑️ Duplicate Handling",
         "❓ Missing Value Treatment",
-        "🔄 Data Type Conversion",
-        "⚠️ Invalid Value Correction"
+        "🔄 Data Type Conversion"
     ])
 
     # ── TAB 1: Duplicate Handling ─────────────────────────────────────────
@@ -1642,156 +1629,7 @@ elif st.session_state.page == "Data Cleaning":
             except Exception as e:
                 st.error(f"Conversion error: {e}")
 
-    with tab4:
-        st.markdown("<div class='section-header'><h3>Invalid Value Detection</h3></div>", unsafe_allow_html=True)
-
-        df_check = st.session_state.df
-        issues_found = []
-
-        # 1. Invalid emails
-        pat_email = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$")
-        for col in df_check.select_dtypes(include="object").columns:
-            if any(k in col.lower() for k in ["email","mail","e-mail"]):
-                bad = df_check[col].dropna().apply(lambda x: not bool(pat_email.match(str(x).strip())))
-                if bad.sum():
-                    issues_found.append({
-                        "Column": col,
-                        "Issue Type": "Invalid Email",
-                        "Invalid Count": int(bad.sum()),
-                        "Reason": "Does not match email format (user@domain.com)",
-                        "Sample Invalid Values": str(df_check.loc[bad[bad].index, col].head(3).tolist())
-                    })
-
-        # 2. Invalid phones
-        for col in df_check.select_dtypes(include="object").columns:
-            if not _is_phone_column(col):
-                continue
-            def _bad_ph(v):
-                v = str(v).strip()
-                digits = re.sub(r"[\s\.\-\(\)\+]", "", v)
-                return not digits.isdigit() or len(digits) < 7 or len(digits) > 15
-            bad = df_check[col].dropna().apply(_bad_ph)
-            if bad.sum():
-                issues_found.append({
-                    "Column": col,
-                    "Issue Type": "Invalid Phone",
-                    "Invalid Count": int(bad.sum()),
-                    "Reason": "Contains letters, symbols, or wrong digit count (need 7–15 digits)",
-                    "Sample Invalid Values": str(df_check.loc[bad[bad].index, col].head(3).tolist())
-                })
-
-        # 3. Future dates
-        now = pd.Timestamp.now()
-        for col in df_check.columns:
-            if any(k in col.lower() for k in ["birth","dob","born","date","created","joined"]):
-                try:
-                    parsed = pd.to_datetime(df_check[col], errors="coerce")
-                    n = int((parsed > now).sum())
-                    if n:
-                        issues_found.append({
-                            "Column": col,
-                            "Issue Type": "Future Date",
-                            "Invalid Count": n,
-                            "Reason": "Date is in the future — likely a data entry error",
-                            "Sample Invalid Values": str(df_check.loc[parsed > now, col].head(3).tolist())
-                        })
-                except: pass
-
-        # 4. Negative values in non-negative columns
-        for col in df_check.select_dtypes(include=[np.number]).columns:
-            if is_non_negative_column(col):
-                n = int((df_check[col] < 0).sum())
-                if n:
-                    issues_found.append({
-                        "Column": col,
-                        "Issue Type": "Negative Value",
-                        "Invalid Count": n,
-                        "Reason": f"Column '{col}' should not contain negative values by domain rules",
-                        "Sample Invalid Values": str(df_check.loc[df_check[col] < 0, col].head(3).tolist())
-                    })
-
-        # 5. Domain range errors (age, percent, salary)
-        for col, info in detect_invalid_values(df_check).items():
-            issues_found.append({
-                "Column": col,
-                "Issue Type": "Domain Range Error",
-                "Invalid Count": info["count"],
-                "Reason": info["issue"],
-                "Sample Invalid Values": "—"
-            })
-
-        if not issues_found:
-            st.success("✅ No invalid values detected across all columns.")
-        else:
-            issues_df = pd.DataFrame(issues_found)
-            st.error(f"⚠️ {len(issues_found)} issue(s) found across {issues_df['Column'].nunique()} column(s)")
-            st.dataframe(issues_df, use_container_width=True, hide_index=True, height=300)
-
-            st.markdown("---")
-            st.markdown("**🔧 Fix Selected Issue**")
-
-            col_options = issues_df["Column"].tolist()
-            fix_col = st.selectbox("Select column to fix", col_options, key="fix_col_select")
-            fix_issue_row = issues_df[issues_df["Column"] == fix_col].iloc[0]
-
-            st.markdown(f"""
-            <div style='background:#fef2f2;border:1px solid #fecaca;border-radius:8px;
-                 padding:12px 16px;margin:8px 0;font-size:0.88rem;'>
-                <b>Issue:</b> {fix_issue_row['Issue Type']} &nbsp;|&nbsp;
-                <b>Affected rows:</b> {fix_issue_row['Invalid Count']} &nbsp;|&nbsp;
-                <b>Reason:</b> {fix_issue_row['Reason']}
-            </div>
-            """, unsafe_allow_html=True)
-
-            action = st.radio("Action", ["Replace with NaN", "Drop rows", "Cap at 0 (negatives only)"],
-                key="fix_action_select", horizontal=True)
-
-            if st.button("Apply Fix", key="apply_fix_btn", type="primary"):
-                try:
-                    df_t = st.session_state.df.copy()
-                    issue_type = fix_issue_row["Issue Type"]
-
-                    if issue_type == "Invalid Email":
-                        pat = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$")
-                        if action == "Replace with NaN":
-                            df_t[fix_col] = df_t[fix_col].apply(
-                                lambda x: x if pd.isna(x) or bool(pat.match(str(x).strip())) else np.nan)
-                        elif action == "Drop rows":
-                            mask = df_t[fix_col].apply(lambda x: pd.isna(x) or bool(pat.match(str(x).strip())))
-                            df_t = df_t[mask].reset_index(drop=True)
-
-                    elif issue_type == "Invalid Phone":
-                        def _is_valid_ph(x):
-                            if pd.isna(x): return True
-                            d = re.sub(r"[\s\.\-\(\)\+]","",str(x))
-                            return d.isdigit() and 7 <= len(d) <= 15
-                        if action == "Replace with NaN":
-                            df_t[fix_col] = df_t[fix_col].apply(lambda x: x if _is_valid_ph(x) else np.nan)
-                        elif action == "Drop rows":
-                            df_t = df_t[df_t[fix_col].apply(_is_valid_ph)].reset_index(drop=True)
-
-                    elif issue_type == "Future Date":
-                        parsed = pd.to_datetime(df_t[fix_col], errors="coerce")
-                        if action == "Replace with NaN":
-                            df_t[fix_col] = df_t[fix_col].where(parsed <= pd.Timestamp.now(), other=np.nan)
-                        elif action == "Drop rows":
-                            df_t = df_t[parsed <= pd.Timestamp.now()].reset_index(drop=True)
-
-                    elif issue_type in ("Negative Value", "Domain Range Error"):
-                        if action == "Replace with NaN":
-                            df_t.loc[df_t[fix_col] < 0, fix_col] = np.nan
-                        elif action == "Drop rows":
-                            df_t = df_t[df_t[fix_col] >= 0].reset_index(drop=True)
-                        elif action == "Cap at 0 (negatives only)":
-                            df_t[fix_col] = df_t[fix_col].clip(lower=0)
-
-                    st.session_state.df = df_t
-                    save_operation(st.session_state.file_name, f"Fix {issue_type}: {fix_col}", action)
-                    st.success(f"✅ Fixed '{fix_col}' — {action}")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Fix error: {e}")
-    nav_buttons("Data Cleaning")
+        nav_buttons("Data Cleaning")
 # ═══════════════════════════════════════════════
 # PAGE 5 — FEATURE ENGINEERING
 # ═══════════════════════════════════════════════
