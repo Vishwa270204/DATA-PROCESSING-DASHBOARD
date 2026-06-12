@@ -1476,494 +1476,275 @@ elif st.session_state.page == "Encoding & Outliers":
     ct = identify_column_types(df)
     tab1, tab2, tab3 = st.tabs(["🔡 Encoding","📦 Outliers","〰️ Skewness"])
 
-    # ── Encoding  ── exclude already-encoded columns ──────────────────
+    # ── Encoding Tab (tab1) — Redesigned ─────────────────────────────────────
     with tab1:
-        st.markdown("<div class='section-header'><h3>Target-First Categorical Encoding</h3></div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-header'><h3>Categorical Encoding</h3></div>", unsafe_allow_html=True)
 
         encoding_df = st.session_state.original_df
-        all_cols = list(st.session_state.original_df.columns)
         ct = identify_column_types(encoding_df)
-        if "target_col" not in st.session_state:
-            st.session_state.target_col = "— None —"
-        saved_target = st.session_state.get("target_col", "— None —")
-        already_encoded = st.session_state.get("target_encoded", False)
-        
-        if already_encoded and saved_target != "— None —":
-            target_col = saved_target
-        else:
-            target_options = ["— None —"] + all_cols
-            target_index = target_options.index(saved_target) if saved_target in target_options else 0
-            target_col = st.selectbox("Select Target Variable", target_options, index=target_index, key="target_col_widget")
-            if target_col != st.session_state.get("target_col"):
-                st.session_state.target_col = target_col
-                st.session_state.target_encoded = False
-        if target_col != "— None —":
-            already_encoded = st.session_state.get("target_encoded", False)
-        
-            if already_encoded:
-                st.markdown(f"""
-                <div style='display:flex;align-items:center;gap:10px;padding:12px 16px;
-                     background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;margin:12px 0;'>
-                    <span style='font-size:1.1rem;'>🎯</span>
-                    <span style='font-size:0.9rem;color:#374151;'>
-                        Target variable: <code style='background:#dcfce7;padding:2px 6px;border-radius:4px;
-                        color:#16a34a;font-weight:700;'>{target_col}</code>
-                        &nbsp;— locked for training. Encoding applied.
-                    </span>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                rec_enc, rec_exp = recommend_encoding(st.session_state.original_df, target_col, is_target=True)
-                st.markdown(f"""
-                <div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px;margin:12px 0;'>
-                    <b style='color:#2563eb;'>Target:</b> <code>{target_col}</code> &nbsp;|&nbsp;
-                    <b style='color:#2563eb;'>Recommended:</b> <code>{rec_enc}</code><br>
-                    <span style='color:#374151;font-size:0.9rem;'>{rec_exp}</span>
-                </div>
-                """, unsafe_allow_html=True)
-                chosen_enc_t = st.selectbox("Encoding method for target",
-                                             ["label","onehot","ordinal","frequency"],
-                                             index=["label","onehot","ordinal","frequency"].index(rec_enc),
-                                             key="enc_target_method")
-                ordinal_order_t = None
-                if chosen_enc_t == "ordinal":
-                    ord_str = st.text_input("Ordinal order (comma-separated, low→high)", key="ord_target")
-                    if ord_str: ordinal_order_t = [x.strip() for x in ord_str.split(",")]
-                if st.button(f"Apply Encoding to Target: {target_col}"):
-                    try:
-                        new_df, mapping = apply_encoding(df, target_col, chosen_enc_t, ordinal_order_t)
-                        st.session_state.processed_df = new_df
-                        st.session_state.df = new_df
-                        if target_col not in st.session_state.encoded_columns:
-                            st.session_state.encoded_columns.append(target_col)
-                        st.session_state.target_encoded = True
-                        save_operation(st.session_state.file_name, f"Encoding: {target_col}", chosen_enc_t)
-                        st.success(f"✅ Applied {chosen_enc_t} encoding to '{target_col}'.")
-                        if mapping is not None:
-                            st.dataframe(mapping.head(20), use_container_width=True)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(str(e))
-        st.markdown("---")
-        st.markdown("**Feature Column Encoding**")
 
-        # FIX 2: exclude columns that have already been encoded
-        encoded_set = set(st.session_state.encoded_columns)
+        # Collect all categorical + boolean columns
+        all_cat_cols = list(dict.fromkeys(ct["categorical"] + ct["boolean"]))
+
+        # Already encoded columns
+        encoded_set = set(st.session_state.get("encoded_columns", []))
+
+        # Helper: detect one-hot dummy columns (e.g. "City_London" from "City")
         def _is_ohe_dummy(col, encoded_set):
             for enc_col in encoded_set:
                 if col.startswith(enc_col + "_"):
                     return True
             return False
-        
-        enc_candidates = [
-            c for c in ct["categorical"] + ct["boolean"]
-            if c != target_col
-            and c not in encoded_set
-            and not c.endswith("_encoded")
+
+        # Columns still available for encoding
+        available_cols = [
+            c for c in all_cat_cols
+            if c not in encoded_set
             and not _is_ohe_dummy(c, encoded_set)
         ]
-        ordinal_candidates = [
-            c for c in enc_candidates
-            if encoding_df[c].dtype == "object"    
-        ]
-        total_feature_cats = len([c for c in ct["categorical"] + ct["boolean"] if c != target_col])
-        done_count = len([c for c in encoded_set if c != target_col])
 
-        if done_count > 0 and done_count < total_feature_cats:
-            st.markdown(f"<span class='badge badge-info'>ℹ️ {done_count} of {total_feature_cats} feature columns already encoded — hidden below</span>", unsafe_allow_html=True)
+        # ── All done state ────────────────────────────────────────────────────
+        if not available_cols and all_cat_cols:
+            st.success("✅ All categorical columns have been encoded.")
+            st.balloons()
 
-         # Recommendation buckets
-        onehot_cols = []
-        label_cols = []
-        frequency_cols = []
-        if not enc_candidates:
+            # Show encoding summary
+            st.markdown("""
+            <div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;
+                 padding:20px;margin-top:12px;'>
+                <div style='font-size:0.8rem;color:#16a34a;font-weight:700;
+                     text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;'>
+                     Encoding Summary
+                </div>
+            """, unsafe_allow_html=True)
+
+            for col in all_cat_cols:
+                enc_info = st.session_state.get("encoders", {}).get(col)
+                method_label = "One-Hot" if _is_ohe_dummy(col, {col}) else "Encoded"
+                st.markdown(f"""
+                <div style='display:flex;align-items:center;gap:10px;padding:8px 0;
+                     border-bottom:1px solid #dcfce7;'>
+                    <span style='font-size:0.9rem;'>✅</span>
+                    <span style='font-family:"JetBrains Mono",monospace;font-size:0.88rem;
+                         color:#111827;font-weight:600;'>{col}</span>
+                    <span style='margin-left:auto;background:#dcfce7;color:#16a34a;
+                         border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:600;'>
+                         Encoded
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        elif not all_cat_cols:
+            st.info("No categorical columns found in this dataset.")
+
+        else:
+            # ── Progress bar ─────────────────────────────────────────────────
+            done = len(all_cat_cols) - len(available_cols)
+            total = len(all_cat_cols)
+            pct = int(done / total * 100) if total else 0
+
+            st.markdown(f"""
+            <div style='margin-bottom:20px;'>
+                <div style='display:flex;justify-content:space-between;
+                     align-items:center;margin-bottom:8px;'>
+                    <span style='font-size:0.82rem;color:#6b7280;'>
+                        Encoding progress
+                    </span>
+                    <span style='font-family:"JetBrains Mono",monospace;font-size:0.82rem;
+                         color:#2563eb;font-weight:700;'>{done} / {total} columns encoded</span>
+                </div>
+                <div style='background:#e2e6f0;border-radius:999px;height:6px;'>
+                    <div style='width:{pct}%;height:100%;background:#2563eb;
+                         border-radius:999px;transition:width 0.4s;'></div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # ── Already encoded chips ─────────────────────────────────────────
             if encoded_set:
-                st.success("✅ All categorical feature columns have been encoded.")
-            else:
-                st.info("No categorical feature columns found.")
-        else:
-            for col in enc_candidates:
-                rec, _ = recommend_encoding(st.session_state.original_df, col)
-                if rec == "onehot":
-                    onehot_cols.append(col)
-                elif rec == "label":
-                    label_cols.append(col)
-                elif rec == "frequency":
-                    frequency_cols.append(col)
-            
-            # ─────────────────────────────────────
-            # Ordinal Encoding
-            # ─────────────────────────────────────
-            if True:
-                st.subheader("📈 Ordinal Encoding")
-                ord_col = st.selectbox(
-                    "Select column for Ordinal Encoding",
-                    ["— Select —"] + enc_candidates,
-                    key="ordinal_select"
+                chips_html = "".join([
+                    f"<span style='display:inline-flex;align-items:center;gap:5px;"
+                    f"background:#eff6ff;border:1px solid #bfdbfe;color:#2563eb;"
+                    f"border-radius:999px;padding:3px 12px;font-size:0.75rem;"
+                    f"font-weight:600;margin:3px;'>"
+                    f"✓ {c}</span>"
+                    for c in sorted(encoded_set) if c in all_cat_cols
+                ])
+                st.markdown(f"""
+                <div style='margin-bottom:20px;'>
+                    <div style='font-size:0.75rem;color:#6b7280;margin-bottom:6px;
+                         text-transform:uppercase;letter-spacing:1px;'>Already encoded</div>
+                    <div style='line-height:2;'>{chips_html}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # ── Main encoding form ────────────────────────────────────────────
+            st.markdown("""
+            <div style='background:#ffffff;border:1px solid #e2e6f0;border-radius:12px;
+                 padding:20px 24px;'>
+            """, unsafe_allow_html=True)
+
+            enc_technique = st.selectbox(
+                "Encoding Technique",
+                [
+                    "Label Encoding",
+                    "One-Hot Encoding",
+                    "Ordinal Encoding",
+                    "Frequency Encoding",
+                    "Binary Encoding",
+                ],
+                key="enc_technique_unified",
+                help=(
+                    "Label: integer codes 0…N-1  |  "
+                    "One-Hot: new binary column per category  |  "
+                    "Ordinal: user-defined rank order  |  "
+                    "Frequency: replace with category frequency  |  "
+                    "Binary: label → binary bit columns"
                 )
-                if ord_col != "— Select —":
-                    existing_vals = sorted(encoding_df[ord_col].dropna().unique().tolist())
-                    st.markdown(f"<b>Existing values in {ord_col}:</b> <code>{existing_vals}</code>", unsafe_allow_html=True)
-                    ord_str = st.text_input(
-                        "Enter order (comma-separated, low→high)",
-                        placeholder="low,medium,high",
-                        key="ordinal_order"
+            )
+
+            # Technique hint
+            hints = {
+                "Label Encoding":     "Best for binary columns or tree-based models.",
+                "One-Hot Encoding":   "Best for low-cardinality columns (≤ 10 unique values).",
+                "Ordinal Encoding":   "Use when categories have a natural order (e.g. low → medium → high).",
+                "Frequency Encoding": "Best for high-cardinality columns. Replaces each category with its frequency.",
+                "Binary Encoding":    "Label → binary bits. Compact alternative to one-hot for medium cardinality.",
+            }
+            st.caption(hints[enc_technique])
+
+            # Column multiselect — show unique counts as hint
+            col_options = available_cols
+            col_labels  = {c: f"{c}  ({encoding_df[c].nunique()} unique)" for c in col_options}
+
+            selected_cols = st.multiselect(
+                "Columns to Encode",
+                options=col_options,
+                format_func=lambda c: col_labels[c],
+                placeholder="Select one or more categorical columns…",
+                key="enc_cols_unified"
+            )
+
+            # Ordinal order input — show only when Ordinal selected
+            ordinal_orders = {}
+            if enc_technique == "Ordinal Encoding" and selected_cols:
+                st.markdown(
+                    "<div style='margin-top:12px;font-size:0.82rem;color:#374151;"
+                    "font-weight:600;margin-bottom:6px;'>Define order for each column "
+                    "<span style='color:#6b7280;font-weight:400;'>(comma-separated, low → high)</span>"
+                    "</div>",
+                    unsafe_allow_html=True
+                )
+                for col in selected_cols:
+                    existing = sorted(encoding_df[col].dropna().unique().tolist())
+                    ord_input = st.text_input(
+                        f"{col}",
+                        placeholder=f"e.g. {', '.join(str(v) for v in existing[:4])}…",
+                        key=f"ordinal_order_{col}",
+                        help=f"Existing values: {existing}"
                     )
-                    if st.button("Apply Ordinal Encoding"):
-                        if not ord_str:
-                            st.warning("Please enter the ordinal order.")
-                        else:
-                            # normalize both sides — strip + lowercase for comparison
-                            ordinal_order = [x.strip() for x in ord_str.split(",")]
-                            existing_stripped = [str(v).strip() for v in existing_vals]
-                            invalid_vals = [v for v in ordinal_order if v.strip() not in existing_stripped]
-                            missing_vals = [v for v in existing_stripped if v not in [x.strip() for x in ordinal_order]]
-                            # remap ordinal_order to match exact original values
-                            val_map = {str(v).strip(): v for v in existing_vals}
-                            ordinal_order = [val_map.get(x.strip(), x.strip()) for x in ord_str.split(",")]                            
-                            if invalid_vals:
-                                st.error(f"❌ These values don't exist in column: `{invalid_vals}`")
-                            elif missing_vals:
-                                st.warning(f"⚠️ These column values are not in your order: `{missing_vals}`. They will become NaN.")
-                            else:
-                                new_df, mapping = apply_encoding(
-                                    st.session_state.processed_df,
-                                    ord_col, "ordinal", ordinal_order
-                                )
-                                st.session_state.processed_df = new_df
-                                st.session_state.df = new_df
-                                if ord_col not in st.session_state.encoded_columns:
-                                    st.session_state.encoded_columns.append(ord_col)
-                                st.success(f"✅ Ordinal encoding applied to '{ord_col}'")
-                                st.rerun()
-            # ─────────────────────────────────────
-            # One-Hot Encoding
-            # ─────────────────────────────────────
-            if onehot_cols:
-                st.subheader("🔵 One-Hot Encoding")
-                selected_cols = st.multiselect(
-                    "Select columns for One-Hot Encoding",
-                    onehot_cols,
-                    key="onehot_select"
-                )
-                if st.button("Apply One-Hot Encoding"):
-                    for col in selected_cols:
-                        new_df, mapping = apply_encoding(
-                            st.session_state.processed_df,
-                            col,
-                            "onehot"
-                        )
-                        st.session_state.processed_df = new_df
-                        st.session_state.df = new_df   # temporary compatibility
-                        if col not in st.session_state.encoded_columns:
-                            st.session_state.encoded_columns.append(col)
-                    st.success(f"✅ Encoded {len(selected_cols)} column(s)")
-                    st.rerun()
-            # ─────────────────────────────────────
-            # Label Encoding
-            # ─────────────────────────────────────
-            if label_cols:
-                st.subheader("🏷️ Label Encoding")
-                selected_cols = st.multiselect(
-                    "Select columns for Label Encoding",
-                    label_cols,
-                    key="label_select"
-                )
-                if st.button("Apply Label Encoding"):
-                    for col in selected_cols:
-                        new_df, mapping = apply_encoding(
-                            st.session_state.processed_df,
-                            col,
-                            "label"
-                        )
-                        st.session_state.processed_df = new_df
-                        st.session_state.df = new_df   # temporary compatibility
-                        if col not in st.session_state.encoded_columns:
-                            st.session_state.encoded_columns.append(col)        
-                    st.success(f"✅ Encoded {len(selected_cols)} column(s)")
-                    st.rerun()
-            # ─────────────────────────────────────
-            # Frequency Encoding
-            # ─────────────────────────────────────
-            if frequency_cols:
-                st.subheader("📊 Frequency Encoding")
-                selected_cols = st.multiselect(
-                    "Select columns for Frequency Encoding",
-                    frequency_cols,
-                    key="freq_select"
-                )
-                if st.button("Apply Frequency Encoding"):
-                    for col in selected_cols:
-                        new_df, mapping = apply_encoding(
-                            st.session_state.processed_df,
-                            col,
-                            "frequency"
-                        )
-                        st.session_state.processed_df = new_df
-                        st.session_state.df = new_df   # temporary compatibility
-                        if col not in st.session_state.encoded_columns:
-                            st.session_state.encoded_columns.append(col)
-                    st.success(f"✅ Encoded {len(selected_cols)} column(s)")
-                    st.rerun()
-    # ── Outliers  ── FIX 3: go.Strip → go.Box + go.Scatter overlay ──────────
-    with tab2:
-        st.markdown("<div class='section-header'><h3>Outlier Detection & Treatment</h3></div>", unsafe_allow_html=True)
-        num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        if not num_cols:
-            st.info("No numerical columns found.")
-        else:
-            method_choice = st.radio("Detection Method", ["IQR (Interquartile Range)","Z-Score"], horizontal=True)
-            use_iqr = "IQR" in method_choice
+                    ordinal_orders[col] = ord_input
 
-            if use_iqr:
-                outlier_data = detect_outliers_iqr(df)
-                st.markdown("""
-                <div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin:12px 0;'>
-                    <b style='color:#2563eb;'>IQR Method</b><br><br>
-                    Q1 = 25th pct &nbsp;|&nbsp; Q3 = 75th pct &nbsp;|&nbsp; IQR = Q3 − Q1<br>
-                    Lower = Q1 − 1.5×IQR &nbsp;|&nbsp; Upper = Q3 + 1.5×IQR
-                </div>
-                """, unsafe_allow_html=True)
-                stats_rows = [{"Column":c,"Q1":round(i["Q1"],3),"Q3":round(i["Q3"],3),
-                                "IQR":round(i["IQR"],3),"Lower":round(i["lower"],3),
-                                "Upper":round(i["upper"],3),"Outliers":i["count"],"Outlier %":i["pct"]}
-                               for c,i in outlier_data.items()]
-            else:
-                outlier_data = detect_outliers_zscore(df)
-                st.markdown("""
-                <div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin:12px 0;'>
-                    <b style='color:#2563eb;'>Z-Score Method</b><br><br>
-                    Z = (x − mean) / std &nbsp;|&nbsp; Values with |Z| &gt; 3 are outliers.
-                </div>
-                """, unsafe_allow_html=True)
-                stats_rows = [{"Column":c,"Mean":round(i["mean"],3),"Std":round(i["std"],3),
-                                "Threshold":f"|Z|>{i['threshold']}","Outliers":i["count"],"Outlier %":i["pct"]}
-                               for c,i in outlier_data.items()]
-           
-            st.dataframe(pd.DataFrame(stats_rows),use_container_width=True)
-            # ── FIX 3: Box plots (go.Box) + outlier scatter overlay ──
-            st.markdown("<div class='section-header'><h3>Box Plot — Outliers Highlighted</h3></div>", unsafe_allow_html=True)
-            st.caption("Blue boxes = normal distribution. Red dots = outlier values beyond whiskers.")
-            try:
-                n_cols_plot = len(num_cols)
-                h_space = max(0.02, min(0.1, 0.8/max(n_cols_plot,1)))
-                fig_box = make_subplots(
-                    rows=1, cols=n_cols_plot,
-                    subplot_titles=num_cols,
-                    horizontal_spacing=h_space
-                )
-                legend_added = False
-                for i, col in enumerate(num_cols, start=1):
-                    info = outlier_data.get(col, {})
-                    outlier_idx = set(info.get("rows", []))
-                    series = df[col].dropna()
-                    out_series = series[series.index.isin(outlier_idx)]
+            st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
 
-                    # Box trace — all data (whiskers auto-clip to IQR fence)
-                    fig_box.add_trace(go.Box(
-                        y=series,
-                        name=col,
-                        marker_color="rgba(37,99,235,0.55)",
-                        line_color="#2563eb",
-                        fillcolor="rgba(37,99,235,0.15)",
-                        boxpoints=False,          # hide built-in point overlay
-                        showlegend=not legend_added,
-                        legendgroup="normal",
-                        legendgrouptitle_text="" if legend_added else "Normal",
-                    ), row=1, col=i)
+            apply_btn = st.button(
+                "Apply Encoding",
+                type="primary",
+                disabled=len(selected_cols) == 0,
+                key="apply_encoding_unified"
+            )
 
-                    # Scatter overlay for outlier points in red
-                    if len(out_series) > 0:
-                        fig_box.add_trace(go.Scatter(
-                            y=out_series,
-                            x=[col]*len(out_series),
-                            mode="markers",
-                            marker=dict(color="rgba(220,38,38,0.85)", size=7, symbol="circle-open"),
-                            name="Outlier" if not legend_added else "",
-                            legendgroup="outlier",
-                            showlegend=not legend_added,
-                        ), row=1, col=i)
+            st.markdown("</div>", unsafe_allow_html=True)
 
-                    legend_added = True
+            # ── Apply logic ──────────────────────────────────────────────────
+            if apply_btn and selected_cols:
+                errors = []
+                successes = []
 
-                fig_box.update_layout(
-                    title="Box Plots — Outliers (Red ◯) vs Normal Range",
-                    template="plotly_white",
-                    height=max(420, 380),
-                    paper_bgcolor="#ffffff",
-                    plot_bgcolor="#f8f9fc",
-                    showlegend=True,
-                )
-                st.plotly_chart(fig_box, use_container_width=True)
-            except Exception as e:
-                st.error(f"Box plot error: {e}")
-
-            # Density histogram overlay
-            try:
-                n_r = (len(num_cols)+2)//3
-                fig_dens = make_subplots(rows=n_r, cols=3,
-                    subplot_titles=num_cols, horizontal_spacing=0.08, vertical_spacing=0.12)
-                for idx, col in enumerate(num_cols):
-                    r, c = divmod(idx, 3)
-                    info = outlier_data.get(col, {})
-                    lo = info.get("lower", -np.inf); hi = info.get("upper", np.inf)
-                    series = df[col].dropna()
-                    normal = series[(series>=lo) & (series<=hi)]
-                    outs   = series[(series<lo) | (series>hi)]
-                    fig_dens.add_trace(go.Histogram(x=normal, nbinsx=25,
-                        marker_color="rgba(37,99,235,0.5)", showlegend=False), row=r+1, col=c+1)
-                    if len(outs)>0:
-                        fig_dens.add_trace(go.Histogram(x=outs, nbinsx=10,
-                            marker_color="rgba(220,38,38,0.7)", showlegend=False), row=r+1, col=c+1)
-                fig_dens.update_layout(title="Density — Normal (Blue) vs Outliers (Red)",
-                    template="plotly_white", barmode="overlay",
-                    height=max(350, n_r*300), paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
-                st.plotly_chart(fig_dens, use_container_width=True)
-            except Exception as e:
-                st.error(f"Density plot error: {e}")
-
-            st.markdown("<div class='section-header'><h3>Treat Outliers</h3></div>", unsafe_allow_html=True)
-            cols_with_outliers = [c for c in num_cols if outlier_data.get(c, {}).get("count", 0) > 0]
-            if not cols_with_outliers:
-                st.markdown("<span class='badge badge-success'>✅ No outliers found in any column</span>", unsafe_allow_html=True)
-                selected_col = None
-            else:
-                selected_col = st.selectbox(
-                    f"Select column to treat ({len(cols_with_outliers)} columns with outliers)",
-                    cols_with_outliers,
-                    key="out_treat_col")
-            if selected_col:
-                ca, cb, cc = st.columns(3)
-                method_key = "iqr" if use_iqr else "zscore"
-                with ca:
-                    if st.button("🗑️ Remove Outliers"):
-                        try:
-                            new_df, r = remove_outliers(df, selected_col, method=method_key)
-                            st.session_state.df = new_df
-                            save_operation(st.session_state.file_name, f"Remove Outliers: {selected_col}", str(r))
-                            st.success(f"Removed {r['removed']} outlier rows."); st.rerun()
-                        except Exception as e: st.error(str(e))
-                with cb:
-                    if st.button("📌 Cap Outliers (Winsorise)"):
-                        try:
-                            new_df, r = cap_outliers(df, selected_col)
-                            st.session_state.df = new_df
-                            save_operation(st.session_state.file_name, f"Cap Outliers: {selected_col}", str(r))
-                            st.success(f"Capped {r['capped']} outliers."); st.rerun()
-                        except Exception as e: st.error(str(e))
-                with cc:
-                    st.info("Select Remove or Cap above.")
-
-    with tab3:
-        st.markdown("<div class='section-header'><h3>Skewness Analysis</h3></div>", unsafe_allow_html=True)
-        skew_df = calculate_skewness(df)
-        if skew_df.empty:
-            st.info("No numerical columns.")
-        else:
-            st.dataframe(skew_df,use_container_width=True)
-            transformed_suffixes = ("_log", "_sqrt", "_boxcox")
-            already_transformed = set(st.session_state.get("transformed_columns", []))
-            num_cols_sk = [
-                c for c in df.select_dtypes(include=[np.number]).columns.tolist()
-                if not c.endswith(transformed_suffixes)
-                and c not in already_transformed
-            ]
-            n_r = (len(num_cols_sk)+1)//2
-            try:
-                fig_sk = make_subplots(rows=n_r, cols=2,
-                    subplot_titles=[f"{r['Column']} | sk={r['Skewness']} ({r['Classification']})" for _,r in skew_df.iterrows()],
-                    horizontal_spacing=0.08, vertical_spacing=0.14)
-                cls_color = {"Highly Left Skewed":"#dc2626","Moderately Left Skewed":"#f97316",
-                             "Approximately Normal":"#16a34a","Moderately Right Skewed":"#f59e0b",
-                             "Highly Right Skewed":"#dc2626"}
-                for idx, col in enumerate(num_cols_sk):
-                    r, c = divmod(idx, 2)
-                    data = df[col].dropna()
-                    cls = skew_df.loc[skew_df["Column"]==col,"Classification"].values
-                    color = cls_color.get(cls[0] if len(cls) else "", "#2563eb")
-                    fig_sk.add_trace(go.Histogram(x=data, nbinsx=30,
-                        marker_color="rgba(37,99,235,0.5)", showlegend=False), row=r+1, col=c+1)
+                for col in selected_cols:
                     try:
-                        kde = stats.gaussian_kde(data)
-                        x_r = np.linspace(data.min(), data.max(), 200)
-                        kde_y = kde(x_r)*len(data)*(data.max()-data.min())/30
-                        fig_sk.add_trace(go.Scatter(x=x_r, y=kde_y, mode="lines",
-                            line=dict(color=color,width=2.5), showlegend=False), row=r+1, col=c+1)
-                    except: pass
-                    fig_sk.add_vline(x=float(data.mean()), line_dash="dash",
-                        line_color="#dc2626", line_width=1.5, row=r+1, col=c+1)
-                fig_sk.update_layout(title="Distribution + KDE (Red dashed = Mean)",
-                    template="plotly_white", height=max(400,n_r*320),
-                    paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
-                st.plotly_chart(fig_sk, use_container_width=True)
-            except Exception as e:
-                st.error(f"Skewness chart error: {e}")
+                        working_df = st.session_state.processed_df.copy()
 
-            st.markdown("**Apply Transformation:**")
-            
-            # Exclude already-transformed columns and approximately normal columns
-            transformed_suffixes = ("_log", "_sqrt", "_boxcox")
-            skew_dict_current = dict(zip(skew_df["Column"], skew_df["Skewness"]))
-            
-            skew_candidates = [
-                c for c in num_cols_sk
-                if not c.endswith(transformed_suffixes)
-                and c not in already_transformed
-                and abs(skew_dict_current.get(c, 0)) > 0.5
-            ]
-            
-            if not skew_candidates:
-                st.markdown("<span class='badge badge-success'>✅ No skewed columns remaining — all distributions are approximately normal</span>", unsafe_allow_html=True)
-            else:
-                skew_col = st.selectbox(
-                    f"Column ({len(skew_candidates)} skewed remaining)",
-                    skew_candidates,
-                    key="skew_col"
-                )
-            transform = st.radio("Transformation", ["Log","Sqrt","Box-Cox"], horizontal=True)
-            if st.button("Apply Transform"):
-                try:
-                    df_t = st.session_state.df.copy()
-                    
-                    if transform == "Log":
-                        shift = abs(df_t[skew_col].min())+1 if df_t[skew_col].min()<=0 else 0
-                        df_t[skew_col] = np.log(df_t[skew_col]+shift)
-                    elif transform == "Sqrt":
-                        shift = abs(df_t[skew_col].min()) if df_t[skew_col].min()<0 else 0
-                        df_t[skew_col] = np.sqrt(df_t[skew_col]+shift)
-                    elif transform == "Box-Cox":
-                        s = df_t[skew_col].dropna()
-                        shift = abs(s.min())+1 if s.min()<=0 else 0
-                        t, _ = boxcox(s+shift)
-                        df_t.loc[s.index, skew_col] = t
+                        if enc_technique == "Label Encoding":
+                            new_df, _ = apply_encoding(working_df, col, "label")
 
-                    # Check if transform actually reduced skewness
-                    new_skew = abs(df_t[skew_col].skew())
-                    old_skew = abs(df[skew_col].skew())
+                        elif enc_technique == "One-Hot Encoding":
+                            new_df, _ = apply_encoding(working_df, col, "onehot")
 
-                    st.session_state.df = df_t
+                        elif enc_technique == "Frequency Encoding":
+                            new_df, _ = apply_encoding(working_df, col, "frequency")
 
-                    # Track transformed columns
-                    if skew_col not in st.session_state.transformed_columns:
-                        st.session_state.transformed_columns.append(skew_col)
+                        elif enc_technique == "Binary Encoding":
+                            # Label encode first, then convert to binary bit columns
+                            le = LabelEncoder()
+                            labels = le.fit_transform(working_df[col].astype(str))
+                            max_bits = max(int(np.ceil(np.log2(len(le.classes_) + 1))), 1)
+                            new_df = working_df.copy()
+                            for bit in range(max_bits):
+                                new_df[f"{col}_bin{bit}"] = (labels >> bit) & 1
+                            new_df = new_df.drop(columns=[col])
+                            st.session_state.encoders[col] = {
+                                cls: int(code) for code, cls in enumerate(le.classes_)
+                            }
 
-                    save_operation(
-                        st.session_state.file_name,
-                        f"{transform} Transform: {skew_col}",
-                        f"skew {round(old_skew,4)} → {round(new_skew,4)}"
-                    )
+                        elif enc_technique == "Ordinal Encoding":
+                            ord_str = ordinal_orders.get(col, "")
+                            if not ord_str.strip():
+                                errors.append(f"'{col}': no ordinal order provided.")
+                                continue
+                            ordinal_order = [x.strip() for x in ord_str.split(",")]
+                            existing_vals = [str(v).strip() for v in
+                                             encoding_df[col].dropna().unique()]
+                            invalid = [v for v in ordinal_order if v not in existing_vals]
+                            if invalid:
+                                errors.append(
+                                    f"'{col}': these values don't exist in the column: {invalid}"
+                                )
+                                continue
+                            # Remap to original exact values
+                            val_map = {str(v).strip(): v for v in
+                                       encoding_df[col].dropna().unique()}
+                            mapped_order = [val_map.get(x, x) for x in ordinal_order]
+                            new_df, _ = apply_encoding(working_df, col, "ordinal", mapped_order)
 
-                    if new_skew <= 0.5:
-                        st.success(f"✅ '{skew_col}' is now approximately normal (skew={round(new_skew,4)})")
-                    elif new_skew < old_skew:
-                        st.warning(f"⚠️ Skewness reduced but still present: {round(old_skew,4)} → {round(new_skew,4)}. Try a different transform.")
-                    else:
-                        st.error(f"❌ Transform did not help: skew={round(new_skew,4)}. Try Box-Cox instead.")
+                        else:
+                            errors.append(f"'{col}': unknown technique.")
+                            continue
 
-                    st.rerun()
-                except Exception as e:
-                    st.error(str(e))
-    
+                        # Persist
+                        st.session_state.processed_df = new_df
+                        st.session_state.df = new_df
+                        if col not in st.session_state.encoded_columns:
+                            st.session_state.encoded_columns.append(col)
+                        save_operation(
+                            st.session_state.file_name,
+                            f"Encoding [{enc_technique}]: {col}",
+                            enc_technique
+                        )
+                        successes.append(col)
+
+                    except Exception as e:
+                        errors.append(f"'{col}': {e}")
+
+                if successes:
+                    st.success(f"Successfully encoded: {', '.join(successes)}")
+                for err in errors:
+                    st.error(f"❌ {err}")
+
+                # Check if all done now
+                encoded_set_after = set(st.session_state.encoded_columns)
+                remaining = [
+                    c for c in all_cat_cols
+                    if c not in encoded_set_after
+                    and not _is_ohe_dummy(c, encoded_set_after)
+                ]
+                if not remaining and successes:
+                    st.success("✅ All categorical columns have been encoded.")
+                    st.balloons()
+
+                st.rerun()    
     nav_buttons("Encoding & Outliers")
 
 
