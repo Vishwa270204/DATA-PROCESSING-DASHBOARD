@@ -2378,9 +2378,17 @@ elif st.session_state.page == "Visualizations":
                 effective_group = group_val if group_val and group_val in plot_df.columns else grp_col
 
                 if color_val and color_val in plot_df.columns:
-                    plot_df = plot_df.groupby([effective_group, color_val])[y_val].agg(fn).reset_index()
+                    if color_val == x_col_plot:
+                        # Same column — group by it, use it for color too
+                        plot_df = (plot_df.groupby(x_col_plot)[y_val]
+                                   .agg(fn_bar).reset_index())
+                        # color_val stays same as x_col_plot — plotly handles it
+                    else:
+                        plot_df = (plot_df.groupby([x_col_plot, color_val])[y_val]
+                                     .agg(fn_bar).reset_index())
                 else:
-                    plot_df = plot_df.groupby(effective_group)[y_val].agg(fn).reset_index()
+                    plot_df = (plot_df.groupby(x_col_plot)[y_val]
+                                  .agg(fn_bar).reset_index())
                     color_val = None
 
                 grp_col = effective_group  # use for x-axis label
@@ -2568,23 +2576,57 @@ elif st.session_state.page == "Visualizations":
             
                 # ── AREA CHART ───────────────────────────────────────────────────
                 elif chart_type == "Area" and y_val:
+                    agg_map_area = {"Mean":"mean","Sum":"sum","Count":"count",
+                                    "Median":"median","Max":"max","Min":"min",
+                                    "None (raw)":"mean"}
+                    fn_area = agg_map_area.get(agg_func, "mean")
+                    agg_label_area = "Mean" if agg_func == "None (raw)" else agg_func
+
+                    # Determine x grouping
+                    x_col_area = group_val if group_val and group_val in plot_df.columns else x_col
+
+                    # Aggregate
+                    if color_val and color_val in plot_df.columns:
+                        if color_val == x_col_area:
+                            area_df = (plot_df.groupby(x_col_area)[y_val]
+                                       .agg(fn_area).reset_index())
+                        else:
+                            area_df = (plot_df.groupby([x_col_area, color_val])[y_val]
+                                       .agg(fn_area).reset_index())
+                    else:
+                        area_df = (plot_df.groupby(x_col_area)[y_val]
+                                   .agg(fn_area).reset_index())
+                        color_val = None
+
+                    area_df = area_df.sort_values(x_col_area)
+
                     fig = px.area(
-                        plot_df, x=x_col, y=y_val, color=color_val,
+                        area_df, x=x_col_area, y=y_val, color=color_val,
                         template="plotly_white", height=420,
-                        text=y_val if show_labels else None
+                        labels={x_col_area: x_col_area, y_val: f"{agg_label_area} of {y_val}"},
+                        title=f"{agg_label_area} of {y_val} by {x_col_area}"
                     )
-                    if show_labels:
-                        fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")
                     fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
                     st.plotly_chart(fig, use_container_width=True, key="area_chart_normal")
             
                 # ── HISTOGRAM ────────────────────────────────────────────────────
                 elif chart_type == "Histogram":
+                    # Only use color_val if explicitly selected and valid
+                    hist_color = color_val if (color_val and color_val in plot_df.columns) else None
+                    hist_df = plot_df[[x_col] + ([hist_color] if hist_color else [])].dropna()
+
                     fig = px.histogram(
-                        plot_df, x=x_col, color=color_val,
-                        template="plotly_white", height=420
+                        hist_df, x=x_col, color=hist_color,
+                        template="plotly_white", height=420,
+                        barmode="overlay" if hist_color else "relative",
+                        opacity=0.75,
+                        labels={x_col: x_col},
+                        title=f"Distribution of {x_col}" + (f" by {hist_color}" if hist_color else "")
                     )
-                    fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
+                    fig.update_layout(
+                        paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc",
+                        bargap=0.05
+                    )
                     st.plotly_chart(fig, use_container_width=True, key="hist_chart_normal")
             
                 elif not y_val:
