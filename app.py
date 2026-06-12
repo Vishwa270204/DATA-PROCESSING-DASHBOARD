@@ -2524,7 +2524,13 @@ elif st.session_state.page == "Visualizations":
                     agg_map = {"Mean":"mean","Sum":"sum","Count":"count",
                                "Median":"median","Max":"max","Min":"min",
                                "None (raw)":"sum"}
-                    fn_bar = agg_map.get(agg_func, "sum")
+                    agg_map = {"Mean":"mean","Sum":"sum","Count":"count",
+                               "Median":"median","Max":"max","Min":"min",
+                               "None (raw)":"mean"}
+                    fn_bar = agg_map.get(agg_func, "mean")
+                    # Display label for title
+                    agg_label = "Mean" if agg_func == "None (raw)" else agg_func
+                    
 
                     # Determine grouping column: prefer Group X by, else X axis
                     if group_val and group_val in plot_df.columns:
@@ -2556,7 +2562,7 @@ elif st.session_state.page == "Visualizations":
                         fig.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
                     fig.update_layout(
                         paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc",
-                        title=f"{agg_func} of {y_val} by {x_col_plot}"
+                        title=f"{agg_label} of {y_val} by {x_col_plot}"
                     )
                     st.plotly_chart(fig, use_container_width=True, key="bar_chart_normal")
             
