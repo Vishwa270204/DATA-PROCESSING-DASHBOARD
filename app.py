@@ -1644,24 +1644,26 @@ elif st.session_state.page == "Cleaning":
     
             # Analyse current state
             ph_series = df_fe[ph_col].dropna().astype(str)
-    
             def classify_phone(val):
-                """Return (clean_digits, status, reason)"""
-                # Strip everything except digits and leading +
-                digits_only = re.sub(r"[^\d]", "", val)
-                n = len(digits_only)
-                if n == 0:
-                    return val, "invalid", "No digits found"
-                elif n < 7:
-                    return val, "invalid", f"Too short ({n} digits)"
-                elif n == 8:
-                    return digits_only, "warning", "8-digit number (may be local format)"
-                elif 9 <= n <= 10:
-                    return digits_only, "valid", f"{n}-digit number"
-                elif 11 <= n <= 15:
-                    return digits_only, "valid", f"{n}-digit (with country code)"
-                else:
-                    return val, "invalid", f"Too long ({n} digits)"
+            """Return (clean_digits, status, reason)"""
+        
+            digits_only = re.sub(r"[^\d]", "", str(val))
+            n = len(digits_only)
+        
+            if n == 0:
+                return val, "invalid", "No digits found"
+        
+            elif n < 7:
+                return val, "invalid", f"Too short ({n} digits)"
+        
+            elif 7 <= n <= 9:
+                return digits_only, "warning", f"Possibly local number ({n} digits)"
+        
+            elif 10 <= n <= 15:
+                return digits_only, "valid", f"Valid phone number ({n} digits)"
+        
+            else:
+                return val, "invalid", f"Too long ({n} digits)"
     
             results = ph_series.apply(lambda v: classify_phone(v))
             valid_ct   = sum(1 for _, s, _ in results if s == "valid")
