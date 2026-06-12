@@ -116,10 +116,10 @@ def load_file(buf, name):
 
 # ── Column type detection ─────────────────────
 def identify_column_types(df):
-    ct = {"numerical": [], "categorical": [], "datetime": [], "boolean": [], "id": []}
+    ct = {"numerical": [], "categorical": [], "datetime": [], "boolean": [], "id": [], "null": []}
     for col in df.columns:
         cl = col.lower(); s = df[col].dropna()
-        if s.empty: ct["categorical"].append(col); continue
+        if s.empty: ct["null"].append(col); continue
         if any(k in cl for k in ["_id","id","index","key","uuid","guid"]) and s.nunique() == len(s):
             ct["id"].append(col); continue
         if s.dtype == bool or set(map(str, s.unique())).issubset({"True","False","true","false","1","0","yes","no","Yes","No"}):
@@ -841,6 +841,15 @@ if st.session_state.page == "Upload & Inspect":
                 for typ, emoji in [("datetime","📅"),("boolean","✅"),("id","🔑")]:
                     st.markdown(f"**{emoji} {typ.title()}** ({len(ct[typ])})")
                     st.write(", ".join(ct[typ]) if ct[typ] else "_None detected_")
+
+        if ct.get("null"):
+            st.markdown("---")
+            st.markdown(f"**⬜ Fully Empty / Null Columns** ({len(ct['null'])})")
+            null_preview = pd.DataFrame({
+                col: df[col] for col in ct["null"]
+            }).head(5)
+            st.dataframe(null_preview, use_container_width=True)
+            st.caption("These columns contain no data at all. Consider dropping them in Data Cleaning.")
 
         with tab4:
             miss_report = missing_value_report(df)
@@ -1633,157 +1642,155 @@ elif st.session_state.page == "Data Cleaning":
             except Exception as e:
                 st.error(f"Conversion error: {e}")
 
-    # ── TAB 4: Invalid Value Correction ──────────────────────────────────
     with tab4:
-        st.markdown("<div class='section-header'><h3>Invalid Value Detection & Correction</h3></div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-header'><h3>Invalid Value Detection</h3></div>", unsafe_allow_html=True)
 
-        inv_emails  = detect_invalid_email(df)
-        inv_phones  = detect_invalid_phone(df)
-        inv_dates   = detect_future_dates(df)
-        inv_domain  = detect_invalid_values(df)
-        neg_vals    = detect_negative_values(df)
-        ct_live     = identify_column_types(df)
+        df_check = st.session_state.df
+        issues_found = []
 
-        with st.expander("🔍 Debug — what was scanned", expanded=False):
-            st.write("**Columns scanned for email:**", [c for c in df.select_dtypes(include="object").columns if any(k in c.lower() for k in ["email","mail","e-mail"])])
-            st.write("**Columns scanned for phone:**", [c for c in df.select_dtypes(include="object").columns if _is_phone_column(c)])
-            st.write("**Columns scanned for dates:**", [c for c in df.columns if any(k in c.lower() for k in ["birth","dob","born","date","created","joined"])])
-            st.write("**Domain issues found:**", inv_domain)
-            st.write("**Negative value issues:**", neg_vals)
-            st.write("**Invalid emails:**", inv_emails)
-            st.write("**Invalid phones:**", inv_phones)
-            st.write("**Future dates:**", inv_dates)
+        # 1. Invalid emails
+        pat_email = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$")
+        for col in df_check.select_dtypes(include="object").columns:
+            if any(k in col.lower() for k in ["email","mail","e-mail"]):
+                bad = df_check[col].dropna().apply(lambda x: not bool(pat_email.match(str(x).strip())))
+                if bad.sum():
+                    issues_found.append({
+                        "Column": col,
+                        "Issue Type": "Invalid Email",
+                        "Invalid Count": int(bad.sum()),
+                        "Reason": "Does not match email format (user@domain.com)",
+                        "Sample Invalid Values": str(df_check.loc[bad[bad].index, col].head(3).tolist())
+                    })
 
-        total_issues = len(inv_emails) + len(inv_phones) + len(inv_dates) + len(inv_domain) + len(neg_vals)
-        if total_issues == 0:
-            st.markdown("<span class='badge badge-success'>✅ No invalid values detected</span>", unsafe_allow_html=True)
+        # 2. Invalid phones
+        for col in df_check.select_dtypes(include="object").columns:
+            if not _is_phone_column(col):
+                continue
+            def _bad_ph(v):
+                v = str(v).strip()
+                digits = re.sub(r"[\s\.\-\(\)\+]", "", v)
+                return not digits.isdigit() or len(digits) < 7 or len(digits) > 15
+            bad = df_check[col].dropna().apply(_bad_ph)
+            if bad.sum():
+                issues_found.append({
+                    "Column": col,
+                    "Issue Type": "Invalid Phone",
+                    "Invalid Count": int(bad.sum()),
+                    "Reason": "Contains letters, symbols, or wrong digit count (need 7–15 digits)",
+                    "Sample Invalid Values": str(df_check.loc[bad[bad].index, col].head(3).tolist())
+                })
+
+        # 3. Future dates
+        now = pd.Timestamp.now()
+        for col in df_check.columns:
+            if any(k in col.lower() for k in ["birth","dob","born","date","created","joined"]):
+                try:
+                    parsed = pd.to_datetime(df_check[col], errors="coerce")
+                    n = int((parsed > now).sum())
+                    if n:
+                        issues_found.append({
+                            "Column": col,
+                            "Issue Type": "Future Date",
+                            "Invalid Count": n,
+                            "Reason": "Date is in the future — likely a data entry error",
+                            "Sample Invalid Values": str(df_check.loc[parsed > now, col].head(3).tolist())
+                        })
+                except: pass
+
+        # 4. Negative values in non-negative columns
+        for col in df_check.select_dtypes(include=[np.number]).columns:
+            if is_non_negative_column(col):
+                n = int((df_check[col] < 0).sum())
+                if n:
+                    issues_found.append({
+                        "Column": col,
+                        "Issue Type": "Negative Value",
+                        "Invalid Count": n,
+                        "Reason": f"Column '{col}' should not contain negative values by domain rules",
+                        "Sample Invalid Values": str(df_check.loc[df_check[col] < 0, col].head(3).tolist())
+                    })
+
+        # 5. Domain range errors (age, percent, salary)
+        for col, info in detect_invalid_values(df_check).items():
+            issues_found.append({
+                "Column": col,
+                "Issue Type": "Domain Range Error",
+                "Invalid Count": info["count"],
+                "Reason": info["issue"],
+                "Sample Invalid Values": "—"
+            })
+
+        if not issues_found:
+            st.success("✅ No invalid values detected across all columns.")
         else:
-            iv1, iv2, iv3, iv4, iv5 = st.columns(5)
-            for w, lbl, cnt in [
-                (iv1, "Invalid Emails",  len(inv_emails)),
-                (iv2, "Invalid Phones",  len(inv_phones)),
-                (iv3, "Future Dates",    len(inv_dates)),
-                (iv4, "Domain Errors",   len(inv_domain)),
-                (iv5, "Negative Values", len(neg_vals)),
-            ]:
-                color = "#dc2626" if cnt > 0 else "#16a34a"
-                with w:
-                    st.markdown(f"""<div class='metric-card'>
-                        <span class='val' style='color:{color};'>{cnt}</span>
-                        <span class='label'>{lbl}</span></div>""", unsafe_allow_html=True)
+            issues_df = pd.DataFrame(issues_found)
+            st.error(f"⚠️ {len(issues_found)} issue(s) found across {issues_df['Column'].nunique()} column(s)")
+            st.dataframe(issues_df, use_container_width=True, hide_index=True, height=300)
 
-            st.markdown("&nbsp;")
+            st.markdown("---")
+            st.markdown("**🔧 Fix Selected Issue**")
 
-            # Invalid emails
-            if inv_emails:
-                st.markdown("**📧 Invalid Email Columns**")
-                for col, info in inv_emails.items():
-                    with st.expander(f"'{col}' — {info['count']} invalid emails"):
-                        bad_mask = df[col].dropna().apply(
-                            lambda x: not bool(re.compile(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$").match(str(x)))
-                        )
-                        st.dataframe(df.loc[bad_mask[bad_mask].index, [col]].head(20),
-                            use_container_width=True, height=200)
-                        action = st.radio("Action", ["Replace with NaN", "Drop rows"],
-                            key=f"email_action_{col}", horizontal=True)
-                        if st.button(f"Fix '{col}'", key=f"fix_email_{col}"):
-                            df_t = st.session_state.df.copy()
-                            pat = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$")
-                            if action == "Replace with NaN":
-                                df_t[col] = df_t[col].apply(
-                                    lambda x: x if pd.isna(x) or bool(pat.match(str(x))) else np.nan
-                                )
-                            else:
-                                mask = df_t[col].apply(
-                                    lambda x: pd.isna(x) or bool(pat.match(str(x)))
-                                )
-                                df_t = df_t[mask].reset_index(drop=True)
-                            st.session_state.df = df_t
-                            save_operation(st.session_state.file_name, f"Fix Invalid Email: {col}", action)
-                            st.success(f"✅ Fixed invalid emails in '{col}'.")
-                            st.rerun()
+            col_options = issues_df["Column"].tolist()
+            fix_col = st.selectbox("Select column to fix", col_options, key="fix_col_select")
+            fix_issue_row = issues_df[issues_df["Column"] == fix_col].iloc[0]
 
-            # Invalid phones
-            if inv_phones:
-                st.markdown("**📞 Invalid Phone Columns**")
-                for col, info in inv_phones.items():
-                    with st.expander(f"'{col}' — {info['count']} invalid phone numbers"):
-                        def _bad_phone(v):
-                            d = re.sub(r"[^\d]", "", str(v))
-                            return len(d) < 7 or len(d) > 15
-                        bad_mask = df[col].dropna().apply(_bad_phone)
-                        st.dataframe(df.loc[bad_mask[bad_mask].index, [col]].head(20),
-                            use_container_width=True, height=200)
-                        action = st.radio("Action", ["Replace with NaN", "Drop rows", "Standardise (digits only)"],
-                            key=f"phone_action_{col}", horizontal=True)
-                        if st.button(f"Fix '{col}'", key=f"fix_phone_{col}"):
-                            df_t = st.session_state.df.copy()
-                            if action == "Standardise (digits only)":
-                                df_t[col] = df_t[col].apply(
-                                    lambda x: re.sub(r"[^\d]", "", str(x)) if pd.notna(x) else x
-                                )
-                            elif action == "Replace with NaN":
-                                df_t[col] = df_t[col].apply(
-                                    lambda x: x if pd.isna(x) or (7 <= len(re.sub(r"[^\d]","",str(x))) <= 15) else np.nan
-                                )
-                            else:
-                                mask = df_t[col].apply(
-                                    lambda x: pd.isna(x) or (7 <= len(re.sub(r"[^\d]","",str(x))) <= 15)
-                                )
-                                df_t = df_t[mask].reset_index(drop=True)
-                            st.session_state.df = df_t
-                            save_operation(st.session_state.file_name, f"Fix Invalid Phone: {col}", action)
-                            st.success(f"✅ Fixed invalid phones in '{col}'.")
-                            st.rerun()
+            st.markdown(f"""
+            <div style='background:#fef2f2;border:1px solid #fecaca;border-radius:8px;
+                 padding:12px 16px;margin:8px 0;font-size:0.88rem;'>
+                <b>Issue:</b> {fix_issue_row['Issue Type']} &nbsp;|&nbsp;
+                <b>Affected rows:</b> {fix_issue_row['Invalid Count']} &nbsp;|&nbsp;
+                <b>Reason:</b> {fix_issue_row['Reason']}
+            </div>
+            """, unsafe_allow_html=True)
 
-            # Future dates
-            if inv_dates:
-                st.markdown("**📅 Future Date Columns**")
-                for col, info in inv_dates.items():
-                    with st.expander(f"'{col}' — {info['count']} future dates"):
-                        parsed = pd.to_datetime(df[col], errors="coerce")
-                        bad_mask = parsed > pd.Timestamp.now()
-                        st.dataframe(df.loc[bad_mask, [col]].head(20),
-                            use_container_width=True, height=200)
-                        action = st.radio("Action", ["Replace with NaN", "Drop rows"],
-                            key=f"date_action_{col}", horizontal=True)
-                        if st.button(f"Fix '{col}'", key=f"fix_date_{col}"):
-                            df_t = st.session_state.df.copy()
-                            parsed_t = pd.to_datetime(df_t[col], errors="coerce")
-                            if action == "Replace with NaN":
-                                df_t[col] = df_t[col].where(parsed_t <= pd.Timestamp.now(), other=np.nan)
-                            else:
-                                df_t = df_t[parsed_t <= pd.Timestamp.now()].reset_index(drop=True)
-                            st.session_state.df = df_t
-                            save_operation(st.session_state.file_name, f"Fix Future Dates: {col}", action)
-                            st.success(f"✅ Fixed future dates in '{col}'.")
-                            st.rerun()
+            action = st.radio("Action", ["Replace with NaN", "Drop rows", "Cap at 0 (negatives only)"],
+                key="fix_action_select", horizontal=True)
 
-            # Domain / negative value errors
-            if inv_domain or neg_vals:
-                st.markdown("**⚠️ Domain & Negative Value Errors**")
-                all_issues = {**inv_domain, **neg_vals}
-                for col, info in all_issues.items():
-                    reason = info.get("issue", info.get("reason", "Invalid value"))
-                    count  = info.get("count", 0)
-                    with st.expander(f"'{col}' — {count} rows — {reason}"):
-                        st.dataframe(df[df[col] < 0][[col]].head(20) if col in neg_vals
-                            else df[[col]].head(20), use_container_width=True, height=200)
-                        action = st.radio("Action", ["Replace with NaN", "Drop rows", "Cap at 0"],
-                            key=f"domain_action_{col}", horizontal=True)
-                        if st.button(f"Fix '{col}'", key=f"fix_domain_{col}"):
-                            df_t = st.session_state.df.copy()
-                            if action == "Replace with NaN":
-                                df_t.loc[df_t[col] < 0, col] = np.nan
-                            elif action == "Drop rows":
-                                df_t = df_t[df_t[col] >= 0].reset_index(drop=True)
-                            else:
-                                df_t[col] = df_t[col].clip(lower=0)
-                            st.session_state.df = df_t
-                            save_operation(st.session_state.file_name, f"Fix Domain Error: {col}", action)
-                            st.success(f"✅ Fixed domain errors in '{col}'.")
-                            st.rerun()
+            if st.button("Apply Fix", key="apply_fix_btn", type="primary"):
+                try:
+                    df_t = st.session_state.df.copy()
+                    issue_type = fix_issue_row["Issue Type"]
 
+                    if issue_type == "Invalid Email":
+                        pat = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$")
+                        if action == "Replace with NaN":
+                            df_t[fix_col] = df_t[fix_col].apply(
+                                lambda x: x if pd.isna(x) or bool(pat.match(str(x).strip())) else np.nan)
+                        elif action == "Drop rows":
+                            mask = df_t[fix_col].apply(lambda x: pd.isna(x) or bool(pat.match(str(x).strip())))
+                            df_t = df_t[mask].reset_index(drop=True)
+
+                    elif issue_type == "Invalid Phone":
+                        def _is_valid_ph(x):
+                            if pd.isna(x): return True
+                            d = re.sub(r"[\s\.\-\(\)\+]","",str(x))
+                            return d.isdigit() and 7 <= len(d) <= 15
+                        if action == "Replace with NaN":
+                            df_t[fix_col] = df_t[fix_col].apply(lambda x: x if _is_valid_ph(x) else np.nan)
+                        elif action == "Drop rows":
+                            df_t = df_t[df_t[fix_col].apply(_is_valid_ph)].reset_index(drop=True)
+
+                    elif issue_type == "Future Date":
+                        parsed = pd.to_datetime(df_t[fix_col], errors="coerce")
+                        if action == "Replace with NaN":
+                            df_t[fix_col] = df_t[fix_col].where(parsed <= pd.Timestamp.now(), other=np.nan)
+                        elif action == "Drop rows":
+                            df_t = df_t[parsed <= pd.Timestamp.now()].reset_index(drop=True)
+
+                    elif issue_type in ("Negative Value", "Domain Range Error"):
+                        if action == "Replace with NaN":
+                            df_t.loc[df_t[fix_col] < 0, fix_col] = np.nan
+                        elif action == "Drop rows":
+                            df_t = df_t[df_t[fix_col] >= 0].reset_index(drop=True)
+                        elif action == "Cap at 0 (negatives only)":
+                            df_t[fix_col] = df_t[fix_col].clip(lower=0)
+
+                    st.session_state.df = df_t
+                    save_operation(st.session_state.file_name, f"Fix {issue_type}: {fix_col}", action)
+                    st.success(f"✅ Fixed '{fix_col}' — {action}")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Fix error: {e}")
     nav_buttons("Data Cleaning")
 # ═══════════════════════════════════════════════
 # PAGE 5 — FEATURE ENGINEERING
@@ -2513,8 +2520,9 @@ elif st.session_state.page == "Visualizations":
         
         
 
-        color_val = None if color_col == "— None —" else color_col
-        y_val     = None if y_col     == "— None —" else y_col
+        color_val   = None if color_col == "— None —" else color_col
+        y_val       = None if y_col     == "— None —" else y_col
+        show_labels = st.session_state.get("custom_labels", False)
       
 
         try:
@@ -2527,14 +2535,16 @@ elif st.session_state.page == "Visualizations":
                 }
                 agg_fn = agg_map.get(date_agg, "sum")
 
-                if color_val:
-                    plot_df = (plot_df
-                               .groupby([x_col, color_val])[y_val]
-                               .agg(agg_fn).reset_index())
+                # Use group_col if selected, otherwise fall back to x_col
+                effective_group = group_val if group_val and group_val in plot_df.columns else grp_col
+
+                if color_val and color_val in plot_df.columns:
+                    plot_df = plot_df.groupby([effective_group, color_val])[y_val].agg(fn).reset_index()
                 else:
-                    plot_df = (plot_df
-                               .groupby(x_col)[y_val]
-                               .agg(agg_fn).reset_index())
+                    plot_df = plot_df.groupby(effective_group)[y_val].agg(fn).reset_index()
+                    color_val = None
+
+                grp_col = effective_group  # use for x-axis label
 
                 if date_sort:
                     plot_df = plot_df.sort_values(x_col)
