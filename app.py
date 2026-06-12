@@ -1742,7 +1742,7 @@ elif st.session_state.page == "Encoding & Outliers":
                 ]
                 if not remaining and successes:
                     st.success("✅ All categorical columns have been encoded.")
-                    st.balloons()
+                  
 
                 st.rerun()    
     nav_buttons("Encoding & Outliers")
