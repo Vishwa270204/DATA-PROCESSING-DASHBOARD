@@ -2282,13 +2282,15 @@ elif st.session_state.page == "Outlier & Distribution":
     nav_buttons("Outlier & Distribution")
 
 # ═══════════════════════════════════════════════
-# PAGE — VISUALIZATIONS 
+# PAGE — VISUALIZATIONS
+# Drop-in replacement for the Visualizations page in app.py
 # ═══════════════════════════════════════════════
+
 elif st.session_state.page == "Visualizations":
     st.markdown("""
     <div class='main-header'>
         <h1>📊 Visualizations</h1>
-        <p>Interactive charts with filtering, grouping and data controls</p>
+        <p>Interactive charts with filtering, grouping and aggregation controls</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -2297,868 +2299,501 @@ elif st.session_state.page == "Visualizations":
         st.stop()
 
     df = st.session_state.df
-    ct = identify_column_types(df)
-    num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     ct_viz = identify_column_types(df)
-    cat_cols = [c for c in df.select_dtypes(include="object").columns.tolist() 
+    num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    cat_cols = [c for c in df.select_dtypes(include="object").columns.tolist()
                 if c not in ct_viz.get("null", [])]
-    plot_df      = df.copy()
-    filtered_df2 = df.copy()
-    filtered_df3 = df.copy()
-    filtered_df4 = df.copy()
-    
-    # ── Date grouping helper ─────────────────────────────────────────────────
-    def apply_date_grouping(df, col, freq):
-        df = df.copy()
+
+    # ── Shared helpers ────────────────────────────────────────────────────
+
+    def _is_date_col(col):
+        """Return True if col is or can be parsed as datetime."""
+        if col not in df.columns:
+            return False
+        if pd.api.types.is_datetime64_any_dtype(df[col]):
+            return True
+        if col in ct_viz.get("datetime", []):
+            return True
+        sample = df[col].dropna().head(50)
         try:
-            df[col] = pd.to_datetime(df[col], errors="coerce")
-            if freq == "Month":
-                df[col] = df[col].dt.to_period("M").astype(str)
-            elif freq == "Year":
-                df[col] = df[col].dt.to_period("Y").astype(str)
-            elif freq == "Quarter":
-                df[col] = df[col].dt.to_period("Q").astype(str)
-            elif freq == "Week":
-                df[col] = df[col].dt.to_period("W").astype(str)
-            elif freq == "Day":
-                df[col] = df[col].dt.date.astype(str)
+            ratio = pd.to_datetime(sample, errors="coerce").notna().sum() / max(len(sample), 1)
+            if ratio > 0.8:
+                return True
         except Exception:
             pass
-        return df
- 
-   
+        return any(k in col.lower() for k in
+                   ["date", "month", "year", "time", "day", "week", "period"])
+
+    def _group_by_period(series, freq):
+        """Convert a datetime series to period strings."""
+        s = pd.to_datetime(series, errors="coerce")
+        freq_map = {
+            "Day":     lambda x: x.dt.date.astype(str),
+            "Week":    lambda x: x.dt.to_period("W").astype(str),
+            "Month":   lambda x: x.dt.to_period("M").astype(str),
+            "Quarter": lambda x: x.dt.to_period("Q").astype(str),
+            "Year":    lambda x: x.dt.to_period("Y").astype(str),
+        }
+        return freq_map.get(freq, lambda x: x.astype(str))(s)
+
+    def _aggregate(df_in, x_col, y_col, color_col, agg_fn):
+        """
+        Group df_in by x_col (+ optional color_col) and aggregate y_col.
+        Returns (grouped_df, effective_color_col).
+        """
+        df_w = df_in.copy()
+        df_w[y_col] = pd.to_numeric(df_w[y_col], errors="coerce")
+
+        grp = [x_col]
+        eff_color = None
+        if color_col and color_col in df_w.columns and color_col != x_col:
+            grp.append(color_col)
+            eff_color = color_col
+
+        result = df_w.groupby(grp)[y_col].agg(agg_fn).reset_index()
+        return result, eff_color
+
+    AGG_MAP = {
+        "Sum":    "sum",
+        "Mean":   "mean",
+        "Count":  "count",
+        "Median": "median",
+        "Max":    "max",
+        "Min":    "min",
+    }
+
+    CHART_LAYOUT = dict(
+        template="plotly_white",
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#f8f9fc",
+        height=440,
+        margin=dict(t=50, b=60, l=60, r=30),
+        font=dict(family="Inter, sans-serif", size=12),
+    )
+
+    def _apply_layout(fig, title=""):
+        fig.update_layout(title=dict(text=title, font=dict(size=15, weight=700)), **CHART_LAYOUT)
+        return fig
+
+    def _summary_strip(df_s, x_col, y_col, period_label="Period"):
+        """Render a 4-metric summary bar below a time-series chart."""
+        try:
+            total    = df_s[y_col].sum()
+            avg      = df_s[y_col].mean()
+            peak_row = df_s.loc[df_s[y_col].idxmax()]
+            ms = st.columns(4)
+            for w, lbl, val in [
+                (ms[0], f"Total {y_col}",        f"{total:,.2f}"),
+                (ms[1], f"Avg / {period_label}", f"{avg:,.2f}"),
+                (ms[2], f"Peak {period_label}",  str(peak_row[x_col])),
+                (ms[3], "Peak value",            f"{peak_row[y_col]:,.2f}"),
+            ]:
+                with w:
+                    st.markdown(f"""
+                    <div style='background:#eff6ff;border:1px solid #bfdbfe;
+                         border-radius:8px;padding:10px;text-align:center;margin-top:8px;'>
+                        <div style='font-family:"JetBrains Mono",monospace;font-size:1rem;
+                             font-weight:700;color:#2563eb;'>{val}</div>
+                        <div style='font-size:0.7rem;color:#6b7280;margin-top:3px;
+                             text-transform:uppercase;letter-spacing:1px;'>{lbl}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+        except Exception:
+            pass
+
+    def _settings_box(content_fn, label="Chart Settings"):
+        """Render controls inside a styled card."""
+        st.markdown(f"""
+        <div style='background:#ffffff;border:1px solid #e2e6f0;border-radius:12px;
+             padding:16px 20px;margin-bottom:16px;'>
+        <div style='font-size:0.75rem;color:#6b7280;font-weight:600;
+             text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;'>{label}</div>
+        """, unsafe_allow_html=True)
+        result = content_fn()
+        st.markdown("</div>", unsafe_allow_html=True)
+        return result
+
+    # ── Tabs ──────────────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4 = st.tabs([
-        "📈 Custom Plot", "🔵 Scatter", "📦 Box & Violin", "📊 Category Breakdown"
+        "📈 Line / Bar / Area",
+        "🔵 Scatter",
+        "📦 Box & Violin",
+        "🥧 Category Breakdown",
     ])
 
-    # ══════════════════════════════════════════
-    # TAB 1 — CUSTOM PLOT
-    # ══════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════════
+    # TAB 1 — LINE / BAR / AREA
+    # ══════════════════════════════════════════════════════════════════════
     with tab1:
-        st.markdown(
-            "<div class='section-header'><h3>Custom Chart Builder</h3></div>",
-            unsafe_allow_html=True
-        )
+        st.markdown("<div class='section-header'><h3>Line / Bar / Area Chart</h3></div>",
+                    unsafe_allow_html=True)
 
-        with st.container():
-            st.markdown("""
-            <div style='background:#ffffff;border:1px solid #e2e6f0;border-radius:12px;
-                 padding:16px 20px;margin-bottom:16px;'>
-            <div style='font-size:0.8rem;color:#6b7280;font-weight:600;
-                 text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;'>
-                 Chart Settings</div>
-            """, unsafe_allow_html=True)
+        # ── Controls ─────────────────────────────────────────────────────
+        r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+        with r1c1:
+            t1_chart = st.selectbox("Chart type", ["Line", "Bar", "Area"], key="t1_chart")
+        with r1c2:
+            t1_x = st.selectbox("X axis", df.columns.tolist(), key="t1_x")
+        with r1c3:
+            t1_y = st.selectbox("Y axis", ["— None —"] + num_cols, key="t1_y")
+        with r1c4:
+            t1_color = st.selectbox("Color by", ["— None —"] + cat_cols, key="t1_color")
 
-            cp1, cp2, cp3, cp4 = st.columns(4)
-            with cp1:
-                chart_type = st.selectbox(
-                    "Chart Type", ["Line", "Bar", "Histogram", "Area"],
-                    key="custom_chart_type"
-                )
-            with cp2:
-                x_col = st.selectbox("X Axis", df.columns.tolist(), key="custom_x")
-            with cp3:
-                y_col = st.selectbox("Y Axis", ["— None —"] + num_cols, key="custom_y")
-            with cp4:
-                color_col = st.selectbox(
-                    "Color by", ["— None —"] + cat_cols, key="custom_color"
-                )
+        t1_x_is_date = _is_date_col(t1_x)
 
-            # ── detect if X is a date column ──
-            ct_live   = identify_column_types(df)
-            x_is_date = (
-                x_col in ct_live["datetime"]
-                or (x_col in df.columns and pd.api.types.is_datetime64_any_dtype(df[x_col]))
-                or (
-                    x_col in df.columns
-                    and df[x_col].dtype == object
-                    and any(k in x_col.lower() for k in
-                            ["date", "month", "year", "time", "day", "week", "period"])
-                )
-            )
+        if t1_x_is_date:
+            st.markdown("""<div style='background:#eff6ff;border:1px solid #bfdbfe;
+                border-radius:8px;padding:9px 14px;margin:6px 0;font-size:0.82rem;color:#2563eb;'>
+                📅 Date column detected — choose a grouping period below</div>""",
+                unsafe_allow_html=True)
+            r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+            with r2c1:
+                t1_freq = st.radio("Group by", ["Month", "Quarter", "Year", "Week", "Day"],
+                                   horizontal=True, key="t1_freq")
+            with r2c2:
+                t1_agg = st.selectbox("Aggregate", list(AGG_MAP.keys()), key="t1_agg")
+            with r2c3:
+                t1_fill = st.checkbox("Fill missing periods → 0", key="t1_fill")
+            with r2c4:
+                t1_labels = st.checkbox("Show value labels", key="t1_labels")
+        else:
+            r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+            with r2c1:
+                t1_agg = st.selectbox("Aggregate Y by", list(AGG_MAP.keys()), key="t1_agg_nd")
+            with r2c2:
+                t1_group = st.selectbox("Group X by", ["— None —"] + cat_cols, key="t1_group")
+            with r2c3:
+                t1_sort = st.selectbox("Sort by",
+                    ["None", "X asc", "X desc", "Y asc", "Y desc"], key="t1_sort")
+            with r2c4:
+                t1_labels = st.checkbox("Show value labels", key="t1_labels_nd")
+            t1_freq = "Month"
+            t1_fill = False
 
-            if x_is_date:
-                st.markdown("""
-                <div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;
-                     padding:10px 14px;margin:8px 0;font-size:0.83rem;color:#2563eb;'>
-                    📅 <b>Date column detected</b> — group by a time period below
-                </div>
-                """, unsafe_allow_html=True)
-                dg1, dg2, dg3, dg4 = st.columns(4)
-                with dg1:
-                    date_freq = st.radio(
-                        "Group dates by",
-                        ["None", "Day", "Week", "Month", "Quarter", "Year"],
-                        horizontal=True, key="date_freq"
-                    )
-                with dg2:
-                    date_agg = st.selectbox(
-                        "Aggregate Y by",
-                        ["Sum", "Mean", "Count", "Median", "Max", "Min"],
-                        key="date_agg"
-                    )
-                with dg3:
-                    fill_gaps = st.checkbox(
-                        "Fill missing periods with 0",
-                        value=False, key="date_fill_gaps"
-                    )
-                with dg4:
-                    date_sort = st.checkbox(
-                        "Sort by date", value=True, key="date_sort"
-                    )
-            else:
-                date_freq = "None"
-                date_agg  = "Sum"
-                fill_gaps = False
-                date_sort = True
-                dg1, dg2, dg3, dg4 = st.columns(4)
-                with dg1:
-                    agg_func = st.selectbox(
-                        "Aggregate Y by",
-                        ["None (raw)", "Mean", "Sum", "Count", "Median", "Max", "Min"],
-                        key="custom_agg"
-                    )
-                with dg2:
-                    group_col = st.selectbox(
-                        "Group X by", ["— None —"] + cat_cols, key="custom_group"
-                    )
-                with dg3:
-                    sort_order = st.selectbox(
-                        "Sort by",
-                        ["None", "X ascending", "X descending",
-                         "Y ascending", "Y descending"],
-                        key="custom_sort"
-                    )
-                with dg4:
-                    show_labels = st.checkbox(
-                        "Show value labels", value=False, key="custom_labels"
-                    )
+        # ── Render ────────────────────────────────────────────────────────
+        t1_y_val    = None if t1_y    == "— None —" else t1_y
+        t1_color_val = None if t1_color == "— None —" else t1_color
 
-            st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
-            
-        color_val   = None if color_col == "— None —" else color_col
-        y_val       = None if y_col     == "— None —" else y_col
-        show_labels = st.session_state.get("custom_labels", False)
-        group_val   = None
-        agg_func    = "None (raw)"
-        sort_order  = "None"
-      
+        if not t1_y_val:
+            st.info("Select a Y axis column to plot.")
+        elif t1_y_val == t1_x:
+            st.warning("⚠️ X and Y axes cannot be the same column.")
+        else:
+            try:
+                fn = AGG_MAP[t1_agg if t1_x_is_date else
+                             (t1_agg if "t1_agg_nd" not in st.session_state
+                              else st.session_state.get("t1_agg_nd", "Mean"))]
 
-        try:
-            # ── Guard: same column for X and Y ──
-            if y_val and y_val == x_col:
-                st.warning("⚠️ X and Y axes cannot be the same column. Please select different columns.")
-                st.stop()
+                plot_df = df.copy()
 
-            # ── always defined regardless of branch ──
-            group_val  = None
-            agg_func   = st.session_state.get("custom_agg", "None (raw)")
-            sort_order = st.session_state.get("custom_sort", "None")
-            show_labels = st.session_state.get("custom_labels", False)
+                if t1_x_is_date:
+                    # ── Date path ──
+                    plot_df["_x"] = _group_by_period(plot_df[t1_x], t1_freq)
+                    plot_df[t1_y_val] = pd.to_numeric(plot_df[t1_y_val], errors="coerce")
 
-            # ── DATE GROUPING PATH ──────────────────────────────────────────
-            if x_is_date and date_freq != "None" and y_val:
-                plot_df  = apply_date_grouping(plot_df, x_col, date_freq)
-                agg_map  = {
-                    "Sum": "sum", "Mean": "mean", "Count": "count",
-                    "Median": "median", "Max": "max", "Min": "min"
-                }
-                agg_fn = agg_map.get(date_agg, "sum")
+                    agg_df, eff_color = _aggregate(plot_df, "_x", t1_y_val, t1_color_val,
+                                                   AGG_MAP[t1_agg])
+                    agg_df = agg_df.sort_values("_x")
 
-                # Use group_col if selected, otherwise fall back to x_col
-                # Drop any remaining datetime columns before aggregation to avoid
-                # "datetime64 does not support operation 'sum'" errors
-                safe_cols = [x_col] + ([color_val] if color_val and color_val in plot_df.columns else []) + ([y_val] if y_val else [])
-                plot_df = plot_df[[c for c in safe_cols if c in plot_df.columns]].copy()
-                # Cast y_val to numeric — if it was datetime this will produce NaN instead of crashing
-                if y_val and y_val in plot_df.columns:
-                    plot_df[y_val] = pd.to_numeric(plot_df[y_val], errors="coerce")
+                    if t1_fill and not eff_color:
+                        freq_pd = {"Day":"D","Week":"W","Month":"M","Quarter":"Q","Year":"Y"}
+                        try:
+                            all_p = pd.period_range(
+                                agg_df["_x"].min(), agg_df["_x"].max(),
+                                freq=freq_pd.get(t1_freq, "M")
+                            ).astype(str)
+                            agg_df = (agg_df.set_index("_x")
+                                      .reindex(all_p, fill_value=0)
+                                      .reset_index()
+                                      .rename(columns={"index": "_x"}))
+                        except Exception:
+                            pass
 
-                if color_val and color_val in plot_df.columns:
-                    if color_val == x_col:
-                        plot_df = (plot_df.groupby(x_col)[y_val]
-                                   .agg(agg_fn).reset_index())
-                        color_val = None
-                    else:
-                        plot_df = (plot_df.groupby([x_col, color_val])[y_val]
-                                   .agg(agg_fn).reset_index())
+                    x_plot = "_x"
+                    title  = f"{t1_agg} of {t1_y_val} by {t1_x} ({t1_freq})"
+
                 else:
-                    plot_df = (plot_df.groupby(x_col)[y_val]
-                               .agg(agg_fn).reset_index())
-                    color_val = None
+                    # ── Non-date path ──
+                    t1_group_val = (None if st.session_state.get("t1_group","— None —") == "— None —"
+                                    else st.session_state.get("t1_group"))
+                    t1_sort_val  = st.session_state.get("t1_sort", "None")
+                    fn = AGG_MAP.get(st.session_state.get("t1_agg_nd", "Mean"), "mean")
 
-                x_col_plot = x_col
-                if date_sort:
-                    plot_df = plot_df.sort_values(x_col)
+                    x_eff = t1_group_val if t1_group_val and t1_group_val in plot_df.columns else t1_x
+                    plot_df[t1_y_val] = pd.to_numeric(plot_df[t1_y_val], errors="coerce")
+                    agg_df, eff_color = _aggregate(plot_df, x_eff, t1_y_val, t1_color_val, fn)
 
-                if fill_gaps and not color_val:
-                    freq_map = {
-                        "Day": "D", "Week": "W", "Month": "M",
-                        "Quarter": "Q", "Year": "Y"
+                    sort_map = {
+                        "X asc":  (x_eff,    True),
+                        "X desc": (x_eff,    False),
+                        "Y asc":  (t1_y_val, True),
+                        "Y desc": (t1_y_val, False),
                     }
-                    try:
-                        all_periods = pd.period_range(
-                            start=plot_df[x_col].min(),
-                            end=plot_df[x_col].max(),
-                            freq=freq_map.get(date_freq, "M")
-                        ).astype(str)
-                        plot_df = (plot_df
-                                   .set_index(x_col)
-                                   .reindex(all_periods, fill_value=0)
-                                   .reset_index())
-                        plot_df.columns = [x_col, y_val]
-                    except Exception:
-                        pass
-                x_col_plot = x_col
-                text_col = y_val if st.session_state.get("custom_labels", False) else None
-                if chart_type == "Line":
-                    fig = px.line(
-                        plot_df, x=x_col_plot, y=y_val, color=color_val,
-                        template="plotly_white", height=420, text=text_col
-                    )
-                    if show_labels:
-                        fig.update_traces(textposition="top center")
-                
-                elif chart_type == "Bar":
-                    fig = px.bar(
-                        plot_df, x=x_col_plot, y=y_val, color=color_val,
-                        template="plotly_white", height=420,
-                        barmode="group", text=text_col
-                    )
-                    if show_labels:
-                        fig.update_traces(texttemplate="%{text:.2f}", textposition="outside")
-                
-                elif chart_type == "Histogram":
-                    fig = px.histogram(
-                        plot_df, x=x_col_plot, color=color_val,
-                        template="plotly_white", height=420, nbins=30
-                    )
-                    # histograms don't support text labels — skip
-                
-                elif chart_type == "Area":
-                    fig = px.area(
-                        plot_df, x=x_col_plot, y=y_val, color=color_val,
-                        template="plotly_white", height=420, text=text_col
-                    )
-                    if show_labels:
-                        fig.update_traces(textposition="top center")
-                
-                fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
-                st.plotly_chart(fig, use_container_width=True)
-                # ── summary strip ──
-                total    = plot_df[y_val].sum()
-                avg      = plot_df[y_val].mean()
-                peak_row = plot_df.loc[plot_df[y_val].idxmax()]
-                ms1, ms2, ms3, ms4 = st.columns(4)
-                for w, lbl, val in [
-                    (ms1, f"Total {y_val}",     f"{total:,.2f}"),
-                    (ms2, f"Avg / {date_freq}", f"{avg:,.2f}"),
-                    (ms3, "Peak period",        str(peak_row[x_col])),
-                    (ms4, "Peak value",         f"{peak_row[y_val]:,.2f}"),
-                ]:
-                    with w:
-                        st.markdown(f"""
-                        <div style='background:#eff6ff;border:1px solid #bfdbfe;
-                             border-radius:8px;padding:10px;text-align:center;'>
-                            <div style='font-family:"JetBrains Mono",monospace;font-size:1rem;
-                                 font-weight:700;color:#2563eb;'>{val}</div>
-                            <div style='font-size:0.7rem;color:#6b7280;margin-top:3px;
-                                 text-transform:uppercase;letter-spacing:1px;'>{lbl}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                    if t1_sort_val in sort_map:
+                        col_s, asc_s = sort_map[t1_sort_val]
+                        agg_df = agg_df.sort_values(col_s, ascending=asc_s)
 
-            # ── NORMAL PATH ─────────────────────────────────────────────────
-            else:
-                group_val  = (None if st.session_state.get("custom_group","— None —") == "— None —"
-                              else st.session_state.get("custom_group"))
-                agg_func   = st.session_state.get("custom_agg",    "None (raw)")
-                sort_order = st.session_state.get("custom_sort",   "None")
-                show_labels= st.session_state.get("custom_labels", False)
-            
-                # ── LINE CHART ──────────────────────────────────────────────────
-                if chart_type == "Line" and y_val:
-                   
-                    is_date = False
-                    try:
-                        parsed = pd.to_datetime(plot_df[x_col], errors="coerce")
-                        if parsed.notna().sum() > len(plot_df) * 0.5:
-                            plot_df[x_col] = parsed
-                            is_date = True
-                    except Exception:
-                        pass
-            
-                    agg_choice = agg_func.lower().replace("none (raw)", "sum")
-                    fn = {"mean":"mean","sum":"sum","count":"count",
-                          "median":"median","max":"max","min":"min"}.get(agg_choice, "sum")
-            
-                    if is_date:
-                        plot_df["_period"] = plot_df[x_col].dt.to_period("M").astype(str)
-                        grp_col = "_period"
-                    else:
-                        grp_col = x_col
-            
-                    if color_val and color_val in plot_df.columns:
-                        plot_df = plot_df.groupby([grp_col, color_val])[y_val].agg(fn).reset_index()
-                    else:
-                        plot_df = plot_df.groupby(grp_col)[y_val].agg(fn).reset_index()
-                        color_val = None
-            
-                    plot_df = plot_df.sort_values(grp_col)
-                    fig = px.line(
-                        plot_df, x=grp_col, y=y_val, color=color_val,
-                        template="plotly_white", height=420, markers=True,
-                        labels={grp_col: x_col},
-                        title=f"{y_val} by {x_col} (Monthly)"
-                    )
-                    fig.update_layout(
-                        paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc",
-                        xaxis=dict(tickangle=-45, tickfont=dict(size=10)),
-                    )
-                    if show_labels:
-                        fig.update_traces(
-                            text=plot_df[y_val],
-                            texttemplate="%{text:,.0f}",
-                            textposition="top center"
-                        )
-                    st.plotly_chart(fig, use_container_width=True, key="line_chart_normal")
-            
-                # ── BAR CHART ────────────────────────────────────────────────────
-                elif chart_type == "Bar" and y_val:
-                    agg_map = {"Mean":"mean","Sum":"sum","Count":"count",
-                               "Median":"median","Max":"max","Min":"min",
-                               "None (raw)":"sum"}
-                    agg_map = {"Mean":"mean","Sum":"sum","Count":"count",
-                               "Median":"median","Max":"max","Min":"min",
-                               "None (raw)":"mean"}
-                    fn_bar = agg_map.get(agg_func, "mean")
-                    # Display label for title
-                    agg_label = "Mean" if agg_func == "None (raw)" else agg_func
-                    
+                    x_plot = x_eff
+                    title  = f"{st.session_state.get('t1_agg_nd','Mean')} of {t1_y_val} by {x_eff}"
 
-                    # Determine grouping column: prefer Group X by, else X axis
-                    if group_val and group_val in plot_df.columns:
-                        x_col_plot = group_val
-                    else:
-                        x_col_plot = x_col
+                text_col = t1_y_val if t1_labels else None
 
-                    # Always aggregate — raw data per row makes bar unreadable
-                    if color_val and color_val in plot_df.columns and color_val != x_col_plot:
-                        plot_df = (plot_df.groupby([x_col_plot, color_val])[y_val]
-                                   .agg(fn_bar).reset_index())
-                    else:
-                        plot_df = (plot_df.groupby(x_col_plot)[y_val]
-                                   .agg(fn_bar).reset_index())
-                        color_val = None
+                if t1_chart == "Line":
+                    fig = px.line(agg_df, x=x_plot, y=t1_y_val, color=eff_color,
+                                  markers=True, text=text_col,
+                                  labels={x_plot: t1_x, t1_y_val: t1_y_val})
+                    if t1_labels:
+                        fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")
 
-                    if sort_order == "X ascending":    plot_df = plot_df.sort_values(x_col_plot, ascending=True)
-                    elif sort_order == "X descending": plot_df = plot_df.sort_values(x_col_plot, ascending=False)
-                    elif sort_order == "Y ascending":  plot_df = plot_df.sort_values(y_val, ascending=True)
-                    elif sort_order == "Y descending": plot_df = plot_df.sort_values(y_val, ascending=False)
-
-                    fig = px.bar(
-                        plot_df, x=x_col_plot, y=y_val, color=color_val,
-                        template="plotly_white", height=420, barmode="group",
-                        text=y_val if show_labels else None,
-                        labels={x_col_plot: x_col_plot, y_val: f"{agg_func} of {y_val}"}
-                    )
-                    if show_labels:
+                elif t1_chart == "Bar":
+                    fig = px.bar(agg_df, x=x_plot, y=t1_y_val, color=eff_color,
+                                 barmode="group", text=text_col,
+                                 labels={x_plot: t1_x, t1_y_val: t1_y_val})
+                    if t1_labels:
                         fig.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
-                    fig.update_layout(
-                        paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc",
-                        title=f"{agg_label} of {y_val} by {x_col_plot}"
-                    )
-                    st.plotly_chart(fig, use_container_width=True, key="bar_chart_normal")
-            
-                # ── AREA CHART ───────────────────────────────────────────────────
-                elif chart_type == "Area" and y_val:
-                    agg_map_area = {"Mean":"mean","Sum":"sum","Count":"count",
-                                    "Median":"median","Max":"max","Min":"min",
-                                    "None (raw)":"mean"}
-                    fn_area = agg_map_area.get(agg_func, "mean")
-                    agg_label_area = "Mean" if agg_func == "None (raw)" else agg_func
 
-                    # Determine x grouping
-                    x_col_area = group_val if group_val and group_val in plot_df.columns else x_col
+                else:  # Area
+                    fig = px.area(agg_df, x=x_plot, y=t1_y_val, color=eff_color,
+                                  text=text_col,
+                                  labels={x_plot: t1_x, t1_y_val: t1_y_val})
+                    if t1_labels:
+                        fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")
 
-                    # Aggregate
-                    if color_val and color_val in plot_df.columns:
-                        if color_val == x_col_area:
-                            area_df = (plot_df.groupby(x_col_area)[y_val]
-                                       .agg(fn_area).reset_index())
-                        else:
-                            area_df = (plot_df.groupby([x_col_area, color_val])[y_val]
-                                       .agg(fn_area).reset_index())
-                    else:
-                        area_df = (plot_df.groupby(x_col_area)[y_val]
-                                   .agg(fn_area).reset_index())
-                        color_val = None
+                _apply_layout(fig, title)
+                fig.update_xaxes(tickangle=-45)
+                st.plotly_chart(fig, use_container_width=True)
 
-                    area_df = area_df.sort_values(x_col_area)
+                if t1_x_is_date:
+                    _summary_strip(agg_df, x_plot, t1_y_val, t1_freq)
 
-                    fig = px.area(
-                        area_df, x=x_col_area, y=y_val, color=color_val,
-                        template="plotly_white", height=420,
-                        labels={x_col_area: x_col_area, y_val: f"{agg_label_area} of {y_val}"},
-                        title=f"{agg_label_area} of {y_val} by {x_col_area}"
-                    )
-                    fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
-                    st.plotly_chart(fig, use_container_width=True, key="area_chart_normal")
-            
-                # ── HISTOGRAM ────────────────────────────────────────────────────
-                elif chart_type == "Histogram":
-                    # Only use color_val if explicitly selected and valid
-                    hist_color = color_val if (color_val and color_val in plot_df.columns) else None
-                    hist_df = plot_df[[x_col] + ([hist_color] if hist_color else [])].dropna()
+            except Exception as e:
+                st.error(f"Chart error: {e}")
 
-                    fig = px.histogram(
-                        hist_df, x=x_col, color=hist_color,
-                        template="plotly_white", height=420,
-                        barmode="overlay" if hist_color else "relative",
-                        opacity=0.75,
-                        labels={x_col: x_col},
-                        title=f"Distribution of {x_col}" + (f" by {hist_color}" if hist_color else "")
-                    )
-                    fig.update_layout(
-                        paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc",
-                        bargap=0.05
-                    )
-                    st.plotly_chart(fig, use_container_width=True, key="hist_chart_normal")
-            
-                elif not y_val:
-                    st.info("Please select a Y Axis column to plot.")
-        except Exception as e:
-            st.error(f"Chart error: {e}")
-
-            
-    # ══════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════════
     # TAB 2 — SCATTER
-    # ══════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════════
     with tab2:
-        st.markdown(
-            "<div class='section-header'><h3>Scatter Plot</h3></div>",
-            unsafe_allow_html=True
-        )
+        st.markdown("<div class='section-header'><h3>Scatter Plot</h3></div>",
+                    unsafe_allow_html=True)
+
         if len(num_cols) < 2:
             st.info("Need at least 2 numerical columns.")
         else:
-            with st.container():
-                st.markdown("""
-                <div style='background:#ffffff;border:1px solid #e2e6f0;border-radius:12px;
-                     padding:16px 20px;margin-bottom:16px;'>
-                <div style='font-size:0.8rem;color:#6b7280;font-weight:600;
-                     text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;'>
-                     Scatter Settings</div>
-                """, unsafe_allow_html=True)
+            r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+            with r1c1: sc_x = st.selectbox("X axis",  num_cols, key="sc_x")
+            with r1c2: sc_y = st.selectbox("Y axis",  num_cols[::-1], key="sc_y")
+            with r1c3: sc_c = st.selectbox("Color by", ["— None —"] + cat_cols + num_cols, key="sc_c")
+            with r1c4: sc_sz = st.selectbox("Size by (bubble)", ["— None —"] + num_cols, key="sc_sz")
 
-                sc1, sc2, sc3, sc4 = st.columns(4)
-                with sc1: sx = st.selectbox("X Axis",  num_cols,        key="scatter_x")
-                with sc2: sy = st.selectbox("Y Axis",  num_cols[::-1],  key="scatter_y")
-                with sc3: sc = st.selectbox("Color by", ["— None —"] + cat_cols + num_cols, key="scatter_color")
-                with sc4: sz = st.selectbox("Size by (bubble)", ["— None —"] + num_cols, key="scatter_size")
+            r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+            with r2c1: sc_trend   = st.checkbox("Trendline (OLS)", value=True, key="sc_trend")
+            with r2c2: sc_opacity = st.slider("Opacity", 0.1, 1.0, 0.7, key="sc_opacity")
+            with r2c3: sc_msize   = st.slider("Marker size", 3, 20, 6, key="sc_msize")
+            with r2c4: sc_facet   = st.selectbox("Facet by", ["— None —"] + cat_cols, key="sc_facet")
 
-                sp1, sp2, sp3, sp4 = st.columns(4)
-                with sp1: add_trendline = st.checkbox("Show trendline",  value=True, key="scatter_trend")
-                with sp2: opacity       = st.slider("Opacity", 0.1, 1.0, 0.7, key="scatter_opacity")
-                with sp3: marker_size   = st.slider("Marker size", 3, 20, 6,  key="scatter_msize")
-                with sp4: facet_col     = st.selectbox("Facet by", ["— None —"] + cat_cols, key="scatter_facet")
+            if sc_x == sc_y:
+                st.warning("⚠️ X and Y axes cannot be the same column.")
+            else:
+                try:
+                    sc_color_val = None if sc_c    == "— None —" else sc_c
+                    sc_size_val  = None if sc_sz   == "— None —" else sc_sz
+                    sc_facet_val = None if sc_facet == "— None —" else sc_facet
 
-                sb1, sb2, sb3, _ = st.columns([1, 1, 1, 3])
-                with sb1: scatter_plot_btn  = st.button("🔵 Plot Scatter", key="scatter_plot_btn",  type="primary")
-                with sb2: scatter_reset_btn = st.button("🔄 Reset",        key="scatter_reset_btn")
-                with sb3: scatter_data_btn  = st.button("🗃️ Show Data",   key="scatter_data_btn")
-                st.markdown("</div>", unsafe_allow_html=True)
+                    fig_sc = px.scatter(
+                        df, x=sc_x, y=sc_y,
+                        color=sc_color_val,
+                        size=sc_size_val,
+                        facet_col=sc_facet_val,
+                        trendline="ols" if sc_trend and sc_color_val is None else None,
+                        opacity=sc_opacity,
+                    )
+                    fig_sc.update_traces(marker=dict(size=sc_msize))
+                    _apply_layout(fig_sc, f"{sc_y} vs {sc_x}")
+                    st.plotly_chart(fig_sc, use_container_width=True)
 
-            
-            sc_color = None if sc         == "— None —" else sc
-            sc_size  = None if sz         == "— None —" else sz
-            facet    = None if facet_col  == "— None —" else facet_col
+                    r = df[[sc_x, sc_y]].dropna().corr().iloc[0, 1]
+                    direction = "positive" if r > 0 else "negative"
+                    strength  = "strong" if abs(r) > 0.7 else "moderate" if abs(r) > 0.4 else "weak"
+                    n_pts     = len(df[[sc_x, sc_y]].dropna())
+                    st.markdown(f"""
+                    <div style='background:#f8f9fc;border:1px solid #e2e6f0;border-radius:8px;
+                         padding:12px 16px;font-size:0.88rem;color:#374151;margin-top:4px;'>
+                        <b>Pearson r = {r:.4f}</b> — {strength} {direction} correlation
+                        &nbsp;|&nbsp; <b>N = {n_pts:,} points</b>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-            try:
-                fig_sc = px.scatter(
-                    x=sx, y=sy, color=sc_color, size=sc_size,
-                    template="plotly_white", height=450,
-                    trendline="ols" if add_trendline and sc_color is None else None,
-                    opacity=opacity, facet_col=facet
-                )
-                fig_sc.update_traces(marker=dict(size=marker_size))
-                fig_sc.update_layout(
-                    paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc"
-                )
-                st.plotly_chart(fig_sc, use_container_width=True)
+                except Exception as e:
+                    st.error(f"Scatter error: {e}")
 
-                r         = filtered_df2[[sx, sy]].dropna().corr().iloc[0, 1]
-                direction = "positive" if r > 0 else "negative"
-                strength  = "strong" if abs(r) > 0.7 else "moderate" if abs(r) > 0.4 else "weak"
-                st.markdown(f"""
-                <div style='background:#f8f9fc;border:1px solid #e2e6f0;border-radius:8px;
-                     padding:12px 16px;font-size:0.88rem;color:#374151;'>
-                    <b>Pearson r = {r:.4f}</b> — {strength} {direction} correlation
-                    &nbsp;|&nbsp; <b>N = {len(filtered_df2[[sx,sy]].dropna()):,} rows</b>
-                </div>
-                """, unsafe_allow_html=True)
-            except Exception as e:
-                st.error(f"Scatter error: {e}")
-            if scatter_data_btn:
-                st.dataframe(
-                    filtered_df2[[sx, sy]].dropna(),
-                    use_container_width=True, height=280
-                )
-
-    # ══════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════════
     # TAB 3 — BOX & VIOLIN
-    # ══════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════════
     with tab3:
-        st.markdown(
-            "<div class='section-header'><h3>Box & Violin Plots</h3></div>",
-            unsafe_allow_html=True
-        )
+        st.markdown("<div class='section-header'><h3>Box & Violin Plots</h3></div>",
+                    unsafe_allow_html=True)
+
         if not num_cols:
-            st.info("No numerical columns.")
+            st.info("No numerical columns found.")
         else:
-            with st.container():
-                st.markdown("""
-                <div style='background:#ffffff;border:1px solid #e2e6f0;border-radius:12px;
-                     padding:16px 20px;margin-bottom:16px;'>
-                <div style='font-size:0.8rem;color:#6b7280;font-weight:600;
-                     text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;'>
-                     Box / Violin Settings</div>
-                """, unsafe_allow_html=True)
-
-                bv1, bv2, bv3, bv4 = st.columns(4)
-                with bv1: bv_col    = st.selectbox("Numerical column", num_cols, key="bv_col")
-                with bv2: bv_group  = st.selectbox("Group by", ["— None —"] + cat_cols, key="bv_group")
-                with bv3: bv_type   = st.radio("Plot type", ["Box","Violin","Both"], key="bv_type", horizontal=True)
-                with bv4: bv_points = st.radio("Show points", ["outliers","all","none"], key="bv_points", horizontal=True)
-
-               
+            r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+            with r1c1: bv_col    = st.selectbox("Numerical column", num_cols, key="bv_col")
+            with r1c2: bv_group  = st.selectbox("Group by", ["— None —"] + cat_cols, key="bv_group")
+            with r1c3: bv_type   = st.radio("Plot type", ["Box", "Violin", "Both"],
+                                             horizontal=True, key="bv_type")
+            with r1c4: bv_points = st.radio("Show points", ["outliers", "all", "none"],
+                                             horizontal=True, key="bv_points")
 
             bv_group_val = None if bv_group == "— None —" else bv_group
             pts = False if bv_points == "none" else bv_points
 
             try:
                 if bv_type == "Box":
-                    fig_bv = px.box(
-                        filtered_df3, y=bv_col, x=bv_group_val,
-                        color=bv_group_val, template="plotly_white",
-                        height=420, points=pts
-                    )
+                    fig_bv = px.box(df, y=bv_col, x=bv_group_val, color=bv_group_val,
+                                    points=pts)
                 elif bv_type == "Violin":
-                    fig_bv = px.violin(
-                        filtered_df3, y=bv_col, x=bv_group_val,
-                        color=bv_group_val, template="plotly_white",
-                        height=420, box=True, points=pts
-                    )
+                    fig_bv = px.violin(df, y=bv_col, x=bv_group_val, color=bv_group_val,
+                                       box=True, points=pts)
                 else:
-                    fig_bv = make_subplots(
-                        rows=1, cols=2,
-                        subplot_titles=[f"Box — {bv_col}", f"Violin — {bv_col}"]
-                    )
-                    for val in (filtered_df3[bv_group_val].unique()
-                                if bv_group_val else [None]):
-                        subset = (filtered_df3[filtered_df3[bv_group_val] == val][bv_col].dropna()
-                                  if bv_group_val else filtered_df3[bv_col].dropna())
+                    fig_bv = make_subplots(rows=1, cols=2,
+                                           subplot_titles=[f"Box — {bv_col}", f"Violin — {bv_col}"])
+                    groups = df[bv_group_val].unique() if bv_group_val else [None]
+                    for val in groups:
+                        subset = (df[df[bv_group_val] == val][bv_col].dropna()
+                                  if bv_group_val else df[bv_col].dropna())
                         name = str(val) if val is not None else bv_col
-                        fig_bv.add_trace(
-                            go.Box(y=subset, name=name, boxpoints=pts), row=1, col=1
-                        )
-                        fig_bv.add_trace(
-                            go.Violin(y=subset, name=name, box_visible=True), row=1, col=2
-                        )
-                    fig_bv.update_layout(
-                        template="plotly_white", height=420, showlegend=False
-                    )
-                fig_bv.update_layout(
-                    paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc"
-                )
+                        fig_bv.add_trace(go.Box(y=subset, name=name, boxpoints=pts), row=1, col=1)
+                        fig_bv.add_trace(go.Violin(y=subset, name=name, box_visible=True), row=1, col=2)
+                    fig_bv.update_layout(showlegend=False)
+
+                _apply_layout(fig_bv, f"Distribution of {bv_col}"
+                              + (f" by {bv_group_val}" if bv_group_val else ""))
                 st.plotly_chart(fig_bv, use_container_width=True)
+
+                # Stats summary
+                s = df[bv_col].dropna()
+                st.markdown(f"""
+                <div style='display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;'>
+                {"".join([
+                    f"<div style='background:#f8f9fc;border:1px solid #e2e6f0;border-radius:8px;"
+                    f"padding:8px 14px;text-align:center;min-width:90px;'>"
+                    f"<div style='font-family:\"JetBrains Mono\",monospace;font-size:0.95rem;"
+                    f"font-weight:700;color:#2563eb;'>{v}</div>"
+                    f"<div style='font-size:0.68rem;color:#6b7280;text-transform:uppercase;"
+                    f"letter-spacing:1px;margin-top:2px;'>{l}</div></div>"
+                    for l, v in [
+                        ("Mean",   f"{s.mean():.2f}"),
+                        ("Median", f"{s.median():.2f}"),
+                        ("Std",    f"{s.std():.2f}"),
+                        ("Min",    f"{s.min():.2f}"),
+                        ("Max",    f"{s.max():.2f}"),
+                        ("IQR",    f"{s.quantile(0.75)-s.quantile(0.25):.2f}"),
+                    ]
+                ])}
+                </div>
+                """, unsafe_allow_html=True)
+
             except Exception as e:
                 st.error(f"Plot error: {e}")
 
-
-    # ══════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════════
     # TAB 4 — CATEGORY BREAKDOWN
-    # ══════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════════
     with tab4:
-        st.markdown(
-            "<div class='section-header'><h3>Category Breakdown</h3></div>",
-            unsafe_allow_html=True
-        )
+        st.markdown("<div class='section-header'><h3>Category Breakdown</h3></div>",
+                    unsafe_allow_html=True)
+
         if not cat_cols:
-            st.info("No categorical columns.")
+            st.info("No categorical columns found.")
         else:
-            with st.container():
-                st.markdown("""
-                <div style='background:#ffffff;border:1px solid #e2e6f0;border-radius:12px;
-                     padding:16px 20px;margin-bottom:16px;'>
-                <div style='font-size:0.8rem;color:#6b7280;font-weight:600;
-                     text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;'>
-                     Category Settings</div>
-                """, unsafe_allow_html=True)
+            r1c1, r1c2, r1c3 = st.columns(3)
+            with r1c1:
+                cb_cat = st.selectbox("Category column (X)", cat_cols, key="cb_cat")
+            with r1c2:
+                cb_y = st.selectbox("Value column (Y)", ["Count"] + num_cols, key="cb_y")
+            with r1c3:
+                cb_chart = st.selectbox("Chart type",
+                    ["Horizontal Bar", "Vertical Bar", "Pie", "Donut", "Treemap"],
+                    key="cb_chart")
 
-                cp1, cp2, cp3, cp4 = st.columns(4)
-                with cp1:
-                    chart_type = st.selectbox(
-                        "Chart Type", ["Line", "Bar", "Histogram", "Area"],
-                        key="cat_chart_type"           # ← was "custom_chart_type"
-                    )
-                with cp2:
-                    x_col = st.selectbox("X Axis", df.columns.tolist(), key="cat_x")   # ← was "custom_x"
-                with cp3:
-                    y_col = st.selectbox("Y Axis", ["— None —"] + num_cols, key="cat_y")  # ← was "custom_y"
-                with cp4:
-                    color_col = st.selectbox(
-                        "Color by", ["— None —"] + cat_cols, key="cat_color"  # ← was "custom_color"
-                    )
+            r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+            with r2c1:
+                cb_agg = st.selectbox("Aggregate by",
+                    ["Count"] + list(AGG_MAP.keys()), key="cb_agg",
+                    disabled=(cb_y == "Count"))
+            with r2c2:
+                cb_top = st.slider("Top N categories", 5, 50, 15, key="cb_top")
+            with r2c3:
+                cb_sort = st.selectbox("Sort", ["Value desc", "Value asc", "Alpha asc"],
+                                       key="cb_sort")
+            with r2c4:
+                cb_color2 = st.selectbox("Color by", ["— None —"] + cat_cols, key="cb_color2")
 
-                ct_live   = identify_column_types(df)
-                x_is_date = (
-                    x_col in ct_live["datetime"]
-                    or pd.api.types.is_datetime64_any_dtype(df[x_col])
-                    or (
-                        df[x_col].dtype == object
-                        and any(k in x_col.lower() for k in
-                                ["date","month","year","time","day","week","period"])
-                    )
-                )
-
-                color_val   = None if color_col == "— None —" else color_col
-                y_val       = None if y_col     == "— None —" else y_col
-                group_val   = None
-                agg_func    = "None (raw)"
-                sort_order  = "None"
-                show_labels = False
-                date_freq   = "None"
-                date_agg    = "Mean"
-                fill_gaps   = False
-                date_sort   = True
-
-                if x_is_date:
-                    st.markdown("""
-                    <div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;
-                         padding:10px 14px;margin:8px 0;font-size:0.83rem;color:#2563eb;'>
-                        📅 <b>Date column detected</b> — group by a time period below
-                    </div>
-                    """, unsafe_allow_html=True)
-                    dg1, dg2, dg3, dg4 = st.columns(4)
-                    with dg1:
-                        date_freq = st.radio(
-                            "Group dates by",
-                            ["None", "Day", "Week", "Month", "Quarter", "Year"],
-                            horizontal=True, key="cat_date_freq"       # ← was "date_freq"
-                        )
-                    with dg2:
-                        date_agg = st.selectbox(
-                            "Aggregate Y by",
-                            ["Sum", "Mean", "Count", "Median", "Max", "Min"],
-                            key="cat_date_agg"                          # ← was "date_agg"
-                        )
-                    with dg3:
-                        fill_gaps = st.checkbox(
-                            "Fill missing periods with 0",
-                            value=False, key="cat_date_fill_gaps"       # ← was "date_fill_gaps"
-                        )
-                    with dg4:
-                        date_sort = st.checkbox(
-                            "Sort by date", value=True, key="cat_date_sort"  # ← was "date_sort"
-                        )
-                else:
-                    dg1, dg2, dg3, dg4 = st.columns(4)
-                    with dg1:
-                        agg_func = st.selectbox(
-                            "Aggregate Y by",
-                            ["None (raw)", "Mean", "Sum", "Count", "Median", "Max", "Min"],
-                            key="cat_agg"                               # ← was "custom_agg"
-                        )
-                    with dg2:
-                        group_val_sel = st.selectbox(
-                            "Group X by", ["— None —"] + cat_cols, key="cat_group"  # ← was "custom_group"
-                        )
-                        group_val = None if group_val_sel == "— None —" else group_val_sel
-                    with dg3:
-                        sort_order = st.selectbox(
-                            "Sort by",
-                            ["None", "X ascending", "X descending",
-                             "Y ascending", "Y descending"],
-                            key="cat_sort"                              # ← was "custom_sort"
-                        )
-                    with dg4:
-                        show_labels = st.checkbox(
-                            "Show value labels", value=False, key="cat_labels"  # ← was "custom_labels"
-                        )
-
-                st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
-    
             try:
-                # ── Guard: same column for X and Y ──
-                if y_val and y_val == x_col:
-                    st.warning("⚠️ X and Y axes cannot be the same column. Please select different columns.")
-                    st.stop()
-    
-                if x_is_date and date_freq != "None" and y_val:
-                    plot_df_c = plot_df.copy()
-                    plot_df_c = apply_date_grouping(plot_df_c, x_col, date_freq)
-    
-                    agg_map = {
-                        "Sum":"sum","Mean":"mean","Count":"count",
-                        "Median":"median","Max":"max","Min":"min"
-                    }
-                    fn = agg_map.get(date_agg, "sum")
-    
-                    if color_val and color_val in plot_df_c.columns:
-                        plot_df_c = (plot_df_c
-                                     .groupby([x_col, color_val])[y_val]
-                                     .agg(fn).reset_index())
-                    else:
-                        plot_df_c = (plot_df_c
-                                     .groupby(x_col)[y_val]
-                                     .agg(fn).reset_index())
-    
-                    if date_sort:
-                        plot_df_c = plot_df_c.sort_values(x_col)
-    
-                    if fill_gaps and not color_val:
-                        freq_map = {"Day":"D","Week":"W","Month":"M","Quarter":"Q","Year":"Y"}
-                        try:
-                            all_periods = pd.period_range(
-                                start=plot_df_c[x_col].min(),
-                                end=plot_df_c[x_col].max(),
-                                freq=freq_map.get(date_freq,"M")
-                            ).astype(str)
-                            plot_df_c = (plot_df_c.set_index(x_col)
-                                         .reindex(all_periods, fill_value=0)
-                                         .reset_index())
-                            plot_df_c.columns = [x_col, y_val]
-                        except: pass
-    
-                    if chart_type == "Line":
-                        fig = px.line(plot_df_c, x=x_col, y=y_val, color=color_val,
-                            template="plotly_white", height=420, markers=True,
-                            title=f"{date_agg} of {y_val} by {date_freq}")
-                    elif chart_type == "Bar":
-                        fig = px.bar(plot_df_c, x=x_col, y=y_val, color=color_val,
-                            template="plotly_white", height=420, barmode="group",
-                            title=f"{date_agg} of {y_val} by {date_freq}")
-                    elif chart_type == "Area":
-                        fig = px.area(plot_df_c, x=x_col, y=y_val, color=color_val,
-                            template="plotly_white", height=420,
-                            title=f"{date_agg} of {y_val} by {date_freq}")
-                    elif chart_type == "Histogram":
-                        fig = px.histogram(plot_df_c, x=x_col,
-                            template="plotly_white", height=420)
-    
-                    fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc",
-                        xaxis=dict(tickangle=-45, tickfont=dict(size=10)))
-                    st.plotly_chart(fig, use_container_width=True)
-    
-                    # summary strip
-                    if y_val and y_val in plot_df_c.columns:
-                        total = plot_df_c[y_val].sum()
-                        avg   = plot_df_c[y_val].mean()
-                        peak_row = plot_df_c.loc[plot_df_c[y_val].idxmax()]
-                        ms1,ms2,ms3,ms4 = st.columns(4)
-                        for w,lbl,val in [
-                            (ms1,f"Total {y_val}",f"{total:,.2f}"),
-                            (ms2,f"Avg/{date_freq}",f"{avg:,.2f}"),
-                            (ms3,"Peak period",str(peak_row[x_col])),
-                            (ms4,"Peak value",f"{peak_row[y_val]:,.2f}"),
-                        ]:
-                            with w:
-                                st.markdown(f"""
-                                <div style='background:#eff6ff;border:1px solid #bfdbfe;
-                                     border-radius:8px;padding:10px;text-align:center;'>
-                                    <div style='font-family:"JetBrains Mono",monospace;
-                                         font-size:1rem;font-weight:700;color:#2563eb;'>{val}</div>
-                                    <div style='font-size:0.7rem;color:#6b7280;margin-top:3px;
-                                         text-transform:uppercase;letter-spacing:1px;'>{lbl}</div>
-                                </div>
-                                """, unsafe_allow_html=True)
-    
+                cb_df = df.copy()
+
+                # Build aggregated frame
+                if cb_y == "Count":
+                    agg_df_cb = (cb_df.groupby(cb_cat)
+                                 .size().reset_index(name="Count"))
+                    y_plot = "Count"
                 else:
-                    # ── NON-DATE PATH ────────────────────────────────────────────
-                    agg_map_all = {
-                        "Mean":"mean","Sum":"sum","Count":"count",
-                        "Median":"median","Max":"max","Min":"min",
-                        "None (raw)":"mean"
-                    }
-                    fn = agg_map_all.get(agg_func, "mean")
-                    agg_label = "Mean" if agg_func == "None (raw)" else agg_func
-    
-                    # effective x grouping
-                    x_eff = group_val if group_val and group_val in plot_df.columns else x_col
-    
-                    if chart_type == "Line" and y_val:
-                        if color_val and color_val in plot_df.columns:
-                            line_df = (plot_df.groupby([x_eff, color_val])[y_val]
-                                       .agg(fn).reset_index())
-                        else:
-                            line_df = (plot_df.groupby(x_eff)[y_val]
-                                       .agg(fn).reset_index())
-                            color_val = None
-                        line_df = line_df.sort_values(x_eff)
-                        fig = px.line(line_df, x=x_eff, y=y_val, color=color_val,
-                            markers=True, template="plotly_white", height=420,
-                            title=f"{agg_label} of {y_val} by {x_eff}")
-                        if show_labels:
-                            fig.update_traces(text=line_df[y_val],
-                                texttemplate="%{text:,.0f}", textposition="top center")
-                        fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc",
-                            xaxis=dict(tickangle=-45))
-                        st.plotly_chart(fig, use_container_width=True, key="line_chart_normal")
-    
-                    elif chart_type == "Bar" and y_val:
-                        if color_val and color_val in plot_df.columns and color_val != x_eff:
-                            bar_df = (plot_df.groupby([x_eff, color_val])[y_val]
-                                      .agg(fn).reset_index())
-                        else:
-                            bar_df = (plot_df.groupby(x_eff)[y_val]
-                                      .agg(fn).reset_index())
-                            color_val = None
-                        if sort_order == "X ascending":    bar_df = bar_df.sort_values(x_eff, ascending=True)
-                        elif sort_order == "X descending": bar_df = bar_df.sort_values(x_eff, ascending=False)
-                        elif sort_order == "Y ascending":  bar_df = bar_df.sort_values(y_val, ascending=True)
-                        elif sort_order == "Y descending": bar_df = bar_df.sort_values(y_val, ascending=False)
-                        fig = px.bar(bar_df, x=x_eff, y=y_val, color=color_val,
-                            template="plotly_white", height=420, barmode="group",
-                            text=y_val if show_labels else None,
-                            title=f"{agg_label} of {y_val} by {x_eff}")
-                        if show_labels:
-                            fig.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
-                        fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
-                        st.plotly_chart(fig, use_container_width=True, key="bar_chart_normal")
-    
-                    elif chart_type == "Area" and y_val:
-                        if color_val and color_val in plot_df.columns:
-                            area_df = (plot_df.groupby([x_eff, color_val])[y_val]
-                                       .agg(fn).reset_index())
-                        else:
-                            area_df = (plot_df.groupby(x_eff)[y_val]
-                                       .agg(fn).reset_index())
-                            color_val = None
-                        area_df = area_df.sort_values(x_eff)
-                        fig = px.area(area_df, x=x_eff, y=y_val, color=color_val,
-                            template="plotly_white", height=420,
-                            title=f"{agg_label} of {y_val} by {x_eff}")
-                        fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc")
-                        st.plotly_chart(fig, use_container_width=True, key="area_chart_normal")
-    
-                    elif chart_type == "Histogram":
-                        hist_color = color_val if color_val and color_val in plot_df.columns else None
-                        hist_df = plot_df[[x_col]+([hist_color] if hist_color else [])].dropna()
-                        fig = px.histogram(hist_df, x=x_col, color=hist_color,
-                            template="plotly_white", height=420,
-                            barmode="overlay" if hist_color else "relative",
-                            opacity=0.75,
-                            title=f"Distribution of {x_col}"+(f" by {hist_color}" if hist_color else ""))
-                        fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#f8f9fc", bargap=0.05)
-                        st.plotly_chart(fig, use_container_width=True, key="hist_chart_normal")
-    
-                    elif not y_val:
-                        st.info("Please select a Y Axis column to plot.")
+                    fn_cb = AGG_MAP.get(cb_agg, "sum")
+                    cb_df[cb_y] = pd.to_numeric(cb_df[cb_y], errors="coerce")
+                    agg_df_cb = (cb_df.groupby(cb_cat)[cb_y]
+                                 .agg(fn_cb).reset_index())
+                    y_plot = cb_y
+
+                # Sort
+                if cb_sort == "Value desc":
+                    agg_df_cb = agg_df_cb.sort_values(y_plot, ascending=False)
+                elif cb_sort == "Value asc":
+                    agg_df_cb = agg_df_cb.sort_values(y_plot, ascending=True)
+                else:
+                    agg_df_cb = agg_df_cb.sort_values(cb_cat)
+
+                # Top N
+                agg_df_cb = agg_df_cb.head(cb_top)
+
+                cb_color_val = (None if cb_color2 == "— None —"
+                                or cb_color2 == cb_cat else cb_color2)
+
+                title_cb = (f"{'Count' if cb_y == 'Count' else cb_agg + ' of ' + cb_y}"
+                            f" by {cb_cat} (Top {cb_top})")
+
+                if cb_chart == "Horizontal Bar":
+                    fig_cb = px.bar(agg_df_cb, x=y_plot, y=cb_cat,
+                                    orientation="h", color=cb_color_val,
+                                    text=y_plot)
+                    fig_cb.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
+                    fig_cb.update_layout(yaxis=dict(categoryorder="total ascending"))
+
+                elif cb_chart == "Vertical Bar":
+                    fig_cb = px.bar(agg_df_cb, x=cb_cat, y=y_plot,
+                                    color=cb_color_val, text=y_plot)
+                    fig_cb.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
+
+                elif cb_chart == "Pie":
+                    fig_cb = px.pie(agg_df_cb, names=cb_cat, values=y_plot,
+                                    hole=0)
+
+                elif cb_chart == "Donut":
+                    fig_cb = px.pie(agg_df_cb, names=cb_cat, values=y_plot,
+                                    hole=0.45)
+
+                else:  # Treemap
+                    fig_cb = px.treemap(agg_df_cb, path=[cb_cat], values=y_plot)
+
+                _apply_layout(fig_cb, title_cb)
+                st.plotly_chart(fig_cb, use_container_width=True)
+
+                # Value table toggle
+                if st.checkbox("Show data table", key="cb_table"):
+                    st.dataframe(agg_df_cb.reset_index(drop=True),
+                                 use_container_width=True, height=300)
 
             except Exception as e:
                 st.error(f"Chart error: {e}")
-
-           
 
     nav_buttons("Visualizations")
 # ═══════════════════════════════════════════════
