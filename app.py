@@ -1506,7 +1506,7 @@ elif st.session_state.page == "Encoding & Outliers":
         # ── All done state ────────────────────────────────────────────────────
         if not available_cols and all_cat_cols:
             st.success("✅ All categorical columns have been encoded.")
-            st.balloons()
+            
 
             # Show encoding summary
             st.markdown("""
