@@ -2698,7 +2698,7 @@ elif st.session_state.page == "Visualizations":
                     "label+percent": "label+percent",
                 }
 
-               fig_pie = px.pie(
+                fig_pie = px.pie(
                     pie_df,
                     names=pie_cat,
                     values=y_pie,
