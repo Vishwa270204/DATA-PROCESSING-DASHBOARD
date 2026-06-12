@@ -2436,12 +2436,12 @@ elif st.session_state.page == "Visualizations":
 
             st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
             
-        
-        
-
         color_val   = None if color_col == "— None —" else color_col
         y_val       = None if y_col     == "— None —" else y_col
         show_labels = st.session_state.get("custom_labels", False)
+        group_val   = None
+        agg_func    = "None (raw)"
+        sort_order  = "None"
       
 
         try:
