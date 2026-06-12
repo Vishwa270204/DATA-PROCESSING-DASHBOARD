@@ -2555,47 +2555,16 @@ elif st.session_state.page == "Visualizations":
                         labels={h_col: h_col},
                     )
                     if h_mean:
-                        if h_group_val:
-                            colors = px.colors.qualitative.Plotly
-                            for i, grp in enumerate(hist_df[h_group_val].unique()):
-                                m = hist_df[hist_df[h_group_val] == grp][h_col].mean()
-                                fig_h.add_vline(
-                                    x=float(m), line_dash="dash",
-                                    line_color=colors[i % len(colors)], line_width=1.5,
-                                    annotation_text=f"{grp} mean: {m:.2f}",
-                                    annotation_font=dict(size=10),
-                                )
-                        else:
-                            m = hist_df[h_col].mean()
-                            fig_h.add_vline(
-                                x=float(m), line_dash="dash",
-                                line_color="#dc2626", line_width=1.8,
-                                annotation_text=f"Mean: {m:.2f}",
-                                annotation_position="top right",
-                                annotation_font=dict(color="#dc2626", size=11),
-                            )
+                        m = hist_df[h_col].mean()
+                        fig_h.add_vline(
+                            x=float(m), line_dash="dash",
+                            line_color="#dc2626", line_width=1.8,
+                            annotation_text=f"Mean: {m:.2f}",
+                            annotation_position="top right",
+                            annotation_font=dict(color="#dc2626", size=11),
+                        )
 
-                    if h_median:
-                        if h_group_val:
-                            colors = px.colors.qualitative.Plotly
-                            for i, grp in enumerate(hist_df[h_group_val].unique()):
-                                med = hist_df[hist_df[h_group_val] == grp][h_col].median()
-                                fig_h.add_vline(
-                                    x=float(med), line_dash="dot",
-                                    line_color=colors[i % len(colors)], line_width=1.5,
-                                    annotation_text=f"{grp} median: {med:.2f}",
-                                    annotation_font=dict(size=10),
-                                )
-                        else:
-                            med = hist_df[h_col].median()
-                            fig_h.add_vline(
-                                x=float(med), line_dash="dot",
-                                line_color="#16a34a", line_width=1.8,
-                                annotation_text=f"Median: {med:.2f}",
-                                annotation_position="top left",
-                                annotation_font=dict(color="#16a34a", size=11),
-                            )
-
+                    
                     _apply_layout(fig_h, f"Distribution of {h_col}"
                                   + (f" by {h_group_val}" if h_group_val else ""))
                     st.plotly_chart(fig_h, use_container_width=True)
