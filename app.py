@@ -2474,7 +2474,7 @@ elif st.session_state.page == "Visualizations":
             t1_fill = False
 
         # ── Render ────────────────────────────────────────────────────────
-        t1_y_val    = None if t1_y    == "— None —" else t1_y
+        t1_y_val     = None if t1_y    == "— None —" else t1_y
         t1_color_val = None if t1_color == "— None —" else t1_color
 
         if not t1_y_val:
@@ -2483,19 +2483,15 @@ elif st.session_state.page == "Visualizations":
             st.warning("⚠️ X and Y axes cannot be the same column.")
         else:
             try:
-                fn = AGG_MAP[t1_agg if t1_x_is_date else
-                             (t1_agg if "t1_agg_nd" not in st.session_state
-                              else st.session_state.get("t1_agg_nd", "Mean"))]
-
                 plot_df = df.copy()
 
                 if t1_x_is_date:
-                    # ── Date path ──
+                    # ── Date path ──────────────────────────────────────────
                     plot_df["_x"] = _group_by_period(plot_df[t1_x], t1_freq)
                     plot_df[t1_y_val] = pd.to_numeric(plot_df[t1_y_val], errors="coerce")
 
-                    agg_df, eff_color = _aggregate(plot_df, "_x", t1_y_val, t1_color_val,
-                                                   AGG_MAP[t1_agg])
+                    agg_df, eff_color = _aggregate(
+                        plot_df, "_x", t1_y_val, t1_color_val, AGG_MAP[t1_agg])
                     agg_df = agg_df.sort_values("_x")
 
                     if t1_fill and not eff_color:
@@ -2514,9 +2510,68 @@ elif st.session_state.page == "Visualizations":
 
                     x_plot = "_x"
                     title  = f"{t1_agg} of {t1_y_val} by {t1_x} ({t1_freq})"
+
+                else:
+                    # ── Non-date path ───────────────────────────────────────
+                    t1_group_val = None if t1_group == "— None —" else t1_group
+                    fn           = AGG_MAP.get(t1_agg, "mean")
+                    x_eff        = t1_group_val if t1_group_val and t1_group_val in plot_df.columns else t1_x
+
+                    plot_df[t1_y_val] = pd.to_numeric(plot_df[t1_y_val], errors="coerce")
+                    agg_df, eff_color = _aggregate(plot_df, x_eff, t1_y_val, t1_color_val, fn)
+
+                    sort_map = {
+                        "X asc":  (x_eff,    True),
+                        "X desc": (x_eff,    False),
+                        "Y asc":  (t1_y_val, True),
+                        "Y desc": (t1_y_val, False),
+                    }
+                    if t1_sort in sort_map:
+                        col_s, asc_s = sort_map[t1_sort]
+                        agg_df = agg_df.sort_values(col_s, ascending=asc_s)
+
+                    x_plot = x_eff
+                    title  = f"{t1_agg} of {t1_y_val} by {x_eff}"
+
+                # ── Draw chart ─────────────────────────────────────────────
+                text_col = t1_y_val if t1_labels else None
+
+                if t1_chart == "Line":
+                    fig = px.line(
+                        agg_df, x=x_plot, y=t1_y_val, color=eff_color,
+                        markers=True, text=text_col,
+                        labels={x_plot: t1_x, t1_y_val: t1_y_val},
+                    )
+                    if t1_labels:
+                        fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")
+
+                elif t1_chart == "Bar":
+                    fig = px.bar(
+                        agg_df, x=x_plot, y=t1_y_val, color=eff_color,
+                        barmode="group", text=text_col,
+                        labels={x_plot: t1_x, t1_y_val: t1_y_val},
+                    )
+                    if t1_labels:
+                        fig.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
+
+                else:  # Area
+                    fig = px.area(
+                        agg_df, x=x_plot, y=t1_y_val, color=eff_color,
+                        text=text_col,
+                        labels={x_plot: t1_x, t1_y_val: t1_y_val},
+                    )
+                    if t1_labels:
+                        fig.update_traces(texttemplate="%{text:,.0f}", textposition="top center")
+
+                _apply_layout(fig, title)
+                fig.update_xaxes(tickangle=-45)
+                st.plotly_chart(fig, use_container_width=True)
+
+                if t1_x_is_date:
+                    _summary_strip(agg_df, x_plot, t1_y_val, t1_freq)
+
             except Exception as e:
                 st.error(f"Chart error: {e}")
-
     # ══════════════════════════════════════════════════════════════════════
     # TAB 2 — HISTOGRAM / SCATTER / PIE
     # ══════════════════════════════════════════════════════════════════════
