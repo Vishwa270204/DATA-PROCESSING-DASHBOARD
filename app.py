@@ -2579,7 +2579,8 @@ elif st.session_state.page == "Visualizations":
                             annotation_font=dict(color="#dc2626", size=11),
                         )
 
-                _apply_layout(fig, title if t1_chart != "Histogram" else f"Distribution of {t1_x}")                fig.update_xaxes(tickangle=-45)
+                _apply_layout(fig, title if t1_chart != "Histogram" else f"Distribution of {t1_x}")                
+                fig.update_xaxes(tickangle=-45)
                 st.plotly_chart(fig, use_container_width=True)
 
                 if t1_x_is_date:
